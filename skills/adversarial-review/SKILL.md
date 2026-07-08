@@ -24,6 +24,7 @@ Automatically resolve context, create/update feature branch worktree, and perfor
 1. Get the diff using the resolved branches:
    - Run `git diff <reference_branch>...<feature_branch>` to extract changes introduced by the feature branch.
 2. Perform adversarial review on the diff, emphasizing:
+   - **HPC Constraints**: Do not expect intermediate compute files from HPC jobs or attempt running scripts requiring HPC-level resources.
    - **Technical Bugs**: Logical errors, performance issues, security vulnerabilities, regression risks, and code design.
    - **Scientific & Interpretation Errors**: Formula correctness, numerical stability, incorrect statistical assumptions, data leakage, and misinterpretation of data/metrics.
    - **Writing Quality**: Clarity and accuracy of documentation, comments, markdown, and precision of language.
