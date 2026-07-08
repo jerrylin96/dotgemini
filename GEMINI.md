@@ -85,6 +85,8 @@ The global settings contain dedicated skills under `~/.gemini/skills/` which can
 ## 5. Isolated Testing & Execution Environment
 
 To prevent test/execution collisions and avoid polluting the workspace or running compute scripts in unconfigured global environments:
+> [!WARNING]
+> This provides dependency/test isolation, NOT a security sandbox. Running setup scripts or installing dependencies (via uv/pip) on untrusted repositories can execute arbitrary build hooks or code under your user credentials.
 * **Dynamic Isolated Env:** The agent will automatically initialize/resolve a CPU-compatible virtual environment located under `~/.gemini/tmp/<your-workspace-hash>` by running:
   ```bash
   python3 ~/.gemini/scripts/setup_review_env.py <workspace_path>

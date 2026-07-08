@@ -530,19 +530,20 @@ def main():
             print(json.dumps({"error": str(e)}))
             sys.exit(1)
 
-    if reference_override is not None:
-        try:
-            obj_type = run_git(["cat-file", "-t", "--", reference_override], cwd=cwd)
-        except GitError:
-            print(json.dumps({"error": f"Reference branch '{reference_override}' not found."}))
-            sys.exit(1)
-        if obj_type not in ("commit", "tag"):
-            print(json.dumps({"error": f"Reference '{reference_override}' resolves to a {obj_type}, not a commit or tag."}))
-            sys.exit(1)
-
     try:
         with FileLock(lock_path):
             fetch_all(cwd)
+            
+            if reference_override is not None:
+                try:
+                    obj_type = run_git(["cat-file", "-t", "--", reference_override], cwd=cwd)
+                except GitError:
+                    print(json.dumps({"error": f"Reference branch '{reference_override}' not found."}))
+                    sys.exit(1)
+                if obj_type not in ("commit", "tag"):
+                    print(json.dumps({"error": f"Reference '{reference_override}' resolves to a {obj_type}, not a commit or tag."}))
+                    sys.exit(1)
+                    
             if reference_override:
                 ref_branch = reference_override
             else:

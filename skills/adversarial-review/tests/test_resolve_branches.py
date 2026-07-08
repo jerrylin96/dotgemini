@@ -2,6 +2,7 @@ import os
 import sys
 import unittest
 import hashlib
+import json
 from unittest.mock import patch
 
 # Add scripts directory to path to import resolve_branches
@@ -253,6 +254,98 @@ class TestResolveBranches(unittest.TestCase):
         mock_run_git.side_effect = mock_git
         res = resolve_branches.resolve_integration_branch("/Users/user/repo")
         self.assertEqual(res, "origin/main")
+
+    @patch("resolve_branches.run_git")
+    def test_remote_only_reference(self, mock_run_git):
+        def mock_git(args, cwd=None, timeout=None):
+            if "remote" in args:
+                return "origin"
+            if "rev-parse" in args and "--show-toplevel" in args:
+                return "/Users/user/repo"
+            if "cat-file" in args:
+                if "origin/release" in args or "release" in args:
+                    return "commit"
+            if "rev-parse" in args:
+                if "origin/release" in args or "release" in args:
+                    return "commit_hash_123"
+            raise resolve_branches.GitError("Command failed")
+            
+        mock_run_git.side_effect = mock_git
+        
+        import io
+        stdout_capture = io.StringIO()
+        with patch("sys.stdout", stdout_capture), patch("sys.exit", side_effect=SystemExit):
+            with patch("sys.argv", ["resolve_branches.py", "--reference", "origin/release", "feat"]):
+                with patch("resolve_branches.get_recent_branches") as mock_branches, \
+                     patch("resolve_branches.setup_worktree", return_value="/tmp/wt"):
+                    mock_branches.return_value = [{"branch_name": "feat", "full_name": "feat", "commit_hash": "feathash", "subject": "sub", "timestamp": 123}]
+                    resolve_branches.main()
+                    
+        result = json.loads(stdout_capture.getvalue())
+        self.assertEqual(result.get("reference_branch"), "origin/release")
+        self.assertEqual(result.get("reference_ref"), "origin/release")
+        self.assertEqual(result.get("reference_commit_hash"), "commit_hash_123")
+
+    def test_integration_stale_local_main(self):
+        import tempfile
+        import subprocess
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            origin_path = os.path.join(tmpdir, "origin")
+            local_path = os.path.join(tmpdir, "local")
+            os.makedirs(origin_path)
+            
+            def run_cmd(args, cwd):
+                subprocess.run(args, cwd=cwd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                
+            run_cmd(["git", "init", "-b", "main"], origin_path)
+            run_cmd(["git", "config", "user.name", "Test User"], origin_path)
+            run_cmd(["git", "config", "user.email", "test@example.com"], origin_path)
+            with open(os.path.join(origin_path, "file.txt"), "w") as f:
+                f.write("initial")
+            run_cmd(["git", "add", "file.txt"], origin_path)
+            run_cmd(["git", "commit", "-m", "initial commit"], origin_path)
+            
+            run_cmd(["git", "clone", origin_path, local_path], tmpdir)
+            run_cmd(["git", "config", "user.name", "Test User"], local_path)
+            run_cmd(["git", "config", "user.email", "test@example.com"], local_path)
+            
+            with open(os.path.join(origin_path, "file.txt"), "w") as f:
+                f.write("updated remote")
+            run_cmd(["git", "add", "file.txt"], origin_path)
+            run_cmd(["git", "commit", "-m", "remote update"], origin_path)
+            remote_commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=origin_path, capture_output=True, text=True).stdout.strip()
+            
+            run_cmd(["git", "remote", "set-head", "origin", "main"], local_path)
+            
+            run_cmd(["git", "checkout", "-b", "feature-branch"], local_path)
+            with open(os.path.join(local_path, "feature.txt"), "w") as f:
+                f.write("feature changes")
+            run_cmd(["git", "add", "feature.txt"], local_path)
+            run_cmd(["git", "commit", "-m", "feature commit"], local_path)
+            feature_commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=local_path, capture_output=True, text=True).stdout.strip()
+            
+            old_cwd = os.getcwd()
+            os.chdir(local_path)
+            try:
+                import io
+                from unittest.mock import patch
+                
+                stdout_capture = io.StringIO()
+                with patch("sys.stdout", stdout_capture), patch("sys.exit", side_effect=SystemExit):
+                    with patch("sys.argv", ["resolve_branches.py", "feature-branch"]):
+                        resolve_branches.main()
+                        
+                output_str = stdout_capture.getvalue()
+                result = json.loads(output_str)
+                
+                self.assertEqual(result.get("reference_branch"), "origin/main")
+                self.assertEqual(result.get("reference_ref"), "origin/main")
+                self.assertEqual(result.get("reference_commit_hash"), remote_commit)
+                self.assertEqual(result.get("commit_hash"), feature_commit)
+                self.assertEqual(result.get("feature_branch"), "feature-branch")
+            finally:
+                os.chdir(old_cwd)
 
 if __name__ == "__main__":
     unittest.main()

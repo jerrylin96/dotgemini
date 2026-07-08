@@ -50,6 +50,8 @@ This configuration is developed and tested on macOS only. It should work on Linu
 
 ### 2. Isolated Execution Environments
 * Integrates with `setup_review_env.py` to automatically bootstrap CPU-compatible testing and linting virtual environments under `~/.gemini/tmp/<workspace-hash>` using `uv`.
+  > [!WARNING]
+  > This provides dependency/test isolation, NOT a security sandbox. Running setup scripts or installing dependencies (via uv/pip) on untrusted repositories can execute arbitrary build hooks or code under your user credentials.
 * Isolates dynamic branch workspaces to prevent test collisions.
 
 ### 3. Custom Registered Skills (`skills/`)

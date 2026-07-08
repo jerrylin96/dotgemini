@@ -37,6 +37,8 @@ class FileLock:
         self.lock_file = None
 
     def __enter__(self):
+        if not HAS_FCNTL:
+            raise RuntimeError("fcntl module is unavailable. POSIX file locking is required on macOS and Linux.")
         self.lock_file = open(self.lock_path, "w")
         import time
         start_time = time.time()
@@ -44,8 +46,7 @@ class FileLock:
         acquired = False
         while not acquired:
             try:
-                if HAS_FCNTL:
-                    fcntl.flock(self.lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                fcntl.flock(self.lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 acquired = True
             except (BlockingIOError, OSError):
                 if time.time() - start_time > timeout:
@@ -56,8 +57,7 @@ class FileLock:
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.lock_file:
             try:
-                if HAS_FCNTL:
-                    fcntl.flock(self.lock_file, fcntl.LOCK_UN)
+                fcntl.flock(self.lock_file, fcntl.LOCK_UN)
             except Exception:
                 pass
             try:
@@ -102,7 +102,7 @@ def fallback_parse_toml(filepath):
     opt_sec = re.search(r'^\[project\.optional-dependencies\](.*?)(?=(?:^\s*\[)|\Z)', content, re.DOTALL | re.MULTILINE)
     if opt_sec:
         opt_text = opt_sec.group(1)
-        groups = re.findall(r'(\w+)\s*=\s*\[(.*?)\]', opt_text, re.DOTALL)
+        groups = re.findall(r'([\w\-]+)\s*=\s*\[(.*?)\]', opt_text, re.DOTALL)
         opt_deps = {}
         for group_name, group_deps_text in groups:
             deps = re.findall(r'["\']([^"\']+)["\']', group_deps_text)
@@ -113,7 +113,7 @@ def fallback_parse_toml(filepath):
     dep_sec = re.search(r'^\[dependency-groups\](.*?)(?=(?:^\s*\[)|\Z)', content, re.DOTALL | re.MULTILINE)
     if dep_sec:
         dep_text = dep_sec.group(1)
-        groups = re.findall(r'(\w+)\s*=\s*\[(.*?)\]', dep_text, re.DOTALL)
+        groups = re.findall(r'([\w\-]+)\s*=\s*\[(.*?)\]', dep_text, re.DOTALL)
         dep_groups = {}
         for group_name, group_deps_text in groups:
             deps = re.findall(r'["\']([^"\']+)["\']', group_deps_text)
@@ -156,16 +156,59 @@ def check_venv_compatible(venv_python, requires_python):
     if not os.path.exists(venv_python):
         return False
     try:
-        out = subprocess.run([venv_python, "-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"], capture_output=True, text=True, check=True)
+        out = subprocess.run([venv_python, "-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}')"], capture_output=True, text=True, check=True)
         version_str = out.stdout.strip()
-        major, minor = map(int, version_str.split("."))
+        major, minor, micro = map(int, version_str.split("."))
+        venv_version = (major, minor, micro)
         
-        if requires_python:
-            match = re.search(r'>=\s*(\d+)\.(\d+)', requires_python)
-            if match:
-                req_major = int(match.group(1))
-                req_minor = int(match.group(2))
-                if (major, minor) < (req_major, req_minor):
+        if not requires_python:
+            return True
+            
+        constraints = [c.strip() for c in requires_python.split(",") if c.strip()]
+        for constraint in constraints:
+            match = re.match(r'^([>=<~!]+)\s*([\d\.\*]+)$', constraint)
+            if not match:
+                continue
+            op, req_version_str = match.groups()
+            
+            is_wildcard = req_version_str.endswith(".*")
+            clean_ver_str = req_version_str[:-2] if is_wildcard else req_version_str
+            req_parts = [int(x) for x in clean_ver_str.split(".") if x.isdigit()]
+            
+            def pad_version(parts):
+                return tuple(parts + [0] * (3 - len(parts)))[:3]
+                
+            padded_venv = venv_version
+            padded_req = pad_version(req_parts)
+            
+            if op == ">=":
+                if padded_venv < padded_req:
+                    return False
+            elif op == "<":
+                if padded_venv >= padded_req:
+                    return False
+            elif op == "<=":
+                if padded_venv > padded_req:
+                    return False
+            elif op == ">":
+                if padded_venv <= padded_req:
+                    return False
+            elif op == "==":
+                if is_wildcard:
+                    prefix = tuple(req_parts)
+                    if venv_version[:len(prefix)] != prefix:
+                        return False
+                else:
+                    if padded_venv != padded_req:
+                        return False
+            elif op == "~=":
+                if padded_venv < padded_req:
+                    return False
+                if len(req_parts) <= 2:
+                    upper_limit = (req_parts[0] + 1, 0, 0)
+                else:
+                    upper_limit = (req_parts[0], req_parts[1] + 1, 0)
+                if padded_venv >= upper_limit:
                     return False
         return True
     except Exception:
@@ -332,16 +375,22 @@ def main():
                         env={**os.environ, "VIRTUAL_ENV": env_path, "UV_PROJECT_ENVIRONMENT": env_path},
                         check=True
                     )
-                except subprocess.CalledProcessError:
-                    print("uv sync --locked failed. Retrying without --locked...")
-                    # Remove --locked
-                    sync_cmd.remove("--locked")
-                    subprocess.run(
-                        sync_cmd,
-                        cwd=workspace_path,
-                        env={**os.environ, "VIRTUAL_ENV": env_path, "UV_PROJECT_ENVIRONMENT": env_path},
-                        check=True
-                    )
+                except subprocess.CalledProcessError as e:
+                    allow_unlocked = os.environ.get("ALLOW_UNLOCKED_SYNC") == "1"
+                    if allow_unlocked:
+                        print("uv sync --locked failed. ALLOW_UNLOCKED_SYNC=1 is set, retrying without --locked...")
+                        sync_cmd.remove("--locked")
+                        subprocess.run(
+                            sync_cmd,
+                            cwd=workspace_path,
+                            env={**os.environ, "VIRTUAL_ENV": env_path, "UV_PROJECT_ENVIRONMENT": env_path},
+                            check=True
+                        )
+                        # Recompute fingerprint after sync since uv.lock might have mutated
+                        current_fingerprint = compute_fingerprint(workspace_path, install_deps, requires_python, python_info)
+                    else:
+                        print("Error: 'uv sync --locked' failed. To allow modifying the lockfile, run with ALLOW_UNLOCKED_SYNC=1.", file=sys.stderr)
+                        raise e
                 # Ensure dev tools are present
                 print("Installing review tools...")
                 subprocess.run(

@@ -163,10 +163,10 @@ dev = [
     @patch("subprocess.run")
     @patch("os.path.exists", return_value=True)
     def test_check_venv_compatible(self, mock_exists, mock_run):
-        mock_run.return_value.stdout = "3.11\n"
+        mock_run.return_value.stdout = "3.11.0\n"
         self.assertTrue(setup_review_env.check_venv_compatible("/path/to/python", ">=3.10"))
         
-        mock_run.return_value.stdout = "3.9\n"
+        mock_run.return_value.stdout = "3.9.0\n"
         self.assertFalse(setup_review_env.check_venv_compatible("/path/to/python", ">=3.10"))
         
         mock_run.side_effect = subprocess.SubprocessError
@@ -177,8 +177,13 @@ dev = [
 [project]
 name = "test-project"
 
+[project.optional-dependencies]
+dev-cpu = [
+    "torch-cpu",
+]
+
 [dependency-groups]
-dev = [
+dev-tools = [
     "pytest",
     "black",
 ]
@@ -191,24 +196,63 @@ test = [
             f.write(toml_content)
             
         parsed = setup_review_env.fallback_parse_toml(filepath)
+        opt_deps = parsed.get("project", {}).get("optional-dependencies", {})
+        self.assertIn("dev-cpu", opt_deps)
+        self.assertIn("torch-cpu", opt_deps["dev-cpu"])
+
         dep_groups = parsed.get("dependency-groups", {})
-        self.assertIn("dev", dep_groups)
-        self.assertIn("pytest", dep_groups["dev"])
-        self.assertIn("black", dep_groups["dev"])
+        self.assertIn("dev-tools", dep_groups)
+        self.assertIn("pytest", dep_groups["dev-tools"])
+        self.assertIn("black", dep_groups["dev-tools"])
         self.assertIn("test", dep_groups)
         self.assertIn("pytest-cov", dep_groups["test"])
 
+    def test_check_venv_compatible_complex(self):
+        # Mock subprocess.run
+        with patch("subprocess.run") as mock_run, patch("os.path.exists", return_value=True):
+            # Test ==3.10.*
+            mock_run.return_value.stdout = "3.10.12\n"
+            self.assertTrue(setup_review_env.check_venv_compatible("/bin/python", "==3.10.*"))
+            
+            mock_run.return_value.stdout = "3.11.0\n"
+            self.assertFalse(setup_review_env.check_venv_compatible("/bin/python", "==3.10.*"))
+            
+            # Test ~=3.11
+            mock_run.return_value.stdout = "3.11.5\n"
+            self.assertTrue(setup_review_env.check_venv_compatible("/bin/python", "~=3.11"))
+            
+            mock_run.return_value.stdout = "4.0.0\n"
+            self.assertFalse(setup_review_env.check_venv_compatible("/bin/python", "~=3.11"))
+            
+            mock_run.return_value.stdout = "3.10.9\n"
+            self.assertFalse(setup_review_env.check_venv_compatible("/bin/python", "~=3.11"))
+
+            # Test >=3.11,<3.12
+            mock_run.return_value.stdout = "3.11.5\n"
+            self.assertTrue(setup_review_env.check_venv_compatible("/bin/python", ">=3.11,<3.12"))
+            
+            mock_run.return_value.stdout = "3.12.0\n"
+            self.assertFalse(setup_review_env.check_venv_compatible("/bin/python", ">=3.11,<3.12"))
+
     def test_file_lock_acquired(self):
         lock_path = os.path.join(self.tmpdir, "test.lock")
-        with setup_review_env.FileLock(lock_path):
-            self.assertTrue(os.path.exists(lock_path))
-            
-            if setup_review_env.HAS_FCNTL:
-                with patch("fcntl.flock", side_effect=OSError):
-                    with patch("time.time", side_effect=[0.0, 1000.0]):
-                        with self.assertRaises(TimeoutError):
-                            with setup_review_env.FileLock(lock_path):
-                                pass
+        
+        # Test success under normal flock conditions
+        if setup_review_env.HAS_FCNTL:
+            with setup_review_env.FileLock(lock_path):
+                self.assertTrue(os.path.exists(lock_path))
+                
+            with patch("fcntl.flock", side_effect=OSError):
+                with patch("time.time", side_effect=[0.0, 1000.0]):
+                    with self.assertRaises(TimeoutError):
+                        with setup_review_env.FileLock(lock_path):
+                            pass
+
+        # Test failure when fcntl is missing
+        with patch("setup_review_env.HAS_FCNTL", False):
+            with self.assertRaises(RuntimeError):
+                with setup_review_env.FileLock(lock_path):
+                    pass
 
 if __name__ == "__main__":
     unittest.main()
