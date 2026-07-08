@@ -234,6 +234,69 @@ test = [
             mock_run.return_value.stdout = "3.12.0\n"
             self.assertFalse(setup_review_env.check_venv_compatible("/bin/python", ">=3.11,<3.12"))
 
+            # Test !=3.11.0
+            mock_run.return_value.stdout = "3.11.0\n"
+            self.assertFalse(setup_review_env.check_venv_compatible("/bin/python", "!=3.11.0"))
+            
+            mock_run.return_value.stdout = "3.11.5\n"
+            self.assertTrue(setup_review_env.check_venv_compatible("/bin/python", "!=3.11.0"))
+            
+            # Test complex case: >=3.11,!=3.11.0,<3.12
+            mock_run.return_value.stdout = "3.11.0\n"
+            self.assertFalse(setup_review_env.check_venv_compatible("/bin/python", ">=3.11,!=3.11.0,<3.12"))
+            
+            mock_run.return_value.stdout = "3.11.5\n"
+            self.assertTrue(setup_review_env.check_venv_compatible("/bin/python", ">=3.11,!=3.11.0,<3.12"))
+            
+            mock_run.return_value.stdout = "3.12.0\n"
+            self.assertFalse(setup_review_env.check_venv_compatible("/bin/python", ">=3.11,!=3.11.0,<3.12"))
+
+            # Test fail closed on unknown syntax
+            mock_run.return_value.stdout = "3.11.5\n"
+            self.assertFalse(setup_review_env.check_venv_compatible("/bin/python", "bad_syntax_constraint"))
+
+    @patch("subprocess.run")
+    @patch("os.path.exists")
+    def test_setup_review_env_locked_sync_failures(self, mock_exists, mock_run):
+        mock_exists.side_effect = lambda path: True
+        
+        with patch("setup_review_env.load_pyproject") as mock_load:
+            mock_load.return_value = {
+                "project": {
+                    "name": "test-locked-sync",
+                    "requires-python": ">=3.11"
+                }
+            }
+            
+            # 1. Without ALLOW_UNLOCKED_SYNC=1, it should fail
+            def run_side_effect(args, **kwargs):
+                if "sync" in args and "--locked" in args:
+                    raise subprocess.CalledProcessError(1, args)
+                return unittest.mock.MagicMock()
+            mock_run.side_effect = run_side_effect
+            
+            with patch("sys.argv", ["setup_review_env.py", self.tmpdir]), patch.dict(os.environ, {}):
+                with self.assertRaises(subprocess.CalledProcessError):
+                    setup_review_env.main()
+                    
+            # 2. With ALLOW_UNLOCKED_SYNC=1, it should retry without --locked
+            mock_run.reset_mock()
+            sync_unlocked_called = False
+            
+            def run_side_effect_2(args, **kwargs):
+                nonlocal sync_unlocked_called
+                if "sync" in args:
+                    if "--locked" in args:
+                        raise subprocess.CalledProcessError(1, args)
+                    else:
+                        sync_unlocked_called = True
+                return unittest.mock.MagicMock()
+                
+            mock_run.side_effect = run_side_effect_2
+            with patch("sys.argv", ["setup_review_env.py", self.tmpdir]), patch.dict(os.environ, {"ALLOW_UNLOCKED_SYNC": "1"}):
+                setup_review_env.main()
+            self.assertTrue(sync_unlocked_called)
+
     def test_file_lock_acquired(self):
         lock_path = os.path.join(self.tmpdir, "test.lock")
         

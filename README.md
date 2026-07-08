@@ -70,6 +70,8 @@ python3 scripts/run_tests.py
 ```
 This script automatically ensures that the correct isolated virtual environment is initialized/up-to-date and runs all discoverable tests using `pytest` with `importlib` import mode.
 
+If `uv` is available but the environment setup fails, `run_tests.py` will exit with a non-zero status by default to prevent masking issues. To bypass setup errors and fall back to testing on the host environment anyway, run with the `ALLOW_HOST_TEST_FALLBACK=1` environment variable set. If `uv` is entirely missing, host testing fallback occurs automatically.
+
 ---
 
 ## Sharing and Collaborator Onboarding

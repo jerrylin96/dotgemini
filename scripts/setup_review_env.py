@@ -158,7 +158,10 @@ def check_venv_compatible(venv_python, requires_python):
     try:
         out = subprocess.run([venv_python, "-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}')"], capture_output=True, text=True, check=True)
         version_str = out.stdout.strip()
-        major, minor, micro = map(int, version_str.split("."))
+        parts = version_str.split(".")
+        if len(parts) == 2:
+            parts.append("0")
+        major, minor, micro = map(int, parts[:3])
         venv_version = (major, minor, micro)
         
         if not requires_python:
@@ -166,9 +169,9 @@ def check_venv_compatible(venv_python, requires_python):
             
         constraints = [c.strip() for c in requires_python.split(",") if c.strip()]
         for constraint in constraints:
-            match = re.match(r'^([>=<~!]+)\s*([\d\.\*]+)$', constraint)
+            match = re.match(r'^([>=<~!=]+)\s*([\d\.\*]+)$', constraint)
             if not match:
-                continue
+                return False  # Fail closed on unknown constraint syntax
             op, req_version_str = match.groups()
             
             is_wildcard = req_version_str.endswith(".*")
@@ -201,6 +204,14 @@ def check_venv_compatible(venv_python, requires_python):
                 else:
                     if padded_venv != padded_req:
                         return False
+            elif op == "!=":
+                if is_wildcard:
+                    prefix = tuple(req_parts)
+                    if venv_version[:len(prefix)] == prefix:
+                        return False
+                else:
+                    if padded_venv == padded_req:
+                        return False
             elif op == "~=":
                 if padded_venv < padded_req:
                     return False
@@ -210,6 +221,8 @@ def check_venv_compatible(venv_python, requires_python):
                     upper_limit = (req_parts[0], req_parts[1] + 1, 0)
                 if padded_venv >= upper_limit:
                     return False
+            else:
+                return False  # Fail closed on unsupported operators
         return True
     except Exception:
         return False

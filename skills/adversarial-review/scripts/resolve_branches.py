@@ -118,6 +118,52 @@ def run_git(args, cwd=None, timeout=GIT_TIMEOUT):
         raise GitError(f"Git command failed: git {' '.join(args)}\nError: {result.stderr.strip()}")
     return result.stdout.strip()
 
+def normalize_reference_ref(cwd: str, ref: str) -> str:
+    if ref.startswith("refs/remotes/"):
+        ref = ref[len("refs/remotes/"):]
+    elif ref.startswith("refs/heads/"):
+        ref = ref[len("refs/heads/"):]
+
+    try:
+        run_git(["rev-parse", "--verify", f"refs/heads/{ref}"], cwd=cwd)
+        return ref
+    except GitError:
+        pass
+
+    try:
+        run_git(["rev-parse", "--verify", f"refs/remotes/{ref}"], cwd=cwd)
+        return ref
+    except GitError:
+        pass
+
+    try:
+        out = run_git(["for-each-ref", "--format=%(refname)", f"refs/remotes/*/{ref}"], cwd=cwd)
+        matching_refs = [line.strip() for line in out.splitlines() if line.strip()]
+        if len(matching_refs) == 1:
+            matched = matching_refs[0]
+            if matched.startswith("refs/remotes/"):
+                return matched[len("refs/remotes/"):]
+            return matched
+        elif len(matching_refs) > 1:
+            options = []
+            for r in matching_refs:
+                if r.startswith("refs/remotes/"):
+                    options.append(r[len("refs/remotes/"):])
+                else:
+                    options.append(r)
+            print(json.dumps({"error": f"Reference '{ref}' is ambiguous. Found multiple remote branches: {', '.join(options)}. Please specify <remote>/{ref}."}))
+            sys.exit(1)
+    except GitError:
+        pass
+
+    try:
+        run_git(["rev-parse", "--verify", ref], cwd=cwd)
+        return ref
+    except GitError:
+        pass
+
+    return ref
+
 def get_current_branch(cwd):
     try:
         branch = run_git(["symbolic-ref", "--short", "HEAD"], cwd=cwd)
@@ -343,7 +389,9 @@ def setup_worktree(cwd, branch_name, remote_ref=None, commit_hash=None):
     if not safe_folder or safe_folder in (".", ".."):
         raise ValueError(f"Unsafe branch name: {branch_name}")
         
-    wt_root = os.path.expanduser("~/.gemini/tmp/worktrees")
+    wt_root = os.environ.get("DOTGEMINI_WORKTREE_ROOT")
+    if not wt_root:
+        wt_root = os.path.expanduser("~/.gemini/tmp/worktrees")
     os.makedirs(wt_root, exist_ok=True)
     wt_root_abs = os.path.abspath(wt_root)
     
@@ -469,7 +517,9 @@ def main():
             target_input = arg
             i += 1
 
-    wt_root = os.path.expanduser("~/.gemini/tmp/worktrees")
+    wt_root = os.environ.get("DOTGEMINI_WORKTREE_ROOT")
+    if not wt_root:
+        wt_root = os.path.expanduser("~/.gemini/tmp/worktrees")
     os.makedirs(wt_root, exist_ok=True)
     lock_path = os.path.join(wt_root, "resolve_branches.lock")
 
@@ -535,6 +585,7 @@ def main():
             fetch_all(cwd)
             
             if reference_override is not None:
+                reference_override = normalize_reference_ref(cwd, reference_override)
                 try:
                     obj_type = run_git(["cat-file", "-t", "--", reference_override], cwd=cwd)
                 except GitError:

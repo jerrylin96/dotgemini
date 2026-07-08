@@ -19,7 +19,11 @@ def main():
             subprocess.run([sys.executable, setup_script, workspace_root], check=True)
             setup_success = True
         except subprocess.CalledProcessError as e:
-            print(f"Warning: test environment setup failed: {e}. Falling back to host environment.", file=sys.stderr, flush=True)
+            if os.environ.get("ALLOW_HOST_TEST_FALLBACK") == "1":
+                print(f"Warning: test environment setup failed: {e}. ALLOW_HOST_TEST_FALLBACK=1 is set, falling back to host environment.", file=sys.stderr, flush=True)
+            else:
+                print(f"Error: test environment setup failed: {e}. To fall back to host testing, run with ALLOW_HOST_TEST_FALLBACK=1.", file=sys.stderr, flush=True)
+                sys.exit(e.returncode)
     else:
         print("uv is not available. Skipping setup_review_env.py and falling back to host environment.", flush=True)
         
@@ -45,10 +49,21 @@ def main():
             result = subprocess.run(cmd, cwd=workspace_root)
             sys.exit(result.returncode)
         else:
-            cmd = [sys.executable, "-m", "unittest", "discover", "-s", ".", "-p", "test_*.py"]
-            print(f"pytest not found on host. Running host unittest: {' '.join(cmd)}", flush=True)
-            result = subprocess.run(cmd, cwd=workspace_root)
-            sys.exit(result.returncode)
+            print("pytest not found on host. Running host unittest...", flush=True)
+            test_dirs = [
+                "scripts/tests",
+                "skills/adversarial-review/tests",
+                "skills/data-autocleaning/tests",
+            ]
+            exit_code = 0
+            for d in test_dirs:
+                if os.path.exists(os.path.join(workspace_root, d)):
+                    cmd = [sys.executable, "-m", "unittest", "discover", "-s", d, "-p", "test_*.py"]
+                    print(f"Running: {' '.join(cmd)}", flush=True)
+                    res = subprocess.run(cmd, cwd=workspace_root)
+                    if res.returncode != 0:
+                        exit_code = res.returncode
+            sys.exit(exit_code)
 
 if __name__ == "__main__":
     main()
