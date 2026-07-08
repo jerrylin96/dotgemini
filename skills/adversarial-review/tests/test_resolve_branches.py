@@ -286,70 +286,82 @@ class TestResolveBranches(unittest.TestCase):
         self.assertEqual(result.get("reference_ref"), "origin/release")
         self.assertEqual(result.get("reference_commit_hash"), "commit_hash_123")
 
-    def test_integration_stale_local_main(self):
+    def _run_stale_local_main_integration(self, clean_after=False):
         import tempfile
         import subprocess
+        with tempfile.TemporaryDirectory() as tmpdir:
+            origin_path = os.path.join(tmpdir, "origin")
+            local_path = os.path.join(tmpdir, "local")
+            os.makedirs(origin_path)
+            
+            def run_cmd(args, cwd):
+                subprocess.run(args, cwd=cwd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                
+            run_cmd(["git", "init", "-b", "main"], origin_path)
+            run_cmd(["git", "config", "user.name", "Test User"], origin_path)
+            run_cmd(["git", "config", "user.email", "test@example.com"], origin_path)
+            with open(os.path.join(origin_path, "file.txt"), "w") as f:
+                f.write("initial")
+            run_cmd(["git", "add", "file.txt"], origin_path)
+            run_cmd(["git", "commit", "-m", "initial commit"], origin_path)
+            
+            run_cmd(["git", "clone", origin_path, local_path], tmpdir)
+            run_cmd(["git", "config", "user.name", "Test User"], local_path)
+            run_cmd(["git", "config", "user.email", "test@example.com"], local_path)
+            
+            with open(os.path.join(origin_path, "file.txt"), "w") as f:
+                f.write("updated remote")
+            run_cmd(["git", "add", "file.txt"], origin_path)
+            run_cmd(["git", "commit", "-m", "remote update"], origin_path)
+            remote_commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=origin_path, capture_output=True, text=True).stdout.strip()
+            
+            run_cmd(["git", "remote", "set-head", "origin", "main"], local_path)
+            
+            run_cmd(["git", "checkout", "-b", "feature-branch"], local_path)
+            with open(os.path.join(local_path, "feature.txt"), "w") as f:
+                f.write("feature changes")
+            run_cmd(["git", "add", "feature.txt"], local_path)
+            run_cmd(["git", "commit", "-m", "feature commit"], local_path)
+            feature_commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=local_path, capture_output=True, text=True).stdout.strip()
+            
+            old_cwd = os.getcwd()
+            os.chdir(local_path)
+            try:
+                import io
+                
+                stdout_capture = io.StringIO()
+                with patch("sys.stdout", stdout_capture), patch("sys.exit", side_effect=SystemExit):
+                    with patch("sys.argv", ["resolve_branches.py", "feature-branch"]):
+                        resolve_branches.main()
+                        
+                output_str = stdout_capture.getvalue()
+                result = json.loads(output_str)
+                
+                self.assertEqual(result.get("reference_branch"), "origin/main")
+                self.assertEqual(result.get("reference_ref"), "origin/main")
+                self.assertEqual(result.get("reference_commit_hash"), remote_commit)
+                self.assertEqual(result.get("commit_hash"), feature_commit)
+                self.assertEqual(result.get("feature_branch"), "feature-branch")
+
+                if clean_after:
+                    stdout_capture_prune = io.StringIO()
+                    with patch("sys.stdout", stdout_capture_prune), patch("sys.exit", side_effect=SystemExit):
+                        with patch("sys.argv", ["resolve_branches.py", "--prune"]):
+                            try:
+                                resolve_branches.main()
+                            except SystemExit:
+                                pass
+            finally:
+                os.chdir(old_cwd)
+
+    def test_integration_stale_local_main(self):
+        import tempfile
         import shutil
-        from unittest.mock import patch
         
         test_wt_root = tempfile.mkdtemp()
         try:
             with patch.dict(os.environ, {"DOTGEMINI_WORKTREE_ROOT": test_wt_root}):
-                with tempfile.TemporaryDirectory() as tmpdir:
-                    origin_path = os.path.join(tmpdir, "origin")
-                    local_path = os.path.join(tmpdir, "local")
-                    os.makedirs(origin_path)
-                    
-                    def run_cmd(args, cwd):
-                        subprocess.run(args, cwd=cwd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                        
-                    run_cmd(["git", "init", "-b", "main"], origin_path)
-                    run_cmd(["git", "config", "user.name", "Test User"], origin_path)
-                    run_cmd(["git", "config", "user.email", "test@example.com"], origin_path)
-                    with open(os.path.join(origin_path, "file.txt"), "w") as f:
-                        f.write("initial")
-                    run_cmd(["git", "add", "file.txt"], origin_path)
-                    run_cmd(["git", "commit", "-m", "initial commit"], origin_path)
-                    
-                    run_cmd(["git", "clone", origin_path, local_path], tmpdir)
-                    run_cmd(["git", "config", "user.name", "Test User"], local_path)
-                    run_cmd(["git", "config", "user.email", "test@example.com"], local_path)
-                    
-                    with open(os.path.join(origin_path, "file.txt"), "w") as f:
-                        f.write("updated remote")
-                    run_cmd(["git", "add", "file.txt"], origin_path)
-                    run_cmd(["git", "commit", "-m", "remote update"], origin_path)
-                    remote_commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=origin_path, capture_output=True, text=True).stdout.strip()
-                    
-                    run_cmd(["git", "remote", "set-head", "origin", "main"], local_path)
-                    
-                    run_cmd(["git", "checkout", "-b", "feature-branch"], local_path)
-                    with open(os.path.join(local_path, "feature.txt"), "w") as f:
-                        f.write("feature changes")
-                    run_cmd(["git", "add", "feature.txt"], local_path)
-                    run_cmd(["git", "commit", "-m", "feature commit"], local_path)
-                    feature_commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=local_path, capture_output=True, text=True).stdout.strip()
-                    
-                    old_cwd = os.getcwd()
-                    os.chdir(local_path)
-                    try:
-                        import io
-                        
-                        stdout_capture = io.StringIO()
-                        with patch("sys.stdout", stdout_capture), patch("sys.exit", side_effect=SystemExit):
-                            with patch("sys.argv", ["resolve_branches.py", "feature-branch"]):
-                                resolve_branches.main()
-                                
-                        output_str = stdout_capture.getvalue()
-                        result = json.loads(output_str)
-                        
-                        self.assertEqual(result.get("reference_branch"), "origin/main")
-                        self.assertEqual(result.get("reference_ref"), "origin/main")
-                        self.assertEqual(result.get("reference_commit_hash"), remote_commit)
-                        self.assertEqual(result.get("commit_hash"), feature_commit)
-                        self.assertEqual(result.get("feature_branch"), "feature-branch")
-                    finally:
-                        os.chdir(old_cwd)
+                self._run_stale_local_main_integration()
         finally:
             shutil.rmtree(test_wt_root)
 
@@ -411,6 +423,73 @@ class TestResolveBranches(unittest.TestCase):
                         self.assertEqual(result.get("reference_branch"), "origin/release")
                         self.assertEqual(result.get("reference_ref"), "origin/release")
                         self.assertEqual(result.get("reference_commit_hash"), remote_release_commit)
+                    finally:
+                        os.chdir(old_cwd)
+        finally:
+            shutil.rmtree(test_wt_root)
+
+    def test_integration_stale_local_release_preference(self):
+        import tempfile
+        import subprocess
+        import shutil
+        from unittest.mock import patch
+        
+        test_wt_root = tempfile.mkdtemp()
+        try:
+            with patch.dict(os.environ, {"DOTGEMINI_WORKTREE_ROOT": test_wt_root}):
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    origin_path = os.path.join(tmpdir, "origin")
+                    local_path = os.path.join(tmpdir, "local")
+                    os.makedirs(origin_path)
+                    
+                    def run_cmd(args, cwd):
+                        subprocess.run(args, cwd=cwd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                        
+                    run_cmd(["git", "init", "-b", "main"], origin_path)
+                    run_cmd(["git", "config", "user.name", "Test User"], origin_path)
+                    run_cmd(["git", "config", "user.email", "test@example.com"], origin_path)
+                    with open(os.path.join(origin_path, "file.txt"), "w") as f:
+                        f.write("initial")
+                    run_cmd(["git", "add", "file.txt"], origin_path)
+                    run_cmd(["git", "commit", "-m", "initial commit"], origin_path)
+                    
+                    run_cmd(["git", "checkout", "-b", "release"], origin_path)
+                    stale_commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=origin_path, capture_output=True, text=True).stdout.strip()
+                    run_cmd(["git", "checkout", "main"], origin_path)
+                    
+                    run_cmd(["git", "clone", origin_path, local_path], tmpdir)
+                    run_cmd(["git", "config", "user.name", "Test User"], local_path)
+                    run_cmd(["git", "config", "user.email", "test@example.com"], local_path)
+                    
+                    run_cmd(["git", "branch", "release", "origin/release"], local_path)
+                    
+                    run_cmd(["git", "checkout", "release"], origin_path)
+                    with open(os.path.join(origin_path, "file2.txt"), "w") as f:
+                        f.write("advanced content")
+                    run_cmd(["git", "add", "file2.txt"], origin_path)
+                    run_cmd(["git", "commit", "-m", "advanced commit"], origin_path)
+                    advanced_commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=origin_path, capture_output=True, text=True).stdout.strip()
+                    run_cmd(["git", "checkout", "main"], origin_path)
+                    
+                    run_cmd(["git", "checkout", "-b", "feature-branch"], local_path)
+                    with open(os.path.join(local_path, "feat.txt"), "w") as f:
+                        f.write("feat content")
+                    run_cmd(["git", "add", "feat.txt"], local_path)
+                    run_cmd(["git", "commit", "-m", "feat commit"], local_path)
+                    
+                    old_cwd = os.getcwd()
+                    os.chdir(local_path)
+                    try:
+                        import io
+                        stdout_capture = io.StringIO()
+                        with patch("sys.stdout", stdout_capture), patch("sys.exit", side_effect=SystemExit):
+                            with patch("sys.argv", ["resolve_branches.py", "--reference", "release", "feature-branch"]):
+                                resolve_branches.main()
+                                
+                        result = json.loads(stdout_capture.getvalue())
+                        self.assertEqual(result.get("reference_branch"), "origin/release")
+                        self.assertEqual(result.get("reference_ref"), "origin/release")
+                        self.assertEqual(result.get("reference_commit_hash"), advanced_commit)
                     finally:
                         os.chdir(old_cwd)
         finally:
@@ -490,10 +569,10 @@ class TestResolveBranches(unittest.TestCase):
         test_wt_root = tempfile.mkdtemp()
         try:
             with patch.dict(os.environ, {"DOTGEMINI_WORKTREE_ROOT": test_wt_root}):
-                self.test_integration_stale_local_main()
-            # Assert test_wt_root is empty or only has lock file left
-            files = os.listdir(test_wt_root)
-            self.assertTrue(len(files) <= 1) # Might contain lock file, but no worktree directories
+                self._run_stale_local_main_integration(clean_after=True)
+            for entry in os.listdir(test_wt_root):
+                full_path = os.path.join(test_wt_root, entry)
+                self.assertFalse(os.path.isdir(full_path), f"Found worktree directory: {entry}")
         finally:
             shutil.rmtree(test_wt_root)
 

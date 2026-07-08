@@ -119,42 +119,62 @@ def run_git(args, cwd=None, timeout=GIT_TIMEOUT):
     return result.stdout.strip()
 
 def normalize_reference_ref(cwd: str, ref: str) -> str:
+    if ref.startswith("refs/heads/"):
+        local_name = ref[len("refs/heads/"):]
+        try:
+            run_git(["rev-parse", "--verify", f"refs/heads/{local_name}"], cwd=cwd)
+            return local_name
+        except GitError:
+            pass
+        return local_name
+
     if ref.startswith("refs/remotes/"):
         ref = ref[len("refs/remotes/"):]
-    elif ref.startswith("refs/heads/"):
-        ref = ref[len("refs/heads/"):]
 
     try:
-        run_git(["rev-parse", "--verify", f"refs/heads/{ref}"], cwd=cwd)
-        return ref
+        remotes_out = run_git(["remote"], cwd=cwd)
+        remotes = [r.strip() for r in remotes_out.splitlines() if r.strip()]
     except GitError:
-        pass
+        remotes = []
 
-    try:
-        run_git(["rev-parse", "--verify", f"refs/remotes/{ref}"], cwd=cwd)
-        return ref
-    except GitError:
-        pass
+    has_remote_prefix = False
+    for remote in remotes:
+        if ref.startswith(f"{remote}/"):
+            has_remote_prefix = True
+            break
 
-    try:
-        out = run_git(["for-each-ref", "--format=%(refname)", f"refs/remotes/*/{ref}"], cwd=cwd)
-        matching_refs = [line.strip() for line in out.splitlines() if line.strip()]
-        if len(matching_refs) == 1:
-            matched = matching_refs[0]
-            if matched.startswith("refs/remotes/"):
-                return matched[len("refs/remotes/"):]
-            return matched
-        elif len(matching_refs) > 1:
-            options = []
-            for r in matching_refs:
-                if r.startswith("refs/remotes/"):
-                    options.append(r[len("refs/remotes/"):])
-                else:
-                    options.append(r)
-            print(json.dumps({"error": f"Reference '{ref}' is ambiguous. Found multiple remote branches: {', '.join(options)}. Please specify <remote>/{ref}."}))
-            sys.exit(1)
-    except GitError:
-        pass
+    if not has_remote_prefix:
+        try:
+            out = run_git(["for-each-ref", "--format=%(refname)", f"refs/remotes/*/{ref}"], cwd=cwd)
+            matching_refs = [line.strip() for line in out.splitlines() if line.strip()]
+            if len(matching_refs) == 1:
+                matched = matching_refs[0]
+                if matched.startswith("refs/remotes/"):
+                    return matched[len("refs/remotes/"):]
+                return matched
+            elif len(matching_refs) > 1:
+                options = []
+                for r in matching_refs:
+                    if r.startswith("refs/remotes/"):
+                        options.append(r[len("refs/remotes/"):])
+                    else:
+                        options.append(r)
+                print(json.dumps({"error": f"Reference '{ref}' is ambiguous. Found multiple remote branches: {', '.join(options)}. Please specify <remote>/{ref}."}))
+                sys.exit(1)
+        except GitError:
+            pass
+
+        try:
+            run_git(["rev-parse", "--verify", f"refs/heads/{ref}"], cwd=cwd)
+            return ref
+        except GitError:
+            pass
+    else:
+        try:
+            run_git(["rev-parse", "--verify", f"refs/remotes/{ref}"], cwd=cwd)
+            return ref
+        except GitError:
+            pass
 
     try:
         run_git(["rev-parse", "--verify", ref], cwd=cwd)
