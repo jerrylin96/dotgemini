@@ -433,24 +433,12 @@ def main():
         elif arg == "--reference":
             if i + 1 < len(args):
                 reference_override = args[i+1]
-                # Validate the reference override immediately
-                try:
-                    run_git(["rev-parse", "--verify", reference_override], cwd=cwd)
-                except GitError:
-                    print(json.dumps({"error": f"Reference branch '{reference_override}' not found."}))
-                    sys.exit(1)
                 i += 2
             else:
                 print(json.dumps({"error": "--reference requires a branch name"}))
                 sys.exit(1)
         elif arg.startswith("--reference="):
             reference_override = arg[len("--reference="):]
-            # Validate the reference override immediately
-            try:
-                run_git(["rev-parse", "--verify", reference_override], cwd=cwd)
-            except GitError:
-                print(json.dumps({"error": f"Reference branch '{reference_override}' not found."}))
-                sys.exit(1)
             i += 1
         elif arg.startswith("-"):
             print(json.dumps({"error": f"Unknown option: {arg}"}))
@@ -473,6 +461,14 @@ def main():
             sys.stderr.write(f"Warning: git worktree prune failed: {str(e)}\n")
         print(json.dumps({"success": True, "message": "Worktree cache pruned successfully."}))
         sys.exit(0)
+
+    # Validate the reference override if specified using cat-file to support -- separator
+    if reference_override is not None:
+        try:
+            run_git(["cat-file", "-t", "--", reference_override], cwd=cwd)
+        except GitError:
+            print(json.dumps({"error": f"Reference branch '{reference_override}' not found."}))
+            sys.exit(1)
 
     # Use a lock file to prevent race conditions during concurrent runs
     wt_root = os.path.expanduser("~/.gemini/tmp/worktrees")
@@ -515,8 +511,9 @@ def main():
             # If user passed a specific branch target, we resolve that one directly
             selected_branch = None
             if target_input:
-                # origin/ is hardcoded to match resolve_integration_branch, which only
-                # derives ref_branch from origin or local refs. Update both together.
+                # Reject if the user-supplied feature branch equals the resolved reference branch.
+                # origin/ is hardcoded to match resolve_integration_branch, which only derives
+                # ref_branch from origin or local refs. Update both together.
                 if target_input == ref_branch or target_input in (f"refs/heads/{ref_branch}", f"refs/remotes/origin/{ref_branch}"):
                     print(json.dumps({"error": f"Reference branch and feature branch are the same: {ref_branch}"}))
                     sys.exit(1)
