@@ -5,17 +5,26 @@ description: Adversarial review and diff explanation of two git worktrees.
 
 # Adversarial Review and Diff Explanation
 
-Compare active worktree/branch with target worktree/branch.
+Automatically resolve context, create/update feature branch worktree, and perform adversarial diff review.
 
 ## Context Resolution
-1. Read user input arguments for two branch/worktree references (e.g., `/adversarial-review branch-a branch-b`).
-2. If arguments are missing:
-   - Run `git worktree list` or `git branch -a` to discover active refs.
-   - Ask user to specify refs to compare.
+
+1. Run the helper branch resolution script to discover branches and manage worktree:
+   ```bash
+   python3 ~/.gemini/skills/adversarial-review/scripts/resolve_branches.py [optional_target_branch]
+   ```
+2. If the script output contains `"ambiguous": true`:
+   - Present the candidate list to the user.
+   - Ask the user to clarify which branch is the intended feature branch.
+3. If no candidate feature branch is found (e.g., `"feature_branch": null`):
+   - Report that no feature branch is available to review, and ask the user to specify one.
 
 ## Execution Steps
-1. Run `git diff <ref_1>..<ref_2>` to extract change set.
-2. Analyze diff from adversarial perspective:
-   - Identify bugs, edge cases, regression risk, performance issues.
-   - Explain logical differences.
-3. Print the review report directly to the chat interface (to avoid cluttering the filesystem) unless the user explicitly requests saving it to a file.
+
+1. Get the diff using the resolved branches:
+   - Run `git diff <reference_branch>...<feature_branch>` to extract changes introduced by the feature branch.
+2. Perform adversarial review on the diff, emphasizing:
+   - **Technical Bugs**: Logical errors, performance issues, security vulnerabilities, regression risks, and code design.
+   - **Scientific & Interpretation Errors**: Formula correctness, numerical stability, incorrect statistical assumptions, data leakage, and misinterpretation of data/metrics.
+   - **Writing Quality**: Clarity and accuracy of documentation, comments, markdown, and precision of language.
+3. Output the final review report directly into the chat. Do not save to file unless requested.
