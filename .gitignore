@@ -43,3 +43,10 @@ oauth_creds.json
 *.pkcs12
 *.json.key
 secrets/
+
+# Ignore Python compilation artifacts and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/

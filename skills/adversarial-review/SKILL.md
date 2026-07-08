@@ -88,8 +88,12 @@ The script returns JSON on stdout. The schema depends on the outcome:
 
 1. **Get the Diff**:
    - Run `git diff --merge-base <reference_branch> <commit_hash>` (or `git diff <reference_branch>...<commit_hash>`) using the resolved reference branch and the explicit `commit_hash` returned by the script. (This is more robust than using a branch name directly, as it avoids stale local tracking branch issues).
-2. **Setup/Use Isolated Env**:
-   - The review worktree is created at `worktree_path` to allow running tests or inspecting files without disrupting the user's active working tree.
+2. **Note on Worktree**:
+   - The review worktree is created at `worktree_path` to allow running tests or inspecting files without disrupting the user's active working tree. If you need to run tests, execute linters, or view/run code, `cd` into `worktree_path` first.
+   - Paths under `~/.gemini/tmp/worktrees/` are disposable cache and may be force-removed or recreated at any time; do not use them for long-lived uncommitted work.
+   - The file lock only serializes concurrent `resolve_branches.py` runs. Do not run git worktree commands against `~/.gemini/tmp/worktrees/` manually while a review is in progress.
+   - Note: Git fetches are best-effort. If network resolution fails, the review may run against stale local tracking references.
+3. **Setup/Use Isolated Env**:
    - To run tests, execute linters, or run/view code:
      1. Initialize the review environment for the worktree:
         ```bash
@@ -103,13 +107,11 @@ The script returns JSON on stdout. The schema depends on the outcome:
         ```bash
         ~/.gemini/tmp/<workspace-hash>/bin/ruff check .
         ```
-   - The file lock only serializes concurrent `resolve_branches.py` runs. Do not run git worktree commands against `~/.gemini/tmp/worktrees/` manually while a review is in progress.
-   - Note: Git fetches are best-effort. If network resolution fails, the review may run against stale local tracking references.
-3. **Perform Adversarial Review**:
+4. **Perform Adversarial Review**:
    - Analyze the diff and perform an adversarial review focusing on:
      - **Technical Bugs** (Unconditional): Logical errors, performance issues, security vulnerabilities, regression risks, and code design.
      - **Writing Quality** (Unconditional): Clarity and accuracy of documentation, comments, markdown, and precision of language.
      - **HPC / Scientific Check** (Conditional): If the diff touches HPC job scripts or scientific/numerical code, additionally check:
        - **HPC Constraints**: Do not expect intermediate compute files from HPC jobs or attempt running scripts requiring HPC-level resources.
        - **Scientific & Interpretation Errors**: Formula correctness, numerical stability, incorrect statistical assumptions, data leakage, and misinterpretation of data/metrics.
-4. Output the final review report directly into the chat. Do not save to file unless requested.
+5. Output the final review report directly into the chat. Do not save to file unless requested.

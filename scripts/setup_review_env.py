@@ -136,7 +136,7 @@ def main():
                     cmd_venv += ["--python", requires_python]
             except Exception as e:
                 print(f"Warning: Could not parse python version from pyproject.toml: {e}")
-        subprocess.run(cmd_venv, check=True)
+        subprocess.run(cmd_venv, env={**os.environ, "UV_PROJECT_ENVIRONMENT": env_path}, check=True)
 
     # 5. Determine dependencies to install
     print("Resolving dependencies...")
@@ -202,19 +202,36 @@ def main():
         print("Installing / Syncing dependencies...")
         if os.path.exists(uv_lock_path):
             print("Found uv.lock. Synchronizing with 'uv sync'...")
-            subprocess.run([uv_bin, "sync"], cwd=workspace_path, env={**os.environ, "VIRTUAL_ENV": env_path}, check=True)
+            subprocess.run(
+                [uv_bin, "sync"],
+                cwd=workspace_path,
+                env={**os.environ, "VIRTUAL_ENV": env_path, "UV_PROJECT_ENVIRONMENT": env_path},
+                check=True
+            )
             # Ensure dev tools are present
             print("Installing review tools...")
-            subprocess.run([uv_bin, "pip", "install", "pytest", "pytest-cov", "black", "ruff"], env={**os.environ, "VIRTUAL_ENV": env_path}, check=True)
+            subprocess.run(
+                [uv_bin, "pip", "install", "pytest", "pytest-cov", "black", "ruff"],
+                env={**os.environ, "VIRTUAL_ENV": env_path, "UV_PROJECT_ENVIRONMENT": env_path},
+                check=True
+            )
         else:
             print(f"Installing {len(install_deps)} dependencies via 'uv pip install'...")
             cmd_install = [uv_bin, "pip", "install"] + install_deps
-            subprocess.run(cmd_install, env={**os.environ, "VIRTUAL_ENV": env_path}, check=True)
+            subprocess.run(
+                cmd_install,
+                env={**os.environ, "VIRTUAL_ENV": env_path, "UV_PROJECT_ENVIRONMENT": env_path},
+                check=True
+            )
             
         # 7. Install project in editable mode if pyproject.toml exists (and not uv.lock since uv sync does this)
         if os.path.exists(pyproject_path) and not os.path.exists(uv_lock_path):
             print("Installing workspace project in editable mode (no-deps)...")
-            subprocess.run([uv_bin, "pip", "install", "--no-deps", "-e", workspace_path], env={**os.environ, "VIRTUAL_ENV": env_path}, check=True)
+            subprocess.run(
+                [uv_bin, "pip", "install", "--no-deps", "-e", workspace_path],
+                env={**os.environ, "VIRTUAL_ENV": env_path, "UV_PROJECT_ENVIRONMENT": env_path},
+                check=True
+            )
             
         # Save fingerprint
         try:
@@ -223,6 +240,19 @@ def main():
         except Exception as e:
             print(f"Warning: Could not save dependency fingerprint: {e}")
         
+    # Confirm env_path/bin/python and review tools exist and fail clearly if not
+    pytest_bin = os.path.join(env_path, "bin", "pytest")
+    ruff_bin = os.path.join(env_path, "bin", "ruff")
+    
+    if not os.path.exists(venv_python):
+        print(f"Error: Python executable not found in virtual environment at {venv_python}")
+        sys.exit(1)
+        
+    for tool, tool_path in [("pytest", pytest_bin), ("ruff", ruff_bin)]:
+        if not os.path.exists(tool_path):
+            print(f"Error: Review tool '{tool}' not found in virtual environment at {tool_path}")
+            sys.exit(1)
+
     print("\n--- Review environment setup complete! ---")
     print(f"Path: {env_path}")
     print(f"To run tests: {os.path.join(env_path, 'bin', 'pytest')}")

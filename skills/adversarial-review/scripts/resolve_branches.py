@@ -63,11 +63,6 @@ class FileLock:
                 self.lock_file.close()
             except Exception:
                 pass
-            # ponytail: Try unlinking the lock file to clean it up, but ignore errors if others are waiting/using it.
-            try:
-                os.unlink(self.lock_path)
-            except Exception:
-                pass
 
 def run_git(args, cwd=None, timeout=GIT_TIMEOUT):
     env = os.environ.copy()
