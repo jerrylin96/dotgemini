@@ -466,7 +466,8 @@ def setup_worktree(cwd, branch_name, remote_ref=None, commit_hash=None):
                     run_git(["checkout", "--detach", target_sha_or_ref], cwd=target_path)
                     run_git(["reset", "--hard", target_sha_or_ref], cwd=target_path)
                 except GitError as e:
-                    sys.stderr.write(f"Warning: failed to update worktree to {target_sha_or_ref}: {str(e)}\n")
+                    sys.stderr.write(f"Error: failed to update worktree to {target_sha_or_ref}: {str(e)}\n")
+                    raise
                 return target_path
 
     if not existing_wt:

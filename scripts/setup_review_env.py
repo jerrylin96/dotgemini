@@ -320,17 +320,17 @@ def main():
                         deps.extend(dep_groups[group])
                         groups_to_install.append(group)
 
-                # Filter out GPU-specific / NVIDIA / DALI / macOS-incompatible packages on macOS CPU
+                # Filter out GPU-specific / NVIDIA / ROCm / IPEX / macOS-incompatible packages on macOS CPU
                 for dep in deps:
                     dep_lower = dep.lower()
-                    is_gpu = any(x in dep_lower for x in ["nvidia", "cuda", "dali", "torch-harmonics", "triton", "tensorrt", "cupy"])
+                    is_gpu = any(x in dep_lower for x in ["nvidia", "cuda", "dali", "torch-harmonics", "triton", "tensorrt", "cupy", "rocm", "ipex", "intel-extension-for-pytorch"])
                     is_incompatible_platform = False
                     if sys.platform == "darwin":
-                        if "win-amd64" in dep_lower or "linux-x86_64" in dep_lower:
+                        if any(x in dep_lower for x in ["win-amd64", "linux-x86_64", "linux-aarch64", "manylinux"]):
                             is_incompatible_platform = True
                     
                     if is_gpu or is_incompatible_platform:
-                        print(f" -> Skipping GPU/NVIDIA/Platform-specific dependency: {dep}")
+                        print(f" -> Skipping GPU/NVIDIA/ROCm/IPEX/Platform-specific dependency: {dep}")
                     else:
                         install_deps.append(dep)
             except Exception as e:
