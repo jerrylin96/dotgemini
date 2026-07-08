@@ -355,7 +355,7 @@ def setup_worktree(cwd, branch_name, remote_ref=None):
             remote_name, full_remote_ref = parse_remote_ref(remote_ref, remotes)
             try:
                 run_git(["fetch", remote_name], cwd=wt_path, timeout=GIT_TIMEOUT)
-                run_git(["reset", full_remote_ref], cwd=wt_path)
+                run_git(["reset", "--", full_remote_ref], cwd=wt_path)
             except GitError as e:
                 sys.stderr.write(f"Warning: failed to reset to remote {full_remote_ref}: {str(e)}\n")
         else:
@@ -398,7 +398,7 @@ def setup_worktree(cwd, branch_name, remote_ref=None):
     if remote_ref:
         remote_name, full_remote_ref = parse_remote_ref(remote_ref, remotes)
         try:
-            run_git(["reset", full_remote_ref], cwd=target_path)
+            run_git(["reset", "--", full_remote_ref], cwd=target_path)
         except GitError as e:
             sys.stderr.write(f"Warning: failed to reset new worktree to remote {full_remote_ref}: {str(e)}\n")
             
@@ -465,9 +465,12 @@ def main():
     # Validate the reference override if specified using cat-file to support -- separator
     if reference_override is not None:
         try:
-            run_git(["cat-file", "-t", "--", reference_override], cwd=cwd)
+            obj_type = run_git(["cat-file", "-t", "--", reference_override], cwd=cwd)
         except GitError:
             print(json.dumps({"error": f"Reference branch '{reference_override}' not found."}))
+            sys.exit(1)
+        if obj_type not in ("commit", "tag"):
+            print(json.dumps({"error": f"Reference '{reference_override}' resolves to a {obj_type}, not a commit or tag."}))
             sys.exit(1)
 
     # Use a lock file to prevent race conditions during concurrent runs
