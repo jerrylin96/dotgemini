@@ -4,7 +4,69 @@ import os
 import hashlib
 import subprocess
 import shutil
-import tomllib
+import re
+
+# Fallback for Python 3.10 which lacks tomllib
+try:
+    import tomllib
+    HAS_TOMLLIB = True
+except ImportError:
+    HAS_TOMLLIB = False
+
+def fallback_parse_toml(filepath):
+    """
+    ponytail: Regex-based fallback TOML parser for Python 3.10 compatibility.
+    Only extracts fields needed by this script.
+    """
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            content = f.read()
+    except Exception:
+        return {}
+    
+    # Strip comments
+    content = re.sub(r'#.*$', '', content, flags=re.MULTILINE)
+    result = {}
+    
+    # Extract project section
+    project_sec = re.search(r'\[project\](.*?)(?:\[|$)', content, re.DOTALL)
+    if project_sec:
+        project_text = project_sec.group(1)
+        name_match = re.search(r'name\s*=\s*["\']([^"\']+)["\']', project_text)
+        if name_match:
+            result.setdefault("project", {})["name"] = name_match.group(1)
+            
+        req_match = re.search(r'requires-python\s*=\s*["\']([^"\']+)["\']', project_text)
+        if req_match:
+            result.setdefault("project", {})["requires-python"] = req_match.group(1)
+            
+        deps_match = re.search(r'dependencies\s*=\s*\[(.*?)\]', project_text, re.DOTALL)
+        if deps_match:
+            deps_text = deps_match.group(1)
+            deps = re.findall(r'["\']([^"\']+)["\']', deps_text)
+            result.setdefault("project", {})["dependencies"] = deps
+            
+    # Extract optional-dependencies
+    opt_sec = re.search(r'\[project\.optional-dependencies\](.*?)(?:\[|$)', content, re.DOTALL)
+    if opt_sec:
+        opt_text = opt_sec.group(1)
+        groups = re.findall(r'(\w+)\s*=\s*\[(.*?)\]', opt_text, re.DOTALL)
+        opt_deps = {}
+        for group_name, group_deps_text in groups:
+            deps = re.findall(r'["\']([^"\']+)["\']', group_deps_text)
+            opt_deps[group_name] = deps
+        result.setdefault("project", {})["optional-dependencies"] = opt_deps
+        
+    return result
+
+def load_pyproject(filepath):
+    if HAS_TOMLLIB:
+        try:
+            with open(filepath, "rb") as f:
+                return tomllib.load(f)
+        except Exception as e:
+            print(f"Warning: tomllib failed parsing {filepath}: {e}. Retrying with regex...")
+    return fallback_parse_toml(filepath)
 
 def main():
     # 1. Determine active workspace
@@ -13,7 +75,7 @@ def main():
     else:
         workspace_path = os.getcwd()
         
-    print(f"--- Antigravity Dynamic Review Env Manager ---")
+    print("--- Antigravity Dynamic Review Env Manager ---")
     print(f"Active workspace: {workspace_path}")
     
     # 2. Calculate dynamic env path based on workspace path hash
@@ -45,11 +107,13 @@ def main():
         cmd_venv = [uv_bin, "venv", env_path]
         if os.path.exists(pyproject_path):
             try:
-                with open(pyproject_path, "rb") as f:
-                    data = tomllib.load(f)
+                data = load_pyproject(pyproject_path)
                 requires_python = data.get("project", {}).get("requires-python", ">=3.10")
                 print(f"Detected Python requirement: {requires_python}")
-                if "3.10" in requires_python or ">=3.10" in requires_python:
+                
+                # Safer check for 3.10 targeting
+                versions = re.findall(r'3\.\d+', requires_python)
+                if versions and versions[0] == "3.10":
                     cmd_venv += ["--python", "3.10"]
             except Exception as e:
                 print(f"Warning: Could not parse python version from pyproject.toml: {e}")
@@ -57,14 +121,12 @@ def main():
 
     # 5. Determine dependencies to install
     print("Resolving dependencies...")
-    install_deps = ["pytest", "pytest-cov", "black", "ruff", "parameterized", "properscoring"]
+    install_deps = ["pytest", "pytest-cov", "black", "ruff"]
     
     pyproject_path = os.path.join(workspace_path, "pyproject.toml")
     if os.path.exists(pyproject_path):
         try:
-            with open(pyproject_path, "rb") as f:
-                data = tomllib.load(f)
-            
+            data = load_pyproject(pyproject_path)
             project_name = data.get("project", {}).get("name", "unknown")
             print(f"Parsing dependencies for project: {project_name}")
             
@@ -92,21 +154,6 @@ def main():
     print(f"Installing {len(install_deps)} dependencies...")
     cmd_install = [uv_bin, "pip", "install"] + install_deps
     subprocess.run(cmd_install, env={**os.environ, "VIRTUAL_ENV": env_path}, check=True)
-    
-    # 6b. Install specialized dependencies from GitHub if makani
-    if os.path.exists(pyproject_path):
-        try:
-            with open(pyproject_path, "rb") as f:
-                data = tomllib.load(f)
-            project_name = data.get("project", {}).get("name", "unknown")
-            if project_name == "makani":
-                print("Detected makani. Installing specialized dependencies from GitHub...")
-                print(" -> Installing physicsnemo...")
-                subprocess.run([uv_bin, "pip", "install", "git+https://github.com/NVIDIA/physicsnemo.git@v1.3.0"], env={**os.environ, "VIRTUAL_ENV": env_path}, check=True)
-                print(" -> Installing torch-harmonics...")
-                subprocess.run([uv_bin, "pip", "install", "git+https://github.com/NVIDIA/torch-harmonics.git", "--no-build-isolation"], env={**os.environ, "VIRTUAL_ENV": env_path}, check=True)
-        except Exception as e:
-            print(f"Warning: Could not install specialized dependencies: {e}")
     
     # 7. Install project in editable mode if pyproject.toml exists
     if os.path.exists(pyproject_path):

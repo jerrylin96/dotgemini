@@ -26,16 +26,21 @@ class GitError(Exception):
     pass
 
 class FileLock:
-    def __init__(self, lock_path):
-        self.lock_path = lock_path
+    def __init__(self, lock_path: str):
+        self.lock_path: str = lock_path
         self.lock_file = None
 
-    def __enter__(self):
+    def __enter__(self) -> "FileLock":
         # Open the file; if it fails, raise to the caller.
         self.lock_file = open(self.lock_path, "w")
         
         start_time = time.time()
-        timeout = 120
+        # Default to 15 seconds lock timeout, configurable via LOCK_TIMEOUT_SECS env var
+        try:
+            timeout = int(os.environ.get("LOCK_TIMEOUT_SECS", "15"))
+        except ValueError:
+            timeout = 15
+            
         acquired = False
         
         # Try non-blocking acquisition first
@@ -47,7 +52,7 @@ class FileLock:
             
         while not acquired:
             if time.time() - start_time > timeout:
-                raise TimeoutError("Timed out waiting for file lock after 120 seconds.")
+                raise TimeoutError(f"Timed out waiting for file lock after {timeout} seconds.")
             try:
                 fcntl.flock(self.lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 acquired = True
@@ -56,7 +61,7 @@ class FileLock:
                 
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         if self.lock_file:
             try:
                 fcntl.flock(self.lock_file, fcntl.LOCK_UN)
@@ -64,6 +69,11 @@ class FileLock:
                 pass
             try:
                 self.lock_file.close()
+            except Exception:
+                pass
+            # ponytail: Try unlinking the lock file to clean it up, but ignore errors if others are waiting/using it.
+            try:
+                os.unlink(self.lock_path)
             except Exception:
                 pass
 
@@ -355,9 +365,9 @@ def setup_worktree(cwd, branch_name, remote_ref=None):
             remote_name, full_remote_ref = parse_remote_ref(remote_ref, remotes)
             try:
                 run_git(["fetch", remote_name], cwd=wt_path, timeout=GIT_TIMEOUT)
-                # No `--` separator: `git reset` treats `--` as the commit/pathspec split,
-                # which would silently turn this into a no-op path reset.
-                run_git(["reset", full_remote_ref], cwd=wt_path)
+                # Disambiguate reference by using full refs/remotes/ prefix to avoid git parsing errors
+                qualified_ref = f"refs/remotes/{full_remote_ref}"
+                run_git(["reset", qualified_ref], cwd=wt_path)
             except GitError as e:
                 sys.stderr.write(f"Warning: failed to reset to remote {full_remote_ref}: {str(e)}\n")
         else:
@@ -400,9 +410,9 @@ def setup_worktree(cwd, branch_name, remote_ref=None):
     if remote_ref:
         remote_name, full_remote_ref = parse_remote_ref(remote_ref, remotes)
         try:
-            # No `--` separator: `git reset` treats `--` as the commit/pathspec split,
-            # which would silently turn this into a no-op path reset.
-            run_git(["reset", full_remote_ref], cwd=target_path)
+            # Disambiguate reference by using full refs/remotes/ prefix to avoid git parsing errors
+            qualified_ref = f"refs/remotes/{full_remote_ref}"
+            run_git(["reset", qualified_ref], cwd=target_path)
         except GitError as e:
             sys.stderr.write(f"Warning: failed to reset new worktree to remote {full_remote_ref}: {str(e)}\n")
             
@@ -416,7 +426,7 @@ def main():
     cwd = os.getcwd()
     try:
         toplevel = run_git(["rev-parse", "--show-toplevel"], cwd=cwd)
-        os.chdir(toplevel)
+        # Use cwd=toplevel instead of changing directory globally via os.chdir()
         cwd = toplevel
     except GitError:
         print(json.dumps({"error": "Current directory is not inside a Git repository."}))

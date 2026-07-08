@@ -9,6 +9,9 @@ This configuration is developed and tested on macOS only. It should work on Linu
 ## Setup on a New Machine
 
 1. **Backup existing config (if any):**
+   > [!WARNING]
+   > Running `mv ~/.gemini ~/.gemini.bak` will overwrite any pre-existing backup at `~/.gemini.bak`. Make sure to check or rename any existing backup directory first.
+   
    ```bash
    mv ~/.gemini ~/.gemini.bak
    ```
@@ -21,13 +24,17 @@ This configuration is developed and tested on macOS only. It should work on Linu
 
 3. **Restore local settings and credentials (if applicable):**
    ```bash
-   # Restore settings
-   mkdir -p ~/.gemini/antigravity-cli
-   cp ~/.gemini.bak/antigravity-cli/settings.json ~/.gemini/antigravity-cli/settings.json
-   
-   # Restore credentials (to avoid re-authenticating)
-   cp ~/.gemini.bak/google_accounts.json ~/.gemini/google_accounts.json 2>/dev/null || true
-   cp ~/.gemini.bak/oauth_creds.json ~/.gemini/oauth_creds.json 2>/dev/null || true
+   # Restore settings and credentials safely if backup exists
+   if [ -d ~/.gemini.bak ]; then
+     mkdir -p ~/.gemini/antigravity-cli
+     [ -f ~/.gemini.bak/antigravity-cli/settings.json ] && cp ~/.gemini.bak/antigravity-cli/settings.json ~/.gemini/antigravity-cli/settings.json
+     
+     # Restore credentials (to avoid re-authenticating)
+     [ -f ~/.gemini.bak/google_accounts.json ] && cp ~/.gemini.bak/google_accounts.json ~/.gemini/google_accounts.json
+     [ -f ~/.gemini.bak/oauth_creds.json ] && cp ~/.gemini.bak/oauth_creds.json ~/.gemini/oauth_creds.json
+   else
+     echo "No backup directory found to restore settings."
+   fi
    ```
 
 *Note: Credentials, local settings (`settings.json`), terminal logs (`*.log`), subagent run data (`brain/`), and conversation logs (`conversations/`) are automatically excluded via `.gitignore` to prevent leaking secrets or tracking local session state.*
@@ -72,7 +79,7 @@ If you want to bake this isolated environment setup directly into a specific pro
    ## Isolated Testing & Execution Environment
    All testing and validation commands must run inside the CPU-isolated virtual environment:
    1. Initialize: `python3 scripts/setup_review_env.py`
-   2. Run Tests: `~/.gemini/tmp/<workspace-hash>/bin/pytest`
+   2. Run Tests: `~/.gemini/tmp/<your-workspace-hash>/bin/pytest`
    ```
-   *(Note: The dynamic hashing logic in `setup_review_env.py` will still cleanly isolate the environment for each collaborator's machine and folder paths.)*
+   *(Note: The `<your-workspace-hash>` placeholder is a dynamic MD5 hash of your local workspace path, printed by setup_review_env.py upon completion.)*
 

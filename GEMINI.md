@@ -49,7 +49,7 @@ Use the following commands to navigate the development lifecycle:
 
 | Action | Command | Principle | Workspace Helper / Rule |
 |---|---|---|---|
-| **Define** | `/spec` | Spec before code | Write spec to markdown or check `.cursor/rules/` |
+| **Define** | `/spec` | Spec before code | Write spec to markdown or check `.gemini/` rules |
 | **Plan** | `/plan` | Small, atomic tasks | Break implementation down in an artifact first |
 | **Build** | `/build` | One slice at a time | Build in thin vertical increments |
 | **Test** | `/test` | Tests are proof | Run `tox` or `pytest` via the local commands |
