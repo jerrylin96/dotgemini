@@ -86,6 +86,7 @@ The script returns JSON on stdout. The schema depends on the outcome:
    - Run `git diff <reference_branch>...<feature_branch>` to extract changes introduced by the feature branch. (The diff can be run from the primary repository).
 2. Note on Worktree:
    - The review worktree is created at `worktree_path` to allow running tests or inspecting files without disrupting the user's active working tree. If you need to run tests, execute linters, or view/run code, `cd` into `worktree_path` first.
+   - The file lock only serializes concurrent resolve_branches.py runs. Do not run git worktree commands against ~/.gemini/tmp/worktrees/ manually while a review is in progress.
    - Note: Git fetches are best-effort. If network resolution fails, the review may run against stale local tracking references.
 3. Perform adversarial review on the diff, emphasizing:
    - **Technical Bugs** (Unconditional): Logical errors, performance issues, security vulnerabilities, regression risks, and code design.

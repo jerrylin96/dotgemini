@@ -67,7 +67,7 @@ class FileLock:
             except Exception:
                 pass
 
-def run_git(args, cwd=None, timeout=60):
+def run_git(args, cwd=None, timeout=GIT_TIMEOUT):
     # Setup environment to prevent blocking on interactive prompts
     env = os.environ.copy()
     env["GIT_TERMINAL_PROMPT"] = "0"
@@ -272,16 +272,17 @@ def get_worktree_map(cwd):
                 current_wt["path"] = os.path.abspath(val)
             elif key == "branch":
                 ref = val
-                # Detached-HEAD worktrees (lack refs/heads/) are intentionally skipped
+                # Strip refs/heads/ prefix if present; leave other refs unmodified.
+                # Note: detached-HEAD worktrees emit 'HEAD <sha>' and do not hit this branch.
                 if ref.startswith("refs/heads/"):
                     ref = ref[len("refs/heads/"):]
-                    current_wt["branch"] = ref
+                current_wt["branch"] = ref
     if current_wt:
         worktrees.append(current_wt)
     return worktrees
 
 def parse_remote_ref(remote_ref, remotes):
-    """Cleans a remote ref name and returns the remote name and the full remote ref."""
+    """Cleans a remote ref name and returns (remote_name, remote_qualified_shortname)."""
     full_remote_ref = remote_ref
     # Remove common prefixes
     for prefix in ["refs/remotes/", "remotes/"]:
@@ -432,12 +433,24 @@ def main():
         elif arg == "--reference":
             if i + 1 < len(args):
                 reference_override = args[i+1]
+                # Validate the reference override immediately
+                try:
+                    run_git(["rev-parse", "--verify", reference_override], cwd=cwd)
+                except GitError:
+                    print(json.dumps({"error": f"Reference branch '{reference_override}' not found."}))
+                    sys.exit(1)
                 i += 2
             else:
                 print(json.dumps({"error": "--reference requires a branch name"}))
                 sys.exit(1)
         elif arg.startswith("--reference="):
             reference_override = arg[len("--reference="):]
+            # Validate the reference override immediately
+            try:
+                run_git(["rev-parse", "--verify", reference_override], cwd=cwd)
+            except GitError:
+                print(json.dumps({"error": f"Reference branch '{reference_override}' not found."}))
+                sys.exit(1)
             i += 1
         elif arg.startswith("-"):
             print(json.dumps({"error": f"Unknown option: {arg}"}))
@@ -502,7 +515,8 @@ def main():
             # If user passed a specific branch target, we resolve that one directly
             selected_branch = None
             if target_input:
-                # Immediate check if target matches reference to return a clear same-branch error
+                # origin/ is hardcoded to match resolve_integration_branch, which only
+                # derives ref_branch from origin or local refs. Update both together.
                 if target_input == ref_branch or target_input in (f"refs/heads/{ref_branch}", f"refs/remotes/origin/{ref_branch}"):
                     print(json.dumps({"error": f"Reference branch and feature branch are the same: {ref_branch}"}))
                     sys.exit(1)
