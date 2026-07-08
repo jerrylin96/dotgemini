@@ -355,7 +355,9 @@ def setup_worktree(cwd, branch_name, remote_ref=None):
             remote_name, full_remote_ref = parse_remote_ref(remote_ref, remotes)
             try:
                 run_git(["fetch", remote_name], cwd=wt_path, timeout=GIT_TIMEOUT)
-                run_git(["reset", "--", full_remote_ref], cwd=wt_path)
+                # No `--` separator: `git reset` treats `--` as the commit/pathspec split,
+                # which would silently turn this into a no-op path reset.
+                run_git(["reset", full_remote_ref], cwd=wt_path)
             except GitError as e:
                 sys.stderr.write(f"Warning: failed to reset to remote {full_remote_ref}: {str(e)}\n")
         else:
@@ -398,7 +400,9 @@ def setup_worktree(cwd, branch_name, remote_ref=None):
     if remote_ref:
         remote_name, full_remote_ref = parse_remote_ref(remote_ref, remotes)
         try:
-            run_git(["reset", "--", full_remote_ref], cwd=target_path)
+            # No `--` separator: `git reset` treats `--` as the commit/pathspec split,
+            # which would silently turn this into a no-op path reset.
+            run_git(["reset", full_remote_ref], cwd=target_path)
         except GitError as e:
             sys.stderr.write(f"Warning: failed to reset new worktree to remote {full_remote_ref}: {str(e)}\n")
             
