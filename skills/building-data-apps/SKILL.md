@@ -69,7 +69,7 @@ justifies the choice based on the criteria above.
 ## Shared Design Standards
 
 Regardless of framework, you MUST follow the principles in
-`skills/building-data-apps/resources/shared_design_system.md`.
+`resources/shared_design_system.md`.
 
 -   **Visual Style**: Minimal chrome, zinc color palette, and card-based
     layouts.
@@ -81,13 +81,13 @@ Regardless of framework, you MUST follow the principles in
 
 ### If using Streamlit:
 
-1.  Read `skills/building-data-apps/resources/streamlit_framework.md` for detailed CSS and component
+1.  Read `resources/streamlit_framework.md` for detailed CSS and component
     patterns.
 2.  Follow the "Checklist for New Dashboards" in that file.
 
 ### If using React + Vite:
 
-1.  Read `skills/building-data-apps/resources/react_framework.md` for Tailwind and ECharts setup.
+1.  Read `resources/react_framework.md` for Tailwind and ECharts setup.
 2.  Follow the detailed component guidelines for KPI cards, Tables, and Panels.
 
 --------------------------------------------------------------------------------
@@ -115,7 +115,7 @@ If the user requests or agrees to the chat interface:
 > assumed.
 ```
 
-1.  **Gather Technical Details**: You MUST read `skills/building-data-apps/resources/chat_integration.md`
+1.  **Gather Technical Details**: You MUST read `resources/chat_integration.md`
     for the technical requirements.
 2.  **Update the implementation plan**: If and only if there is an
     implementation plan, you MUST update the implementation plan. This is a
@@ -123,8 +123,8 @@ If the user requests or agrees to the chat interface:
 3.  **Verify Prerequisites**: Ensure the user has the Gemini Data Analytics API
     enabled and data exists in BigQuery.
 4.  **Reference Examples**: Adapt the patterns in
-    `skills/building-data-apps/examples/react_chat_panel.jsx` and either `skills/building-data-apps/examples/fastapi_chat.py` or
-    `skills/building-data-apps/examples/express_chat.ts`.
+    `examples/react_chat_panel.jsx` and either `examples/fastapi_chat.py` or
+    `examples/express_chat.ts`.
 
 ## Acceptance Criteria
 

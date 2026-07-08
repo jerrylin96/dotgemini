@@ -11,7 +11,7 @@ antigravity-cli/knowledge/
 antigravity-cli/log/
 antigravity-cli/updater/
 antigravity-cli/brain/
-antigravity-cli/conversations
+antigravity-cli/conversations/
 antigravity-ide/
 antigravity/
 config/
@@ -33,3 +33,13 @@ projects.json
 # Ignore sensitive credentials
 google_accounts.json
 oauth_creds.json
+
+# Ignore local secrets and private keys
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pkcs12
+*.json.key
+secrets/

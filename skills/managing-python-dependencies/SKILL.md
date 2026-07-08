@@ -88,7 +88,7 @@ For local code reviews, testing, or linting on a macOS workstation where the tar
 
 1. **Initialize/Resolve the Env:** Run the global environment manager script passing the current workspace root path:
    ```bash
-   python3 ~/.gemini/antigravity-cli/scratch/setup_review_env.py <workspace_path>
+   python3 ~/.gemini/scripts/setup_review_env.py <workspace_path>
    ```
    This automatically calculates the MD5 hash of the workspace path and sets up a CPU-compatible virtual environment at `~/.gemini/tmp/<your-workspace-hash>`, filtering out CUDA-specific/NVIDIA dependencies. Because the workspace path hash is unique, every branched workspace or worktree gets its own isolated environment automatically.
 

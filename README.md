@@ -4,7 +4,7 @@ Personal global configuration and custom skills for Google Antigravity and Gemin
 
 ## Platform Support
 
-This configuration is developed and tested on macOS only. It should work on Linux (POSIX fcntl file locking, shell/git assumptions), but has not been validated there. It is not supported on Windows — the adversarial-review skill's file lock silently no-ops without fcntl, and several paths assume POSIX semantics.
+This configuration is developed and tested on macOS only. It should work on Linux (POSIX fcntl file locking, shell/git assumptions), but has not been validated there. It is not supported on Windows — the adversarial-review skill's branch resolver script will exit with an error on platforms without fcntl, and several paths assume POSIX semantics.
 
 ## Setup on a New Machine
 
@@ -53,6 +53,7 @@ This configuration is developed and tested on macOS only. It should work on Linu
 * Isolates dynamic branch workspaces to prevent test collisions.
 
 ### 3. Custom Registered Skills (`skills/`)
+* `adversarial-review` — Git worktree-based adversarial code review and diff inspection helper.
 * `/ponytail` — Lazy senior developer instructions.
 * `/caveman` — Token-efficient caveman communication mode.
 * `incremental-implementation` — Vertical slicing development guidelines.
@@ -61,19 +62,16 @@ This configuration is developed and tested on macOS only. It should work on Linu
 
 ---
 
-## Generalizing & Collaborator Onboarding
+## Sharing and Collaborator Onboarding
 
-To share this workflow with collaborators or scale it to new projects, you have two options:
+> [!WARNING]
+> This configuration repository (`dotgemini`) contains personal global settings, credentials, and custom preferences. Cloning it directly onto another collaborator's system using `git clone … ~/.gemini` will overwrite their own settings and force your personal styles/preferences.
+> 
+> Collaborators should only clone this as a reference or keep it isolated. For sharing rules/skills across team projects, **prefer Project-Level Integration** below to build a shared, repository-specific review workflow, or copy only the specific skill subset needed.
 
-### Option 1: Global Sync (Recommended for Collaborators)
-Have your collaborators clone this configuration repository directly to their home folder. This instantly equips their local Antigravity/Gemini installation with the same rules and skills:
-```bash
-git clone https://github.com/jerrylin96/dotgemini.git ~/.gemini
-```
-
-### Option 2: Project-Level Integration (Recommended for Repository-Specific Setup)
+### Project-Level Integration (Recommended for Sharing)
 If you want to bake this isolated environment setup directly into a specific project repository so that *any* agent working on it automatically uses it:
-1. **Copy the Env Manager**: Place the [setup_review_env.py](antigravity-cli/scratch/setup_review_env.py) script in the project repository (e.g., `scripts/setup_review_env.py`).
+1. **Copy the Env Manager**: Place the [setup_review_env.py](scripts/setup_review_env.py) script in the project repository (e.g., `scripts/setup_review_env.py`).
 2. **Add a Project-Level Guide**: Add a `GEMINI.md` to the project's root containing:
    ```markdown
    ## Isolated Testing & Execution Environment

@@ -11,7 +11,11 @@ try:
     import tomllib
     HAS_TOMLLIB = True
 except ImportError:
-    HAS_TOMLLIB = False
+    try:
+        import tomli as tomllib
+        HAS_TOMLLIB = True
+    except ImportError:
+        HAS_TOMLLIB = False
 
 def fallback_parse_toml(filepath):
     """
@@ -29,7 +33,7 @@ def fallback_parse_toml(filepath):
     result = {}
     
     # Extract project section
-    project_sec = re.search(r'\[project\](.*?)(?:\[|$)', content, re.DOTALL)
+    project_sec = re.search(r'^\[project\](.*?)(?=(?:^\s*\[)|\Z)', content, re.DOTALL | re.MULTILINE)
     if project_sec:
         project_text = project_sec.group(1)
         name_match = re.search(r'name\s*=\s*["\']([^"\']+)["\']', project_text)
@@ -47,7 +51,7 @@ def fallback_parse_toml(filepath):
             result.setdefault("project", {})["dependencies"] = deps
             
     # Extract optional-dependencies
-    opt_sec = re.search(r'\[project\.optional-dependencies\](.*?)(?:\[|$)', content, re.DOTALL)
+    opt_sec = re.search(r'^\[project\.optional-dependencies\](.*?)(?=(?:^\s*\[)|\Z)', content, re.DOTALL | re.MULTILINE)
     if opt_sec:
         opt_text = opt_sec.group(1)
         groups = re.findall(r'(\w+)\s*=\s*\[(.*?)\]', opt_text, re.DOTALL)
@@ -67,6 +71,23 @@ def load_pyproject(filepath):
         except Exception as e:
             print(f"Warning: tomllib failed parsing {filepath}: {e}. Retrying with regex...")
     return fallback_parse_toml(filepath)
+
+def compute_fingerprint(workspace_path, extra_deps):
+    hash_obj = hashlib.sha256()
+    # Hash the dependency list representation
+    hash_obj.update(repr(extra_deps).encode("utf-8"))
+    # Hash contents of config and lock files
+    files_to_hash = ["pyproject.toml", "uv.lock", "poetry.lock", "requirements.txt", "setup.py"]
+    for filename in files_to_hash:
+        file_path = os.path.join(workspace_path, filename)
+        if os.path.exists(file_path):
+            hash_obj.update(filename.encode("utf-8"))
+            try:
+                with open(file_path, "rb") as f:
+                    hash_obj.update(f.read())
+            except Exception:
+                pass
+    return hash_obj.hexdigest()
 
 def main():
     # 1. Determine active workspace
@@ -98,23 +119,21 @@ def main():
             
     # 4. Initialize virtual environment if it doesn't exist
     venv_python = os.path.join(env_path, "bin", "python")
+    pyproject_path = os.path.join(workspace_path, "pyproject.toml")
+    uv_lock_path = os.path.join(workspace_path, "uv.lock")
+    
     if os.path.exists(venv_python):
         print("Virtual environment already exists.")
     else:
         print("Creating virtual environment...")
-        # Check Python requirement in pyproject.toml if available
-        pyproject_path = os.path.join(workspace_path, "pyproject.toml")
         cmd_venv = [uv_bin, "venv", env_path]
         if os.path.exists(pyproject_path):
             try:
                 data = load_pyproject(pyproject_path)
-                requires_python = data.get("project", {}).get("requires-python", ">=3.10")
-                print(f"Detected Python requirement: {requires_python}")
-                
-                # Safer check for 3.10 targeting
-                versions = re.findall(r'3\.\d+', requires_python)
-                if versions and versions[0] == "3.10":
-                    cmd_venv += ["--python", "3.10"]
+                requires_python = data.get("project", {}).get("requires-python")
+                if requires_python:
+                    print(f"Detected Python requirement: {requires_python}")
+                    cmd_venv += ["--python", requires_python]
             except Exception as e:
                 print(f"Warning: Could not parse python version from pyproject.toml: {e}")
         subprocess.run(cmd_venv, check=True)
@@ -123,7 +142,6 @@ def main():
     print("Resolving dependencies...")
     install_deps = ["pytest", "pytest-cov", "black", "ruff"]
     
-    pyproject_path = os.path.join(workspace_path, "pyproject.toml")
     if os.path.exists(pyproject_path):
         try:
             data = load_pyproject(pyproject_path)
@@ -133,14 +151,27 @@ def main():
             # Extract dependencies
             deps = data.get("project", {}).get("dependencies", [])
             optional_groups = data.get("project", {}).get("optional-dependencies", {})
-            for group, group_deps in optional_groups.items():
-                if group in ["test", "dev", "vis"]:
-                    deps.extend(group_deps)
+            
+            # Prefer CPU / review-specific optional dependencies if available
+            groups_to_include = ["test", "dev", "vis"]
+            for group in optional_groups:
+                if "cpu" in group.lower() or "review" in group.lower():
+                    groups_to_include.append(group)
+            
+            for group in set(groups_to_include):
+                if group in optional_groups:
+                    deps.extend(optional_groups[group])
             
             # Filter out GPU-specific / NVIDIA / DALI / macOS-incompatible packages on macOS CPU
             for dep in deps:
                 dep_lower = dep.lower()
-                if "nvidia" in dep_lower or "cuda" in dep_lower or "dali" in dep_lower or "torch-harmonics" in dep_lower:
+                is_gpu = any(x in dep_lower for x in ["nvidia", "cuda", "dali", "torch-harmonics", "triton", "tensorrt", "cupy"])
+                is_incompatible_platform = False
+                if sys.platform == "darwin":
+                    if "win-amd64" in dep_lower or "linux-x86_64" in dep_lower:
+                        is_incompatible_platform = True
+                
+                if is_gpu or is_incompatible_platform:
                     print(f" -> Skipping GPU/NVIDIA/Platform-specific dependency: {dep}")
                 else:
                     install_deps.append(dep)
@@ -150,15 +181,47 @@ def main():
     # De-duplicate dependencies
     install_deps = list(dict.fromkeys(install_deps))
     
-    # 6. Install dependencies
-    print(f"Installing {len(install_deps)} dependencies...")
-    cmd_install = [uv_bin, "pip", "install"] + install_deps
-    subprocess.run(cmd_install, env={**os.environ, "VIRTUAL_ENV": env_path}, check=True)
+    # Check fingerprint to avoid unnecessary reinstalls
+    current_fingerprint = compute_fingerprint(workspace_path, install_deps)
+    fingerprint_file = os.path.join(env_path, ".deps_fingerprint")
     
-    # 7. Install project in editable mode if pyproject.toml exists
-    if os.path.exists(pyproject_path):
-        print("Installing workspace project in editable mode (no-deps)...")
-        subprocess.run([uv_bin, "pip", "install", "--no-deps", "-e", workspace_path], env={**os.environ, "VIRTUAL_ENV": env_path}, check=True)
+    skip_install = False
+    if os.path.exists(fingerprint_file):
+        try:
+            with open(fingerprint_file, "r") as f:
+                stored_fingerprint = f.read().strip()
+            if stored_fingerprint == current_fingerprint:
+                skip_install = True
+        except Exception:
+            pass
+            
+    if skip_install:
+        print("Dependencies and configuration are unchanged. Skipping installation.")
+    else:
+        # 6. Install dependencies
+        print("Installing / Syncing dependencies...")
+        if os.path.exists(uv_lock_path):
+            print("Found uv.lock. Synchronizing with 'uv sync'...")
+            subprocess.run([uv_bin, "sync"], cwd=workspace_path, env={**os.environ, "VIRTUAL_ENV": env_path}, check=True)
+            # Ensure dev tools are present
+            print("Installing review tools...")
+            subprocess.run([uv_bin, "pip", "install", "pytest", "pytest-cov", "black", "ruff"], env={**os.environ, "VIRTUAL_ENV": env_path}, check=True)
+        else:
+            print(f"Installing {len(install_deps)} dependencies via 'uv pip install'...")
+            cmd_install = [uv_bin, "pip", "install"] + install_deps
+            subprocess.run(cmd_install, env={**os.environ, "VIRTUAL_ENV": env_path}, check=True)
+            
+        # 7. Install project in editable mode if pyproject.toml exists (and not uv.lock since uv sync does this)
+        if os.path.exists(pyproject_path) and not os.path.exists(uv_lock_path):
+            print("Installing workspace project in editable mode (no-deps)...")
+            subprocess.run([uv_bin, "pip", "install", "--no-deps", "-e", workspace_path], env={**os.environ, "VIRTUAL_ENV": env_path}, check=True)
+            
+        # Save fingerprint
+        try:
+            with open(fingerprint_file, "w") as f:
+                f.write(current_fingerprint)
+        except Exception as e:
+            print(f"Warning: Could not save dependency fingerprint: {e}")
         
     print("\n--- Review environment setup complete! ---")
     print(f"Path: {env_path}")
