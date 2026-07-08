@@ -80,12 +80,7 @@ python3 -m venv .venv
 -   **NEVER** run `pip install` globally
 -   **NEVER** override an existing dependency manager with a different one
 
-## Workspace Override: Earth2Studio (macOS)
 
-If you are operating within the `earth2studio-private` workspace on macOS:
-- Always execute Python, pytest, make, and uv commands inside the `e2s-mac` conda environment.
-- Prefix all python executions and make tasks with `conda run -n e2s-mac` (e.g., `conda run -n e2s-mac python verify_env_mac.py` or `conda run -n e2s-mac make lint`).
-- This environment selection rule persists across all sessions and branches without modifying any files in the git repository.
 
 ## macOS CPU-only Review Environment (Opt-in)
 
