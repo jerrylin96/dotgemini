@@ -84,12 +84,12 @@ The global settings contain dedicated skills under `~/.gemini/skills/` which can
 ## 5. Isolated Testing & Execution Environment
 
 To prevent test/execution collisions and avoid polluting the workspace or running compute scripts in unconfigured global environments:
-* **Dynamic Isolated Env:** The agent will automatically initialize/resolve a CPU-compatible virtual environment located under `~/.gemini/tmp/<workspace-hash>` by running:
+* **Dynamic Isolated Env:** The agent will automatically initialize/resolve a CPU-compatible virtual environment located under `~/.gemini/tmp/<your-workspace-hash>` by running:
   ```bash
   python3 ~/.gemini/antigravity-cli/scratch/setup_review_env.py <workspace_path>
   ```
   Since dynamic branch workspaces (created via `invoke_subagent` in `branch` mode or local worktrees) have distinct file paths, their hashes will differ, ensuring perfect environment isolation for concurrent runs.
 * **Execution:** All testing and validation commands (`pytest`, `ruff`, etc.) inside the workspace (or dynamic branched workspaces) must be run using the binaries from that resolved environment:
-  * Running tests: `~/.gemini/tmp/<workspace-hash>/bin/pytest`
-  * Running linter: `~/.gemini/tmp/<workspace-hash>/bin/ruff check .`
-  * Running formatter: `~/.gemini/tmp/<workspace-hash>/bin/black`
+  * Running tests: `~/.gemini/tmp/<your-workspace-hash>/bin/pytest`
+  * Running linter: `~/.gemini/tmp/<your-workspace-hash>/bin/ruff check .`
+  * Running formatter: `~/.gemini/tmp/<your-workspace-hash>/bin/black`

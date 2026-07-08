@@ -90,12 +90,11 @@ For local code reviews, testing, or linting on a macOS workstation where the tar
    ```bash
    python3 ~/.gemini/antigravity-cli/scratch/setup_review_env.py <workspace_path>
    ```
-   This automatically calculates the MD5 hash of the workspace path and sets up a CPU-compatible virtual environment at `~/.gemini/tmp/<workspace-hash>`, filtering out CUDA-specific/NVIDIA dependencies. Because the workspace path hash is unique, every branched workspace or worktree gets its own isolated environment automatically.
+   This automatically calculates the MD5 hash of the workspace path and sets up a CPU-compatible virtual environment at `~/.gemini/tmp/<your-workspace-hash>`, filtering out CUDA-specific/NVIDIA dependencies. Because the workspace path hash is unique, every branched workspace or worktree gets its own isolated environment automatically.
 
 2. **Run Linting & Tests:** Use the binaries located inside the resolved environment to execute tests, linters, or formatters:
-   * Test runner: `~/.gemini/tmp/<workspace-hash>/bin/pytest`
-   * Linter: `~/.gemini/tmp/<workspace-hash>/bin/ruff check .`
-   * Formatter: `~/.gemini/tmp/<workspace-hash>/bin/black`
+   * Test runner: `~/.gemini/tmp/<your-workspace-hash>/bin/pytest`
+   * Linter: `~/.gemini/tmp/<your-workspace-hash>/bin/ruff check .`
+   * Formatter: `~/.gemini/tmp/<your-workspace-hash>/bin/black`
 
 This keeps the repository's git status clean of untracked `.venv` directories, prevents test runs from colliding, and guarantees that Python checks run on macOS CPU.
-
