@@ -4,6 +4,7 @@ import unittest
 import tempfile
 import shutil
 import hashlib
+import subprocess
 from unittest.mock import patch
 
 # Add scripts directory to path to import setup_review_env
@@ -158,6 +159,56 @@ dev = [
         self.assertTrue(venv_called)
         self.assertTrue(sync_called)
         self.assertTrue(pip_install_called)
+
+    @patch("subprocess.run")
+    @patch("os.path.exists", return_value=True)
+    def test_check_venv_compatible(self, mock_exists, mock_run):
+        mock_run.return_value.stdout = "3.11\n"
+        self.assertTrue(setup_review_env.check_venv_compatible("/path/to/python", ">=3.10"))
+        
+        mock_run.return_value.stdout = "3.9\n"
+        self.assertFalse(setup_review_env.check_venv_compatible("/path/to/python", ">=3.10"))
+        
+        mock_run.side_effect = subprocess.SubprocessError
+        self.assertFalse(setup_review_env.check_venv_compatible("/path/to/python", ">=3.10"))
+
+    def test_fallback_parse_toml_dependency_groups(self):
+        toml_content = """
+[project]
+name = "test-project"
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "black",
+]
+test = [
+    "pytest-cov",
+]
+"""
+        filepath = os.path.join(self.tmpdir, "pyproject.toml")
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(toml_content)
+            
+        parsed = setup_review_env.fallback_parse_toml(filepath)
+        dep_groups = parsed.get("dependency-groups", {})
+        self.assertIn("dev", dep_groups)
+        self.assertIn("pytest", dep_groups["dev"])
+        self.assertIn("black", dep_groups["dev"])
+        self.assertIn("test", dep_groups)
+        self.assertIn("pytest-cov", dep_groups["test"])
+
+    def test_file_lock_acquired(self):
+        lock_path = os.path.join(self.tmpdir, "test.lock")
+        with setup_review_env.FileLock(lock_path):
+            self.assertTrue(os.path.exists(lock_path))
+            
+            if setup_review_env.HAS_FCNTL:
+                with patch("fcntl.flock", side_effect=OSError):
+                    with patch("time.time", side_effect=[0.0, 1000.0]):
+                        with self.assertRaises(TimeoutError):
+                            with setup_review_env.FileLock(lock_path):
+                                pass
 
 if __name__ == "__main__":
     unittest.main()

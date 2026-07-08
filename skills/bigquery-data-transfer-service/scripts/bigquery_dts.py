@@ -103,16 +103,19 @@ def main() -> None:
     sys.exit(1)
 
   region = args.region or get_region() or "us"
+  project_id_enc = urllib.parse.quote(project_id, safe='')
+  region_enc = urllib.parse.quote(region, safe='')
 
   if args.data_source_id:
     print(
         f"Retrieving Data Source parameters for: {args.data_source_id} "
         f"in {region}..."
     )
+    data_source_id_enc = urllib.parse.quote(args.data_source_id, safe='')
     url = (
         "https://bigquerydatatransfer.googleapis.com/v1/"
-        f"projects/{project_id}/locations/{region}/dataSources/"
-        f"{args.data_source_id}"
+        f"projects/{project_id_enc}/locations/{region_enc}/dataSources/"
+        f"{data_source_id_enc}"
     )
   else:
     print(
@@ -121,7 +124,7 @@ def main() -> None:
     )
     url = (
         "https://bigquerydatatransfer.googleapis.com/v1/"
-        f"projects/{project_id}/locations/{region}/dataSources"
+        f"projects/{project_id_enc}/locations/{region_enc}/dataSources"
     )
 
   token = get_token()

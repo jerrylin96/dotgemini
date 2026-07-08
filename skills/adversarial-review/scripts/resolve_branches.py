@@ -64,6 +64,38 @@ class FileLock:
             except Exception:
                 pass
 
+def safe_rmtree(path: str):
+    """
+    Recursively remove a directory without following symlinks.
+    """
+    try:
+        if os.path.islink(path):
+            os.unlink(path)
+            return
+    except Exception:
+        pass
+
+    try:
+        with os.scandir(path) as it:
+            for entry in it:
+                if entry.is_symlink():
+                    try:
+                        os.unlink(entry.path)
+                    except Exception:
+                        pass
+                elif entry.is_dir(follow_symlinks=False):
+                    safe_rmtree(entry.path)
+                else:
+                    try:
+                        os.unlink(entry.path)
+                    except Exception:
+                        pass
+        os.rmdir(path)
+    except FileNotFoundError:
+        pass
+    except Exception as e:
+        sys.stderr.write(f"Warning: failed to remove {path}: {e}\n")
+
 def run_git(args, cwd=None, timeout=GIT_TIMEOUT):
     env = os.environ.copy()
     env["GIT_TERMINAL_PROMPT"] = "0"
@@ -120,11 +152,18 @@ def resolve_integration_branch(cwd):
         try:
             symref = run_git(["symbolic-ref", f"refs/remotes/{remote}/HEAD"], cwd=cwd)
             if symref.startswith("refs/remotes/"):
-                parts = symref[len("refs/remotes/"):].split("/", 1)
-                if len(parts) == 2:
-                    return parts[1]
+                return symref[len("refs/remotes/"):] # e.g. "origin/main"
         except GitError:
             pass
+
+    # 1b. If local main is absent but remote default/ref exists, check remote refs
+    for remote in remotes:
+        for possible in ["main", "master", "develop"]:
+            try:
+                run_git(["show-ref", "--verify", f"refs/remotes/{remote}/{possible}"], cwd=cwd)
+                return f"{remote}/{possible}"
+            except GitError:
+                pass
 
     # 2. local main
     try:
@@ -173,9 +212,17 @@ def get_recent_branches(cwd, ref_branch):
     branches = []
     seen_branches = set()
     
-    exclude_prefixes = [ref_branch, "HEAD"]
+    short_ref_branch = ref_branch
+    for remote in remotes:
+        if ref_branch.startswith(f"{remote}/"):
+            short_ref_branch = ref_branch[len(f"{remote}/"):]
+            break
+            
+    exclude_prefixes = [ref_branch, short_ref_branch, "HEAD"]
     for remote in remotes:
         exclude_prefixes.extend([
+            f"{remote}/{short_ref_branch}",
+            f"remotes/{remote}/{short_ref_branch}",
             f"{remote}/{ref_branch}",
             f"remotes/{remote}/{ref_branch}",
             f"{remote}/HEAD",
@@ -332,7 +379,7 @@ def setup_worktree(cwd, branch_name, remote_ref=None, commit_hash=None):
                 try:
                     run_git(["worktree", "remove", "--force", target_path], cwd=cwd_abs)
                 except GitError:
-                    shutil.rmtree(target_path, ignore_errors=True)
+                    safe_rmtree(target_path)
                     try:
                         run_git(["worktree", "prune"], cwd=cwd_abs)
                     except GitError:
@@ -357,7 +404,7 @@ def setup_worktree(cwd, branch_name, remote_ref=None, commit_hash=None):
     if not existing_wt:
         if os.path.exists(target_path):
             sys.stderr.write(f"Stale directory found at {target_path}. Cleaning...\n")
-            shutil.rmtree(target_path, ignore_errors=True)
+            safe_rmtree(target_path)
             try:
                 run_git(["worktree", "prune"], cwd=cwd_abs)
             except GitError:
@@ -422,36 +469,66 @@ def main():
             target_input = arg
             i += 1
 
+    wt_root = os.path.expanduser("~/.gemini/tmp/worktrees")
+    os.makedirs(wt_root, exist_ok=True)
+    lock_path = os.path.join(wt_root, "resolve_branches.lock")
+
     if prune_flag:
-        cwd_abs = os.path.abspath(cwd)
-        repo_hash = hashlib.sha256(cwd_abs.encode("utf-8")).hexdigest()[:8]
-        wt_root = os.path.expanduser("~/.gemini/tmp/worktrees")
-        
-        if os.path.exists(wt_root):
-            if prune_all_flag:
-                sys.stderr.write(f"Cleaning all worktrees under {wt_root}...\n")
-                shutil.rmtree(wt_root, ignore_errors=True)
-            else:
-                prefix = f"{repo_hash}_"
-                sys.stderr.write(f"Cleaning worktrees matching prefix '{prefix}' under {wt_root}...\n")
-                for item in os.listdir(wt_root):
-                    if item.startswith(prefix):
-                        item_path = os.path.join(wt_root, item)
-                        if os.path.isdir(item_path):
-                            shutil.rmtree(item_path, ignore_errors=True)
-                        else:
-                            try:
-                                os.unlink(item_path)
-                            except Exception:
-                                pass
         try:
-            run_git(["worktree", "prune"], cwd=cwd)
-        except GitError as e:
-            sys.stderr.write(f"Warning: git worktree prune failed: {str(e)}\n")
-        
-        msg = "All worktree caches pruned successfully." if prune_all_flag else f"Worktree cache for repo hash {repo_hash} pruned successfully."
-        print(json.dumps({"success": True, "message": msg}))
-        sys.exit(0)
+            with FileLock(lock_path):
+                cwd_abs = os.path.abspath(cwd)
+                repo_hash = hashlib.sha256(cwd_abs.encode("utf-8")).hexdigest()[:8]
+                
+                if os.path.exists(wt_root):
+                    if prune_all_flag:
+                        sys.stderr.write(f"Cleaning all worktrees under {wt_root}...\n")
+                        with os.scandir(wt_root) as it:
+                            for entry in it:
+                                if entry.name == "resolve_branches.lock":
+                                    continue
+                                if entry.is_symlink():
+                                    try:
+                                        os.unlink(entry.path)
+                                    except Exception:
+                                        pass
+                                elif entry.is_dir(follow_symlinks=False):
+                                    safe_rmtree(entry.path)
+                                else:
+                                    try:
+                                        os.unlink(entry.path)
+                                    except Exception:
+                                        pass
+                    else:
+                        prefix = f"{repo_hash}_"
+                        sys.stderr.write(f"Cleaning worktrees matching prefix '{prefix}' under {wt_root}...\n")
+                        with os.scandir(wt_root) as it:
+                            for entry in it:
+                                if entry.name == "resolve_branches.lock":
+                                    continue
+                                if entry.name.startswith(prefix):
+                                    if entry.is_symlink():
+                                        try:
+                                            os.unlink(entry.path)
+                                        except Exception:
+                                            pass
+                                    elif entry.is_dir(follow_symlinks=False):
+                                        safe_rmtree(entry.path)
+                                    else:
+                                        try:
+                                            os.unlink(entry.path)
+                                        except Exception:
+                                            pass
+                try:
+                    run_git(["worktree", "prune"], cwd=cwd)
+                except GitError as e:
+                    sys.stderr.write(f"Warning: git worktree prune failed: {str(e)}\n")
+                
+                msg = "All worktree caches pruned successfully." if prune_all_flag else f"Worktree cache for repo hash {repo_hash} pruned successfully."
+                print(json.dumps({"success": True, "message": msg}))
+                sys.exit(0)
+        except Exception as e:
+            print(json.dumps({"error": str(e)}))
+            sys.exit(1)
 
     if reference_override is not None:
         try:
@@ -463,23 +540,26 @@ def main():
             print(json.dumps({"error": f"Reference '{reference_override}' resolves to a {obj_type}, not a commit or tag."}))
             sys.exit(1)
 
-    wt_root = os.path.expanduser("~/.gemini/tmp/worktrees")
-    os.makedirs(wt_root, exist_ok=True)
-    lock_path = os.path.join(wt_root, "resolve_branches.lock")
-    
     try:
         with FileLock(lock_path):
+            fetch_all(cwd)
             if reference_override:
                 ref_branch = reference_override
             else:
                 ref_branch = resolve_integration_branch(cwd)
                 
-            fetch_all(cwd)
+            try:
+                reference_commit_hash = run_git(["rev-parse", ref_branch], cwd=cwd)
+            except GitError:
+                reference_commit_hash = None
+
             branches = get_recent_branches(cwd, ref_branch)
             
             if not branches:
                 print(json.dumps({
                     "reference_branch": ref_branch,
+                    "reference_ref": ref_branch,
+                    "reference_commit_hash": reference_commit_hash,
                     "feature_branch": None,
                     "ambiguous": False,
                     "candidates": [],
@@ -495,17 +575,30 @@ def main():
             ambiguous = False
             selected_branch = None
             current_local_branch = get_current_branch(cwd)
+            remotes = get_remotes(cwd)
             
+            short_ref = ref_branch
+            for remote in remotes:
+                if ref_branch.startswith(f"{remote}/"):
+                    short_ref = ref_branch[len(f"{remote}/"):]
+                    break
+
             if target_input:
-                remotes = get_remotes(cwd)
                 is_same = False
-                if target_input == ref_branch or target_input == f"refs/heads/{ref_branch}":
+                target_short = target_input
+                for remote in remotes:
+                    if target_input.startswith(f"{remote}/"):
+                        target_short = target_input[len(f"{remote}/"):]
+                        break
+                    elif target_input.startswith(f"refs/heads/"):
+                        target_short = target_input[len("refs/heads/"):]
+                        break
+                    elif target_input.startswith(f"refs/remotes/{remote}/"):
+                        target_short = target_input[len(f"refs/remotes/{remote}/"):]
+                        break
+                
+                if target_short == short_ref:
                     is_same = True
-                else:
-                    for remote in remotes:
-                        if target_input in (f"{remote}/{ref_branch}", f"refs/remotes/{remote}/{ref_branch}"):
-                            is_same = True
-                            break
                 if is_same:
                     print(json.dumps({"error": f"Reference branch and feature branch are the same: {ref_branch}"}))
                     sys.exit(1)
@@ -531,18 +624,19 @@ def main():
             if ambiguous and not target_input:
                 print(json.dumps({
                     "reference_branch": ref_branch,
+                    "reference_ref": ref_branch,
+                    "reference_commit_hash": reference_commit_hash,
                     "feature_branch": None,
                     "ambiguous": True,
                     "candidates": branches[:5]
                 }, indent=2))
                 sys.exit(0)
                 
-            if ref_branch == selected_branch["branch_name"]:
+            if short_ref == selected_branch["branch_name"]:
                 print(json.dumps({"error": f"Reference branch and feature branch are the same: {ref_branch}"}))
                 sys.exit(1)
                 
             remote_ref = None
-            remotes = get_remotes(cwd)
             for cand in branches:
                 if cand["branch_name"] == selected_branch["branch_name"]:
                     is_remote = False
@@ -568,6 +662,8 @@ def main():
             
             print(json.dumps({
                 "reference_branch": ref_branch,
+                "reference_ref": ref_branch,
+                "reference_commit_hash": reference_commit_hash,
                 "feature_branch": selected_branch["branch_name"],
                 "ambiguous": False,
                 "worktree_path": wt_path,

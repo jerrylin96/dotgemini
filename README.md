@@ -60,6 +60,14 @@ This configuration is developed and tested on macOS only. It should work on Linu
 * `test-driven-development` — Red-green-refactor testing patterns.
 * `debugging-and-error-recovery` — Systematic triage and root-cause fix strategies.
 
+## Running Tests
+
+To run all unit tests for the configured skills and environment setup:
+```bash
+python3 scripts/run_tests.py
+```
+This script automatically ensures that the correct isolated virtual environment is initialized/up-to-date and runs all discoverable tests using `pytest` with `importlib` import mode.
+
 ---
 
 ## Sharing and Collaborator Onboarding

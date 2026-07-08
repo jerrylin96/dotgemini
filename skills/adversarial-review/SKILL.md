@@ -27,6 +27,8 @@ The script returns JSON on stdout. The schema depends on the outcome:
    ```json
    {
      "reference_branch": "main",
+     "reference_ref": "origin/main",
+     "reference_commit_hash": "b2c3d4e5...",
      "feature_branch": "feat/my-feature",
      "ambiguous": false,
      "worktree_path": "/Users/user/.gemini/tmp/worktrees/a1b2c3d4_feat-my-feature_e5f6g7",
@@ -38,6 +40,8 @@ The script returns JSON on stdout. The schema depends on the outcome:
    ```json
    {
      "reference_branch": "main",
+     "reference_ref": "origin/main",
+     "reference_commit_hash": "b2c3d4e5...",
      "feature_branch": null,
      "ambiguous": true,
      "candidates": [
@@ -55,6 +59,8 @@ The script returns JSON on stdout. The schema depends on the outcome:
    ```json
    {
      "reference_branch": "main",
+     "reference_ref": "origin/main",
+     "reference_commit_hash": "b2c3d4e5...",
      "feature_branch": null,
      "ambiguous": false,
      "candidates": [],
@@ -87,7 +93,7 @@ The script returns JSON on stdout. The schema depends on the outcome:
 ## Execution Steps
 
 1. **Get the Diff**:
-   - Run `git diff --merge-base <reference_branch> <commit_hash>` (or `git diff <reference_branch>...<commit_hash>`) using the resolved reference branch and the explicit `commit_hash` returned by the script. (This is more robust than using a branch name directly, as it avoids stale local tracking branch issues).
+   - Run `git diff --merge-base <reference_commit_hash> <commit_hash>` (or `git diff <reference_commit_hash>...<commit_hash>`) using the resolved `reference_commit_hash` and the explicit feature branch `commit_hash` returned by the script. (This is more robust than using a branch name directly, as it avoids stale local tracking branch issues).
 2. **Note on Worktree**:
    - The review worktree is created at `worktree_path` to allow running tests or inspecting files without disrupting the user's active working tree. If you need to run tests, execute linters, or view/run code, `cd` into `worktree_path` first.
    - Paths under `~/.gemini/tmp/worktrees/` are disposable cache and may be force-removed or recreated at any time; do not use them for long-lived uncommitted work.

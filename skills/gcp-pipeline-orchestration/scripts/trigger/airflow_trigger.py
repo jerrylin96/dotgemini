@@ -66,8 +66,12 @@ class ComposerClient:
       self, project: str, location: str, environment: str
   ) -> str:
     """Gets the Airflow URI for a Composer environment."""
-    url = f'https://composer.googleapis.com/v1/projects/{project}/locations/{location}/environments/{environment}'
-    response = requests.get(url, headers=self._get_headers())
+    from urllib.parse import quote
+    proj_enc = quote(project, safe='')
+    loc_enc = quote(location, safe='')
+    env_enc = quote(environment, safe='')
+    url = f'https://composer.googleapis.com/v1/projects/{proj_enc}/locations/{loc_enc}/environments/{env_enc}'
+    response = requests.get(url, headers=self._get_headers(), timeout=30)
     response.raise_for_status()
     env_data = response.json()
     airflow_uri = env_data.get('config', {}).get('airflowUri')
@@ -79,15 +83,17 @@ class ComposerClient:
       self, project: str, location: str, environment: str, dag_id: str
   ) -> dict[str, Any]:
     """Triggers a DAG run in the specified Composer environment."""
+    from urllib.parse import quote
     airflow_uri = self.get_airflow_uri(project, location, environment)
-    url = f'{airflow_uri}/api/v1/dags/{dag_id}/dagRuns'
-    response = requests.post(url, headers=self._get_headers(), json={})
+    dag_id_enc = quote(dag_id, safe='')
+    url = f'{airflow_uri}/api/v1/dags/{dag_id_enc}/dagRuns'
+    response = requests.post(url, headers=self._get_headers(), json={}, timeout=30)
     response.raise_for_status()
     return response.json()
 
 
 def trigger_dag(
-    project: str, location: str, environment: str, dag_id: str
+    project: str, location: str, environment: str, dag_id: str, sleep_seconds: int = 120
 ) -> str:
   """Triggers an Airflow DAG in a Cloud Composer environment.
 
@@ -96,17 +102,19 @@ def trigger_dag(
     location: GCP Region (e.g., us-central1).
     environment: Composer environment name.
     dag_id: ID of the DAG to trigger.
+    sleep_seconds: Seconds to wait before triggering.
 
   Returns:
     JSON string with the trigger response or error message.
   """
   client = ComposerClient()
   try:
-    logging.info('Waiting 2 minutes for deployment to complete...')
-    time.sleep(120)
+    if sleep_seconds > 0:
+      logging.info('Waiting %d seconds for deployment to complete...', sleep_seconds)
+      time.sleep(sleep_seconds)
     result = client.trigger_dag_run(project, location, environment, dag_id)
     return json.dumps(result, indent=2)
-  except Exception as e:  # pylint: disable=broad-except
+  except Exception as e:  # pylint: disable=broad-exception
     logging.error('Failed to trigger DAG.', exc_info=True)
     return f'Failed to trigger DAG: {e}'
 
@@ -119,11 +127,14 @@ def main() -> None:
       '--environment', required=True, help='Composer Environment'
   )
   parser.add_argument('--dag_id', required=True, help='Airflow DAG ID')
+  parser.add_argument(
+      '--sleep-seconds', type=int, default=120, help='Seconds to sleep before triggering (default: 120)'
+  )
 
   args = parser.parse_args()
 
   logging.basicConfig(level=logging.INFO)
-  print(trigger_dag(args.project, args.location, args.environment, args.dag_id))
+  print(trigger_dag(args.project, args.location, args.environment, args.dag_id, args.sleep_seconds))
 
 
 if __name__ == '__main__':

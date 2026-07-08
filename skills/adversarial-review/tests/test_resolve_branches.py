@@ -187,31 +187,72 @@ class TestResolveBranches(unittest.TestCase):
 
     @patch("resolve_branches.run_git")
     @patch("os.path.exists", return_value=True)
-    @patch("os.listdir")
-    @patch("shutil.rmtree")
-    @patch("os.path.isdir", return_value=True)
-    def test_prune_repo_prefix_only(self, mock_isdir, mock_rmtree, mock_listdir, mock_exists, mock_run_git):
-        # Simulate items in worktree directory
-        mock_listdir.return_value = [
-            f"{self.repo_hash}_branch1_123456",
-            f"{self.repo_hash}_branch2_789012",
-            "differenthash_branch1_123456",
-            "resolve_branches.lock"
+    @patch("os.scandir")
+    @patch("resolve_branches.safe_rmtree")
+    def test_prune_repo_prefix_only(self, mock_safe_rmtree, mock_scandir, mock_exists, mock_run_git):
+        # Mock os.scandir to return DirEntry objects
+        class MockDirEntry:
+            def __init__(self, name, is_dir_val=True, is_symlink_val=False):
+                self.name = name
+                self.path = os.path.join(os.path.expanduser("~/.gemini/tmp/worktrees"), name)
+                self.is_dir_val = is_dir_val
+                self.is_symlink_val = is_symlink_val
+
+            def is_dir(self, follow_symlinks=True):
+                return self.is_dir_val
+
+            def is_symlink(self):
+                return self.is_symlink_val
+
+        mock_scandir.return_value.__enter__.return_value = [
+            MockDirEntry(f"{self.repo_hash}_branch1_123456"),
+            MockDirEntry(f"{self.repo_hash}_branch2_789012"),
+            MockDirEntry("differenthash_branch1_123456"),
+            MockDirEntry("resolve_branches.lock", is_dir_val=False)
         ]
 
-        # Inject arguments to trigger --prune (but not --prune-all)
-        with patch("sys.argv", ["resolve_branches.py", "--prune"]), patch("sys.exit"):
+        with patch("sys.argv", ["resolve_branches.py", "--prune"]), patch("sys.exit", side_effect=SystemExit) as mock_exit:
             with patch("resolve_branches.os.path.abspath", return_value="/Users/user/repo"):
-                resolve_branches.main()
+                with self.assertRaises(SystemExit):
+                    resolve_branches.main()
+                mock_exit.assert_called_once_with(0)
                 
-        # Assert rmtree was called ONLY for the matching prefix worktrees,
-        # NOT for the entire directory or other repo worktrees
-        removed_paths = [call[0][0] for call in mock_rmtree.call_args_list]
-        
+        # Verify safe_rmtree was called only on paths matching prefix and NOT on resolve_branches.lock
+        removed_paths = [call[0][0] for call in mock_safe_rmtree.call_args_list]
         self.assertIn(os.path.join(self.wt_root, f"{self.repo_hash}_branch1_123456"), removed_paths)
         self.assertIn(os.path.join(self.wt_root, f"{self.repo_hash}_branch2_789012"), removed_paths)
         self.assertNotIn(os.path.join(self.wt_root, "differenthash_branch1_123456"), removed_paths)
-        self.assertNotIn(self.wt_root, removed_paths)
+        self.assertNotIn(os.path.join(self.wt_root, "resolve_branches.lock"), removed_paths)
+
+    @patch("resolve_branches.run_git")
+    def test_resolve_integration_branch_prefers_remote_default(self, mock_run_git):
+        # Stale local main vs current origin/main.
+        # Mock symbolic-ref to return refs/remotes/origin/main
+        def mock_git(args, cwd=None, timeout=None):
+            if "symbolic-ref" in args:
+                return "refs/remotes/origin/main"
+            if "remote" in args:
+                return "origin"
+            raise resolve_branches.GitError("Command failed")
+            
+        mock_run_git.side_effect = mock_git
+        res = resolve_branches.resolve_integration_branch("/Users/user/repo")
+        self.assertEqual(res, "origin/main")
+
+    @patch("resolve_branches.run_git")
+    def test_resolve_integration_branch_absent_local_main(self, mock_run_git):
+        # Repos where local main is absent but remote default exists.
+        # Mock symbolic-ref to fail, but show-ref to verify origin/main.
+        def mock_git(args, cwd=None, timeout=None):
+            if "remote" in args:
+                return "origin"
+            if "show-ref" in args and "refs/remotes/origin/main" in args:
+                return "commit_hash"
+            raise resolve_branches.GitError("Command failed")
+            
+        mock_run_git.side_effect = mock_git
+        res = resolve_branches.resolve_integration_branch("/Users/user/repo")
+        self.assertEqual(res, "origin/main")
 
 if __name__ == "__main__":
     unittest.main()

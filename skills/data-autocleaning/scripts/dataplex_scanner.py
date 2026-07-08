@@ -23,23 +23,28 @@ import asyncio
 import json
 import logging
 import os
+import re
 import uuid
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
+PROJECT_RE = re.compile(r"^[a-zA-Z0-9\-:]+$")
+SEGMENT_RE = re.compile(r"^[a-zA-Z0-9_]+$")
+LOCATION_RE = re.compile(r"^[a-zA-Z0-9\-]+$")
 
-async def run_command_async(cmd: str) -> str:
-  """Runs a shell command asynchronously and returns the stdout."""
-  process = await asyncio.create_subprocess_shell(
-      cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+
+async def run_command_async(argv: list) -> str:
+  """Runs a command asynchronously via create_subprocess_exec and returns the stdout."""
+  process = await asyncio.create_subprocess_exec(
+      *argv, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
   )
   stdout, stderr = await process.communicate()
 
   if process.returncode != 0:
     raise RuntimeError(
-        f"Command failed: {cmd}\nError: {stderr.decode('utf-8')}"
+        f"Command failed: {' '.join(argv)}\nError: {stderr.decode('utf-8')}"
     )
 
   return stdout.decode("utf-8")
@@ -47,11 +52,15 @@ async def run_command_async(cmd: str) -> str:
 
 async def get_table_row_count(table_ref: str) -> int:
   """Gets the row count of a BigQuery table using count(*)."""
-  cmd = (
-      "bq query --quiet --nouse_legacy_sql --format=json "
-      f"'SELECT count(*) as count FROM `{table_ref}`'"
-  )
-  output = await run_command_async(cmd)
+  argv = [
+      "bq",
+      "query",
+      "--quiet",
+      "--nouse_legacy_sql",
+      "--format=json",
+      f"SELECT count(*) as count FROM `{table_ref}`",
+  ]
+  output = await run_command_async(argv)
   try:
     results = json.loads(output)
     return int(results[0]["count"])
@@ -73,13 +82,23 @@ async def create_and_wait_for_scan(
       location: Google Cloud region (e.g., 'us-central1').
       output_dir: Directory to save the resulting JSON profile.
   """
+  if not LOCATION_RE.match(location):
+    logging.error("[%s] Invalid location: %s. Skipping.", table_id, location)
+    return
+
   parts = table_id.split(".")
   if len(parts) == 3:
     project, dataset, table = parts
+    if not (PROJECT_RE.match(project) and SEGMENT_RE.match(dataset) and SEGMENT_RE.match(table)):
+      logging.error("[%s] Invalid segments in table ID. Skipping.", table_id)
+      return
     data_source_resource = f"//bigquery.googleapis.com/projects/{project}/datasets/{dataset}/tables/{table}"
     bq_table_ref = f"{project}.{dataset}.{table}"
   elif len(parts) == 4:
     project, catalog, namespace, table = parts
+    if not (PROJECT_RE.match(project) and SEGMENT_RE.match(catalog) and SEGMENT_RE.match(namespace) and SEGMENT_RE.match(table)):
+      logging.error("[%s] Invalid segments in table ID. Skipping.", table_id)
+      return
     data_source_resource = f"//biglake.googleapis.com/iceberg/v1/restcatalog/v1/projects/{project}/catalogs/{catalog}/namespaces/{namespace}/tables/{table}"
     bq_table_ref = f"{project}.{catalog}.{namespace}.{table}"
   else:
@@ -115,24 +134,27 @@ async def create_and_wait_for_scan(
     )
 
   # Construct the base create command
-  create_cmd_parts = [
-      f"gcloud dataplex datascans create data-profile {profile_name}",
+  argv = [
+      "gcloud",
+      "dataplex",
+      "datascans",
+      "create",
+      "data-profile",
+      profile_name,
       f"--location={location}",
-      f'--data-source-resource="{data_source_resource}"',
+      f"--data-source-resource={data_source_resource}",
       f"--project={project}",
       "--one-time",
-      '--ttl-after-scan-completion="2400s"',
+      "--ttl-after-scan-completion=2400s",
       "--format=json",
   ]
 
   if sampling_percent is not None:
-    create_cmd_parts.append(f"--sampling-percent={sampling_percent}")
-
-  create_cmd = " ".join(create_cmd_parts)
+    argv.append(f"--sampling-percent={sampling_percent}")
 
   logging.info("[%s] Creating Dataplex profile: %s", table_id, profile_name)
   try:
-    await run_command_async(create_cmd)
+    await run_command_async(argv)
     logging.info(
         "[%s] Profile %s successfully initiated.", table_id, profile_name
     )
@@ -141,13 +163,17 @@ async def create_and_wait_for_scan(
     return
 
   # Construct the describe command to poll for results
-  describe_cmd = (
-      f"gcloud dataplex datascans describe {profile_name} "
-      f"--location={location} "
-      f"--project={project} "
-      "--view=full "
-      "--format=json"
-  )
+  describe_argv = [
+      "gcloud",
+      "dataplex",
+      "datascans",
+      "describe",
+      profile_name,
+      f"--location={location}",
+      f"--project={project}",
+      "--view=full",
+      "--format=json",
+  ]
 
   logging.info("[%s] Waiting for profile results...", table_id)
   max_retries = 50
@@ -155,7 +181,7 @@ async def create_and_wait_for_scan(
 
   for attempt in range(1, max_retries + 1):
     try:
-      output = await run_command_async(describe_cmd)
+      output = await run_command_async(describe_argv)
       result = json.loads(output)
 
       # Check if scan results are populated
@@ -169,7 +195,10 @@ async def create_and_wait_for_scan(
               attempt,
           )
 
-          output_file = os.path.join(output_dir, f"{table}_{profile_name}.json")
+          # Sanitize output filename
+          safe_table = re.sub(r"[^a-zA-Z0-9_]", "_", table)
+          safe_table = os.path.basename(safe_table)
+          output_file = os.path.join(output_dir, f"{safe_table}_{profile_name}.json")
           with open(output_file, "w") as f:
             json.dump(result, f, indent=2)
 
