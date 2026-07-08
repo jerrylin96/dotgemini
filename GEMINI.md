@@ -73,11 +73,11 @@ Use the following commands to navigate the development lifecycle:
 
 The global settings contain dedicated skills under `~/.gemini/skills/` which can be loaded on demand:
 
-* [ponytail/SKILL.md](file:///Users/jlin404/.gemini/skills/ponytail/SKILL.md) — Detailed minimal-code YAGNI guidelines
-* [caveman/SKILL.md](file:///Users/jlin404/.gemini/skills/caveman/SKILL.md) — Concise style and compression levels
-* [incremental-implementation/SKILL.md](file:///Users/jlin404/.gemini/skills/incremental-implementation/SKILL.md) — Thin-slice execution cycles
-* [test-driven-development/SKILL.md](file:///Users/jlin404/.gemini/skills/test-driven-development/SKILL.md) — Red-Green-Refactor and Prove-It patterns
-* [debugging-and-error-recovery/SKILL.md](file:///Users/jlin404/.gemini/skills/debugging-and-error-recovery/SKILL.md) — Root-cause triage checklists
+* [ponytail/SKILL.md](skills/ponytail/SKILL.md) — Detailed minimal-code YAGNI guidelines
+* [caveman/SKILL.md](skills/caveman/SKILL.md) — Concise style and compression levels
+* [incremental-implementation/SKILL.md](skills/incremental-implementation/SKILL.md) — Thin-slice execution cycles
+* [test-driven-development/SKILL.md](skills/test-driven-development/SKILL.md) — Red-Green-Refactor and Prove-It patterns
+* [debugging-and-error-recovery/SKILL.md](skills/debugging-and-error-recovery/SKILL.md) — Root-cause triage checklists
 
 ---
 

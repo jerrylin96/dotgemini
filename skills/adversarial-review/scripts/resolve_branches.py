@@ -5,6 +5,7 @@ import subprocess
 import json
 import shutil
 import hashlib
+import time
 
 # Try importing fcntl for flock on Unix platforms (macOS/Linux)
 try:
@@ -13,31 +14,56 @@ try:
 except ImportError:
     HAS_FCNTL = False
 
+# The time window (in seconds) within which multiple active branches are considered ambiguous.
+# 10 minutes (600 seconds) is a reasonable default for concurrent developer activity.
+AMBIGUITY_WINDOW_SECS = 600
+
+# Git command timeout (in seconds) used across fetches and other git actions.
+GIT_TIMEOUT = 30
+
+class GitError(Exception):
+    """Custom exception raised when a Git command fails or times out."""
+    pass
+
 class FileLock:
     def __init__(self, lock_path):
         self.lock_path = lock_path
         self.lock_file = None
 
     def __enter__(self):
-        if not HAS_FCNTL:
-            return self
+        # Open the file; if it fails, raise to the caller.
+        self.lock_file = open(self.lock_path, "w")
+        
+        start_time = time.time()
+        timeout = 120
+        acquired = False
+        
+        # Try non-blocking acquisition first
         try:
-            self.lock_file = open(self.lock_path, "w")
             fcntl.flock(self.lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
+            acquired = True
+        except (BlockingIOError, OSError):
             sys.stderr.write("Another instance is running. Waiting for lock...\n")
-            fcntl.flock(self.lock_file, fcntl.LOCK_EX)
-        except Exception as e:
-            sys.stderr.write(f"Warning: could not acquire lock: {str(e)}\n")
+            
+        while not acquired:
+            if time.time() - start_time > timeout:
+                raise TimeoutError("Timed out waiting for file lock after 120 seconds.")
+            try:
+                fcntl.flock(self.lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                acquired = True
+            except (BlockingIOError, OSError):
+                time.sleep(0.5)
+                
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if HAS_FCNTL and self.lock_file:
+        if self.lock_file:
             try:
                 fcntl.flock(self.lock_file, fcntl.LOCK_UN)
+            except Exception:
+                pass
+            try:
                 self.lock_file.close()
-                if os.path.exists(self.lock_path):
-                    os.remove(self.lock_path)
             except Exception:
                 pass
 
@@ -58,10 +84,10 @@ def run_git(args, cwd=None, timeout=60):
             env=env
         )
     except subprocess.TimeoutExpired:
-        raise Exception(f"Git command timed out after {timeout} seconds: git {' '.join(args)}")
+        raise GitError(f"Git command timed out after {timeout} seconds: git {' '.join(args)}")
         
     if result.returncode != 0:
-        raise Exception(f"Git command failed: git {' '.join(args)}\nError: {result.stderr.strip()}")
+        raise GitError(f"Git command failed: git {' '.join(args)}\nError: {result.stderr.strip()}")
     return result.stdout.strip()
 
 def get_current_branch(cwd):
@@ -70,7 +96,7 @@ def get_current_branch(cwd):
         branch = run_git(["symbolic-ref", "--short", "HEAD"], cwd=cwd)
         if branch:
             return branch
-    except Exception:
+    except GitError:
         pass
     
     # Fall back to branch --show-current
@@ -78,7 +104,7 @@ def get_current_branch(cwd):
         branch = run_git(["branch", "--show-current"], cwd=cwd)
         if branch:
             return branch
-    except Exception:
+    except GitError:
         pass
         
     # Detached HEAD: Fallback to current commit hash
@@ -86,16 +112,52 @@ def get_current_branch(cwd):
         commit_hash = run_git(["rev-parse", "--short", "HEAD"], cwd=cwd)
         if commit_hash:
             return commit_hash
-    except Exception:
+    except GitError:
         pass
         
     return "HEAD"
 
+def resolve_integration_branch(cwd):
+    # 1. symref refs/remotes/origin/HEAD
+    try:
+        symref = run_git(["symbolic-ref", "refs/remotes/origin/HEAD"], cwd=cwd)
+        # symref is e.g. "refs/remotes/origin/main"
+        if symref.startswith("refs/remotes/"):
+            parts = symref[len("refs/remotes/"):].split("/", 1)
+            if len(parts) == 2:
+                return parts[1]
+    except GitError:
+        pass
+
+    # 2. local main
+    try:
+        run_git(["show-ref", "--verify", "refs/heads/main"], cwd=cwd)
+        return "main"
+    except GitError:
+        pass
+
+    # 3. local master
+    try:
+        run_git(["show-ref", "--verify", "refs/heads/master"], cwd=cwd)
+        return "master"
+    except GitError:
+        pass
+
+    # 4. local develop
+    try:
+        run_git(["show-ref", "--verify", "refs/heads/develop"], cwd=cwd)
+        return "develop"
+    except GitError:
+        pass
+
+    # 5. current branch as last resort
+    return get_current_branch(cwd)
+
 def fetch_all(cwd):
     try:
         # Fetch silently with timeout to prevent hanging
-        run_git(["fetch", "--all", "--prune"], cwd=cwd, timeout=30)
-    except Exception as e:
+        run_git(["fetch", "--all", "--prune"], cwd=cwd, timeout=GIT_TIMEOUT)
+    except GitError as e:
         # Ignore fetch errors if offline, but log
         sys.stderr.write(f"Warning: git fetch failed: {str(e)}\n")
 
@@ -103,8 +165,9 @@ def get_remotes(cwd):
     """Retrieve the list of registered remote names."""
     try:
         out = run_git(["remote"], cwd=cwd)
-        return [line.strip() for line in out.splitlines() if line.strip()]
-    except Exception:
+        list_remotes = [line.strip() for line in out.splitlines() if line.strip()]
+        return list_remotes if list_remotes else ["origin"]
+    except GitError:
         return ["origin"]  # Fallback to origin if remote query fails
 
 def get_recent_branches(cwd, ref_branch):
@@ -114,8 +177,8 @@ def get_recent_branches(cwd, ref_branch):
     remotes.sort(key=len, reverse=True)
     
     # Get branches sorted by committer date
-    # Format: %(refname:short)|%(committerdate:unix)|%(objectname)|%(subject)
-    fmt = "%(refname:short)|%(committerdate:unix)|%(objectname)|%(subject)"
+    # Format: %(refname)|%(committerdate:unix)|%(objectname)|%(subject)
+    fmt = "%(refname)|%(committerdate:unix)|%(objectname)|%(subject)"
     out = run_git(["for-each-ref", "--sort=-committerdate", f"--format={fmt}", "refs/heads/", "refs/remotes/"], cwd=cwd)
     
     branches = []
@@ -140,22 +203,29 @@ def get_recent_branches(cwd, ref_branch):
         parts = line.split("|", 3)
         if len(parts) < 4:
             continue
-        name, timestamp_str, commit_hash, subject = parts
+        refname, timestamp_str, commit_hash, subject = parts
         
+        if refname.endswith("/HEAD"):
+            continue
+            
+        # Parse short name
+        if refname.startswith("refs/heads/"):
+            name = refname[len("refs/heads/"):]
+        elif refname.startswith("refs/remotes/"):
+            name = refname[len("refs/remotes/"):]
+        else:
+            name = refname
+            
         # Clean branch name by removing remote prefixes dynamically
         clean_name = name
         for remote in remotes:
             if clean_name.startswith(f"{remote}/"):
                 clean_name = clean_name[len(f"{remote}/"):]
                 break
-            elif clean_name.startswith(f"remotes/{remote}/"):
-                clean_name = clean_name[len(f"remotes/{remote}/"):]
-                break
             
         if (clean_name in exclude_prefixes_set or 
             name in exclude_prefixes_set or 
             name in remotes or 
-            name.endswith("/HEAD") or 
             clean_name == "HEAD"):
             continue
             
@@ -183,7 +253,7 @@ def get_worktree_map(cwd):
     """Retrieve all active worktrees using git worktree list --porcelain."""
     try:
         out = run_git(["worktree", "list", "--porcelain"], cwd=cwd)
-    except Exception as e:
+    except GitError as e:
         sys.stderr.write(f"Warning: failed to list worktrees: {str(e)}\n")
         return []
         
@@ -202,27 +272,29 @@ def get_worktree_map(cwd):
                 current_wt["path"] = os.path.abspath(val)
             elif key == "branch":
                 ref = val
+                # Detached-HEAD worktrees (lack refs/heads/) are intentionally skipped
                 if ref.startswith("refs/heads/"):
                     ref = ref[len("refs/heads/"):]
-                current_wt["branch"] = ref
+                    current_wt["branch"] = ref
     if current_wt:
         worktrees.append(current_wt)
     return worktrees
 
 def parse_remote_ref(remote_ref, remotes):
-    """Cleans a remote ref name and returns the remote name and the resolved remote ref."""
-    ref = remote_ref
+    """Cleans a remote ref name and returns the remote name and the full remote ref."""
+    full_remote_ref = remote_ref
     # Remove common prefixes
     for prefix in ["refs/remotes/", "remotes/"]:
-        if ref.startswith(prefix):
-            ref = ref[len(prefix):]
+        if full_remote_ref.startswith(prefix):
+            full_remote_ref = full_remote_ref[len(prefix):]
+            break
             
     # Find matching remote prefix
     for remote in remotes:
-        if ref.startswith(f"{remote}/"):
-            return remote, ref
+        if full_remote_ref.startswith(f"{remote}/"):
+            return remote, full_remote_ref
             
-    return "origin", ref
+    return "origin", full_remote_ref
 
 def setup_worktree(cwd, branch_name, remote_ref=None):
     # Absolute paths to prevent directory traversal
@@ -232,9 +304,12 @@ def setup_worktree(cwd, branch_name, remote_ref=None):
     repo_hash = hashlib.sha256(cwd_abs.encode("utf-8")).hexdigest()[:8]
     
     # Clean and sanitize the branch name to prevent path traversal
-    safe_folder = branch_name.replace("/", "_").replace("\\", "_")
+    clean_folder = branch_name.replace("/", "_").replace("\\", "_")
     # Strip any potential relative traversal pieces
-    safe_folder = "".join(c for c in safe_folder if c.isalnum() or c in ("-", "_", "."))
+    clean_folder = "".join(c for c in clean_folder if c.isalnum() or c in ("-", "_", "."))
+    
+    branch_hash = hashlib.sha256(branch_name.encode("utf-8")).hexdigest()[:6]
+    safe_folder = f"{clean_folder}_{branch_hash}"
     
     if not safe_folder or safe_folder in (".", ".."):
         raise ValueError(f"Unsafe branch name: {branch_name}")
@@ -265,21 +340,27 @@ def setup_worktree(cwd, branch_name, remote_ref=None):
     if wt_path:
         # Worktree already exists and is active for this repository
         sys.stderr.write(f"Worktree for {branch_name} exists at {wt_path}. Updating...\n")
-        # Ensure clean state as requested (adversarial reviews should always be clean)
-        # ponytail: discarding uncommitted changes is required by the user rules here
-        run_git(["reset", "--hard"], cwd=wt_path)
+        
+        # Stash any dirty changes to prevent data loss
+        try:
+            stash_out = run_git(["stash", "push", "-u", "-m", "adversarial-review auto-stash"], cwd=wt_path)
+            if "No local changes to save" not in stash_out:
+                sys.stderr.write(f"Stashed existing worktree changes: {stash_out.strip()}\n")
+        except GitError as e:
+            sys.stderr.write(f"Warning: git stash failed: {str(e)}\n")
+            
         # Pull or reset to remote tracking branch if remote is specified
         if remote_ref:
-            remote_name, resolved_ref = parse_remote_ref(remote_ref, remotes)
+            remote_name, full_remote_ref = parse_remote_ref(remote_ref, remotes)
             try:
-                run_git(["fetch", remote_name], cwd=wt_path)
-                run_git(["reset", "--hard", "--", resolved_ref], cwd=wt_path)
-            except Exception as e:
-                sys.stderr.write(f"Warning: failed to reset to remote {resolved_ref}: {str(e)}\n")
+                run_git(["fetch", remote_name], cwd=wt_path, timeout=GIT_TIMEOUT)
+                run_git(["reset", full_remote_ref], cwd=wt_path)
+            except GitError as e:
+                sys.stderr.write(f"Warning: failed to reset to remote {full_remote_ref}: {str(e)}\n")
         else:
             try:
                 run_git(["pull"], cwd=wt_path)
-            except Exception as e:
+            except GitError as e:
                 sys.stderr.write(f"Warning: pull failed: {str(e)}\n")
         return wt_path
         
@@ -290,7 +371,7 @@ def setup_worktree(cwd, branch_name, remote_ref=None):
         # Remove registered but missing worktrees
         try:
             run_git(["worktree", "prune"], cwd=cwd_abs)
-        except Exception:
+        except GitError:
             pass
             
     # Create worktree
@@ -302,7 +383,7 @@ def setup_worktree(cwd, branch_name, remote_ref=None):
             # Safer, non-scraping check for local branch existence
             run_git(["show-ref", "--verify", f"refs/heads/{branch_name}"], cwd=cwd_abs)
             local_exists = True
-        except Exception:
+        except GitError:
             local_exists = False
             
         if not local_exists:
@@ -312,24 +393,62 @@ def setup_worktree(cwd, branch_name, remote_ref=None):
     # Add the worktree safely using '--' to prevent option injection
     run_git(["worktree", "add", target_path, "--", branch_name], cwd=cwd_abs)
     
-    # Ensure clean reset to match remote if remote_ref is given
+    # Ensure reset to match remote if remote_ref is given
     if remote_ref:
-        remote_name, resolved_ref = parse_remote_ref(remote_ref, remotes)
+        remote_name, full_remote_ref = parse_remote_ref(remote_ref, remotes)
         try:
-            run_git(["reset", "--hard", "--", resolved_ref], cwd=target_path)
-        except Exception as e:
-            sys.stderr.write(f"Warning: failed to reset new worktree to remote {resolved_ref}: {str(e)}\n")
+            run_git(["reset", full_remote_ref], cwd=target_path)
+        except GitError as e:
+            sys.stderr.write(f"Warning: failed to reset new worktree to remote {full_remote_ref}: {str(e)}\n")
             
     return target_path
 
 def main():
+    if not HAS_FCNTL:
+        print(json.dumps({"error": "Platform support: fcntl is required for file locking. This configuration is only supported on macOS and Linux."}))
+        sys.exit(1)
+
     cwd = os.getcwd()
-    if not os.path.exists(os.path.join(cwd, ".git")):
-        print(json.dumps({"error": "Current directory is not a Git repository root."}))
+    try:
+        toplevel = run_git(["rev-parse", "--show-toplevel"], cwd=cwd)
+        os.chdir(toplevel)
+        cwd = toplevel
+    except GitError:
+        print(json.dumps({"error": "Current directory is not inside a Git repository."}))
         sys.exit(1)
         
+    # Parse CLI arguments
+    target_input = None
+    reference_override = None
+    prune_flag = False
+    
+    args = sys.argv[1:]
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg == "--prune":
+            prune_flag = True
+            i += 1
+        elif arg == "--reference":
+            if i + 1 < len(args):
+                reference_override = args[i+1]
+                i += 2
+            else:
+                print(json.dumps({"error": "--reference requires a branch name"}))
+                sys.exit(1)
+        elif arg.startswith("--reference="):
+            reference_override = arg[len("--reference="):]
+            i += 1
+        elif arg.startswith("-"):
+            print(json.dumps({"error": f"Unknown option: {arg}"}))
+            sys.exit(1)
+        else:
+            # Positional argument
+            target_input = arg
+            i += 1
+
     # Handle explicit prune command
-    if len(sys.argv) > 1 and sys.argv[1] == "--prune":
+    if prune_flag:
         wt_root = os.path.expanduser("~/.gemini/tmp/worktrees")
         if os.path.exists(wt_root):
             sys.stderr.write(f"Cleaning worktree directory {wt_root}...\n")
@@ -337,7 +456,7 @@ def main():
         # Prune git registration
         try:
             run_git(["worktree", "prune"], cwd=cwd)
-        except Exception as e:
+        except GitError as e:
             sys.stderr.write(f"Warning: git worktree prune failed: {str(e)}\n")
         print(json.dumps({"success": True, "message": "Worktree cache pruned successfully."}))
         sys.exit(0)
@@ -347,9 +466,13 @@ def main():
     os.makedirs(wt_root, exist_ok=True)
     lock_path = os.path.join(wt_root, "resolve_branches.lock")
     
-    with FileLock(lock_path):
-        try:
-            ref_branch = get_current_branch(cwd)
+    try:
+        with FileLock(lock_path):
+            if reference_override:
+                ref_branch = reference_override
+            else:
+                ref_branch = resolve_integration_branch(cwd)
+                
             fetch_all(cwd)
             branches = get_recent_branches(cwd, ref_branch)
             
@@ -364,25 +487,29 @@ def main():
                 sys.exit(0)
                 
             # Determine ambiguity.
-            # If the top branch's timestamp is very close to others, say within 10 minutes (600s),
+            # If the top branch's timestamp is very close to others, say within AMBIGUITY_WINDOW_SECS,
             # flag it as ambiguous if there are multiple branches.
             ambiguous = False
             candidates = branches[:5]  # top 5 recent branches
             
             if len(candidates) > 1:
-                time_diff = candidates[0]["timestamp"] - candidates[1]["timestamp"]
-                if time_diff <= 600:
-                    ambiguous = True
-                    
+                # Check if any candidate's timestamp is within the window of the most recent one
+                for i in range(1, len(candidates)):
+                    if candidates[0]["timestamp"] - candidates[i]["timestamp"] <= AMBIGUITY_WINDOW_SECS:
+                        ambiguous = True
+                        break
+                        
             # If user passed a specific branch target, we resolve that one directly
             selected_branch = None
-            if len(sys.argv) > 1:
-                target_input = sys.argv[1]
+            if target_input:
+                # Immediate check if target matches reference to return a clear same-branch error
+                if target_input == ref_branch or target_input in (f"refs/heads/{ref_branch}", f"refs/remotes/origin/{ref_branch}"):
+                    print(json.dumps({"error": f"Reference branch and feature branch are the same: {ref_branch}"}))
+                    sys.exit(1)
                 # Match against candidates
                 for cand in branches:
                     if cand["branch_name"] == target_input or cand["full_name"] == target_input:
                         selected_branch = cand
-                        ambiguous = False
                         break
                 if not selected_branch:
                     print(json.dumps({"error": f"Branch '{target_input}' not found."}))
@@ -390,8 +517,13 @@ def main():
             else:
                 selected_branch = candidates[0]
                 
+            # Refuse to run if resolved reference_branch == feature_branch
+            if ref_branch == selected_branch["branch_name"]:
+                print(json.dumps({"error": f"Reference branch and feature branch are the same: {ref_branch}"}))
+                sys.exit(1)
+                
             # If ambiguous and no explicit branch requested, let agent know so it can ask user
-            if ambiguous and len(sys.argv) == 1:
+            if ambiguous and not target_input:
                 print(json.dumps({
                     "reference_branch": ref_branch,
                     "feature_branch": None,
@@ -415,6 +547,17 @@ def main():
                         remote_ref = cand["full_name"]
                         break
                         
+            # If remote_ref not found, explicitly look up refs/remotes/*/<branch_name> with git show-ref
+            if not remote_ref:
+                for remote in remotes:
+                    try:
+                        ref_to_verify = f"refs/remotes/{remote}/{selected_branch['branch_name']}"
+                        run_git(["show-ref", "--verify", ref_to_verify], cwd=cwd)
+                        remote_ref = f"{remote}/{selected_branch['branch_name']}"
+                        break
+                    except GitError:
+                        pass
+                        
             wt_path = setup_worktree(cwd, selected_branch["branch_name"], remote_ref)
             
             print(json.dumps({
@@ -426,9 +569,9 @@ def main():
                 "subject": selected_branch["subject"]
             }, indent=2))
             
-        except Exception as e:
-            print(json.dumps({"error": str(e)}))
-            sys.exit(1)
+    except Exception as e:
+        print(json.dumps({"error": str(e)}))
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

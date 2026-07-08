@@ -2,6 +2,10 @@
 
 Personal global configuration and custom skills for Google Antigravity and Gemini CLI.
 
+## Platform Support
+
+This configuration is developed and tested on macOS only. It should work on Linux (POSIX fcntl file locking, shell/git assumptions), but has not been validated there. It is not supported on Windows — the adversarial-review skill's file lock silently no-ops without fcntl, and several paths assume POSIX semantics.
+
 ## Setup on a New Machine
 
 1. **Backup existing config (if any):**
@@ -62,7 +66,7 @@ git clone https://github.com/jerrylin96/dotgemini.git ~/.gemini
 
 ### Option 2: Project-Level Integration (Recommended for Repository-Specific Setup)
 If you want to bake this isolated environment setup directly into a specific project repository so that *any* agent working on it automatically uses it:
-1. **Copy the Env Manager**: Place the [setup_review_env.py](file:///Users/jlin404/.gemini/antigravity-cli/scratch/setup_review_env.py) script in the project repository (e.g., `scripts/setup_review_env.py`).
+1. **Copy the Env Manager**: Place the [setup_review_env.py](antigravity-cli/scratch/setup_review_env.py) script in the project repository (e.g., `scripts/setup_review_env.py`).
 2. **Add a Project-Level Guide**: Add a `GEMINI.md` to the project's root containing:
    ```markdown
    ## Isolated Testing & Execution Environment
