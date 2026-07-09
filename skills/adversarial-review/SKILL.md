@@ -7,6 +7,13 @@ description: Adversarial review and diff explanation of two git worktrees. Use w
 
 Automatically resolve context, create/update feature branch worktree, and perform adversarial diff review.
 
+## Core Workflow Rules
+> [!IMPORTANT]
+> - **Reference Branch (Baseline)**: The branch currently checked out in the user's active workspace represents the baseline reference code.
+> - **Feature Branch (Target)**: The branch containing the new changes to review. The agent must ALWAYS ask the user to select this branch.
+> - **Worktree Checkout**: The resolver script creates/updates a managed worktree checked out to the selected **feature branch** at `worktree_path`.
+> - **Testing/Inspecting**: All testing, linting, or inspection of the feature branch code must be run inside the resolved `worktree_path` (by executing `cd <worktree_path>` first), leaving the active workspace untouched on the reference branch.
+
 ## Context Resolution
 
 1. Run the helper branch resolution script to discover branches and manage worktree.
