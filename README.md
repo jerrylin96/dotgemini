@@ -55,7 +55,15 @@ This configuration is developed and tested on macOS only. It should work on Linu
 * Isolates dynamic branch workspaces to prevent test collisions.
 
 ### 3. Custom Registered Skills (`skills/`)
-* `adversarial-review` — Git worktree-based adversarial code review and diff inspection helper. Note: the active workspace's current branch is treated as the reference branch (baseline), while the managed worktree is checked out to the feature branch being reviewed.
+* `adversarial-review` — Git worktree-based adversarial code review and diff inspection helper.
+  * **User Workflow**:
+    1. **Prepare Baseline**: Prior to starting the review, checkout the intended **reference branch** (the baseline, e.g., `main` or a specific release branch) in your active workspace:
+       ```bash
+       git checkout <your-reference-branch>
+       ```
+    2. **Activate Review**: Trigger the review by typing `/adversarial-review` in the chat.
+    3. **Select Feature Branch**: Antigravity will automatically fetch the latest updates, detect your current checked-out branch as the reference branch, and present a list of all other local and remote branches. Select the **feature branch** (the target containing the new changes to review) when prompted.
+    4. **Under the Hood**: Antigravity checks out the selected feature branch to a clean, isolated worktree under `~/.gemini/tmp/worktrees/`, leaving your active workspace untouched on the reference branch. It then generates the diff between the two branches, runs tests/linters in the feature branch worktree, and performs the adversarial review.
 
 * `/ponytail` — Lazy senior developer instructions.
 * `/caveman` — Token-efficient caveman communication mode.
