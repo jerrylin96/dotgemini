@@ -55,7 +55,8 @@ This configuration is developed and tested on macOS only. It should work on Linu
 * Isolates dynamic branch workspaces to prevent test collisions.
 
 ### 3. Custom Registered Skills (`skills/`)
-* `adversarial-review` — Git worktree-based adversarial code review and diff inspection helper.
+* `adversarial-review` — Git worktree-based adversarial code review and diff inspection helper. Note: the worktree is checked out to the reference branch (the baseline), designating the active workspace's current branch as the feature branch being reviewed.
+
 * `/ponytail` — Lazy senior developer instructions.
 * `/caveman` — Token-efficient caveman communication mode.
 * `incremental-implementation` — Vertical slicing development guidelines.
