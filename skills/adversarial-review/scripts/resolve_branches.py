@@ -3,7 +3,6 @@ import os
 import sys
 import subprocess
 import json
-import shutil
 import hashlib
 import time
 
@@ -656,14 +655,7 @@ def main():
                 }))
                 sys.exit(0)
                 
-            # Determine ambiguity
-            # A single clear candidate exists if:
-            # 1. There is exactly one candidate branch.
-            # 2. Or the current branch of the working copy is one of the candidates (and not the integration branch).
-            # Otherwise, we mark it as ambiguous.
-            ambiguous = False
             selected_branch = None
-            current_local_branch = get_current_branch(cwd)
             remotes = get_remotes(cwd)
             
             short_ref = ref_branch
@@ -672,39 +664,8 @@ def main():
                     short_ref = ref_branch[len(f"{remote}/"):]
                     break
 
-            if target_input:
-                is_same = False
-                target_short = target_input
-                for remote in remotes:
-                    if target_input.startswith(f"{remote}/"):
-                        target_short = target_input[len(f"{remote}/"):]
-                        break
-                    elif target_input.startswith(f"refs/heads/"):
-                        target_short = target_input[len("refs/heads/"):]
-                        break
-                    elif target_input.startswith(f"refs/remotes/{remote}/"):
-                        target_short = target_input[len(f"refs/remotes/{remote}/"):]
-                        break
-                
-                if target_short == short_ref:
-                    is_same = True
-                if is_same:
-                    print(json.dumps({"error": f"Reference branch and feature branch are the same: {ref_branch}"}))
-                    sys.exit(1)
-                
-                for cand in branches:
-                    if cand["branch_name"] == target_input or cand["full_name"] == target_input:
-                        selected_branch = cand
-                        break
-                if not selected_branch:
-                    print(json.dumps({"error": f"Branch '{target_input}' not found."}))
-                    sys.exit(1)
-            else:
-                # Always ask the user if target_input is not provided
-                ambiguous = True
-                selected_branch = None
-                        
-            if ambiguous and not target_input:
+            if not target_input:
+                # Always prompt user to select target branch if not explicitly provided
                 print(json.dumps({
                     "reference_branch": ref_branch,
                     "reference_ref": ref_branch,
@@ -714,6 +675,33 @@ def main():
                     "candidates": branches[:50]
                 }, indent=2))
                 sys.exit(0)
+
+            is_same = False
+            target_short = target_input
+            for remote in remotes:
+                if target_input.startswith(f"{remote}/"):
+                    target_short = target_input[len(f"{remote}/"):]
+                    break
+                elif target_input.startswith("refs/heads/"):
+                    target_short = target_input[len("refs/heads/"):]
+                    break
+                elif target_input.startswith(f"refs/remotes/{remote}/"):
+                    target_short = target_input[len(f"refs/remotes/{remote}/"):]
+                    break
+            
+            if target_short == short_ref:
+                is_same = True
+            if is_same:
+                print(json.dumps({"error": f"Reference branch and feature branch are the same: {ref_branch}"}))
+                sys.exit(1)
+            
+            for cand in branches:
+                if cand["branch_name"] == target_input or cand["full_name"] == target_input:
+                    selected_branch = cand
+                    break
+            if not selected_branch:
+                print(json.dumps({"error": f"Branch '{target_input}' not found."}))
+                sys.exit(1)
                 
             if short_ref == selected_branch["branch_name"]:
                 print(json.dumps({"error": f"Reference branch and feature branch are the same: {ref_branch}"}))

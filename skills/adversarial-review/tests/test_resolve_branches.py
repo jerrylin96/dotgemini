@@ -454,7 +454,6 @@ class TestResolveBranches(unittest.TestCase):
                     run_cmd(["git", "commit", "-m", "initial commit"], origin_path)
                     
                     run_cmd(["git", "checkout", "-b", "release"], origin_path)
-                    stale_commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=origin_path, capture_output=True, text=True).stdout.strip()
                     run_cmd(["git", "checkout", "main"], origin_path)
                     
                     run_cmd(["git", "clone", origin_path, local_path], tmpdir)

@@ -38,7 +38,7 @@ def main():
     else:
         print("Falling back to host environment testing...", flush=True)
         try:
-            import pytest
+            import pytest  # noqa: F401
             has_pytest = True
         except ImportError:
             has_pytest = False
