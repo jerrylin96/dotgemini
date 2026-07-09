@@ -9,7 +9,7 @@ Automatically resolve context, create/update feature branch worktree, and perfor
 
 ## Core Workflow Rules
 > [!IMPORTANT]
-> - **Reference Branch (Baseline)**: The branch currently checked out in the user's active workspace represents the baseline reference code.
+> - **Reference Branch (Baseline)**: The branch currently checked out in the user's active workspace represents the baseline reference code. If the checked-out branch is itself the selected feature branch (or HEAD is detached), the script falls back to the default integration branch (e.g. `origin/main`) as the baseline instead.
 > - **Feature Branch (Target)**: The branch containing the new changes to review. The agent must ALWAYS ask the user to select this branch.
 > - **Worktree Checkout**: The resolver script creates/updates a managed worktree checked out to the selected **feature branch** at `worktree_path`.
 > - **Testing/Inspecting**: All testing, linting, or inspection of the feature branch code must be run inside the resolved `worktree_path` (by executing `cd <worktree_path>` first), leaving the active workspace untouched on the reference branch.
@@ -22,7 +22,7 @@ Automatically resolve context, create/update feature branch worktree, and perfor
    ```
 
 ### Script Flags
-- `[optional_target_branch]`: Explicitly specify the feature branch name to review.
+- `[optional_target_branch]`: Explicitly specify the feature branch to review. Accepts short names (`feat/x`), remote-qualified names (`origin/feat/x`), or fully qualified refs (`refs/heads/feat/x`); a remote-qualified name reviews that exact remote ref even when a same-named local branch exists.
 - `--reference <branch>`: Override the default integration branch to compare against.
 - `--prune`: Prune cached review worktrees for this repository.
 - `--prune-all`: Prune all cached review worktrees across all repositories.
@@ -33,20 +33,25 @@ The script returns JSON on stdout. The schema depends on the outcome:
 * **Success (Worktree Created/Updated)**
    ```json
    {
-     "reference_branch": "main",
+     "reference_branch": "origin/main",
      "reference_ref": "origin/main",
      "reference_commit_hash": "b2c3d4e5...",
      "feature_branch": "feat/my-feature",
+     "feature_ref": "origin/feat/my-feature",
      "ambiguous": false,
      "worktree_path": "/Users/user/.gemini/tmp/worktrees/a1b2c3d4_feat-my-feature_e5f6g7",
      "commit_hash": "a1b2c3d4...",
-     "subject": "commit message subject"
+     "subject": "commit message subject",
+     "fetch_error": null
    }
    ```
+   - `reference_ref` currently always mirrors `reference_branch`.
+   - `feature_ref` is the exact ref the review targets (local name, or remote-qualified like `origin/feat/my-feature`), so you can tell whether a local or remote branch was resolved.
+   - `fetch_error` is `null` when the best-effort `git fetch` succeeded; otherwise it holds the fetch failure message and the results may be based on stale local tracking refs. Mention this in the review report if set.
 * **Ambiguous Candidates (Need user clarification)**
    ```json
    {
-     "reference_branch": "main",
+     "reference_branch": "origin/main",
      "reference_ref": "origin/main",
      "reference_commit_hash": "b2c3d4e5...",
      "feature_branch": null,
@@ -59,26 +64,28 @@ The script returns JSON on stdout. The schema depends on the outcome:
          "commit_hash": "a1b2c3d4...",
          "subject": "commit subject"
        }
-     ]
+     ],
+     "fetch_error": null
    }
    ```
 * **No Branches Found**
    ```json
    {
-     "reference_branch": "main",
+     "reference_branch": "origin/main",
      "reference_ref": "origin/main",
      "reference_commit_hash": "b2c3d4e5...",
      "feature_branch": null,
      "ambiguous": false,
      "candidates": [],
-     "message": "No other branches found to compare."
+     "message": "No other branches found to compare.",
+     "fetch_error": null
    }
    ```
 * **Prune Success**
    ```json
    {
      "success": true,
-     "message": "Worktree cache pruned successfully."
+     "message": "Worktree cache for repo hash a1b2c3d4 pruned successfully."
    }
    ```
 * **Error**

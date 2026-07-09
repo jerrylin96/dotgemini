@@ -18,8 +18,7 @@ def main():
     
     executable = os.path.join(env_bin_dir, cmd)
     if not os.path.exists(executable):
-        # Fallback to python execution or check path
-        print(f"Error: Executable '{cmd}' not found in env at {env_bin_dir}")
+        print(f"Error: Executable '{cmd}' not found in env at {env_bin_dir}. Run setup_review_env.py first.")
         sys.exit(1)
         
     full_cmd = [executable] + cmd_args
