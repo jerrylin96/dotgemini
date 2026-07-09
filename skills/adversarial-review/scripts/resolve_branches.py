@@ -731,7 +731,7 @@ def main():
                     except GitError:
                         pass
                         
-            wt_path = setup_worktree(cwd, selected_branch["branch_name"], remote_ref, selected_branch["commit_hash"])
+            wt_path = setup_worktree(cwd, ref_branch, None, reference_commit_hash)
             
             print(json.dumps({
                 "reference_branch": ref_branch,

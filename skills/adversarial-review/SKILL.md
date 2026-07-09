@@ -5,7 +5,7 @@ description: Adversarial review and diff explanation of two git worktrees. Use w
 
 # Adversarial Review and Diff Explanation
 
-Automatically resolve context, create/update feature branch worktree, and perform adversarial diff review.
+Automatically resolve context, create/update reference branch worktree, and perform adversarial diff review.
 
 ## Context Resolution
 
@@ -31,7 +31,7 @@ The script returns JSON on stdout. The schema depends on the outcome:
      "reference_commit_hash": "b2c3d4e5...",
      "feature_branch": "feat/my-feature",
      "ambiguous": false,
-     "worktree_path": "/Users/user/.gemini/tmp/worktrees/a1b2c3d4_feat-my-feature_e5f6g7",
+     "worktree_path": "/Users/user/.gemini/tmp/worktrees/a1b2c3d4_main_e5f6g7",
      "commit_hash": "a1b2c3d4...",
      "subject": "commit message subject"
    }
