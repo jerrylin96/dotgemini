@@ -27,29 +27,34 @@ class FileLock:
 
     def __enter__(self) -> "FileLock":
         self.lock_file = open(self.lock_path, "w")
-        
+
         start_time = time.time()
         try:
             timeout = int(os.environ.get("LOCK_TIMEOUT_SECS", "15"))
         except ValueError:
             timeout = 15
-            
-        acquired = False
+
         try:
-            fcntl.flock(self.lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            acquired = True
-        except (BlockingIOError, OSError):
-            sys.stderr.write("Another instance is running. Waiting for lock...\n")
-            
-        while not acquired:
-            if time.time() - start_time > timeout:
-                raise TimeoutError(f"Timed out waiting for file lock after {timeout} seconds.")
+            acquired = False
             try:
                 fcntl.flock(self.lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 acquired = True
             except (BlockingIOError, OSError):
-                time.sleep(0.5)
-                
+                sys.stderr.write("Another instance is running. Waiting for lock...\n")
+
+            while not acquired:
+                if time.time() - start_time > timeout:
+                    raise TimeoutError(f"Timed out waiting for file lock after {timeout} seconds.")
+                try:
+                    fcntl.flock(self.lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    acquired = True
+                except (BlockingIOError, OSError):
+                    time.sleep(0.5)
+        except BaseException:
+            self.lock_file.close()
+            self.lock_file = None
+            raise
+
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
@@ -119,13 +124,7 @@ def run_git(args, cwd=None, timeout=GIT_TIMEOUT):
 
 def normalize_reference_ref(cwd: str, ref: str) -> str:
     if ref.startswith("refs/heads/"):
-        local_name = ref[len("refs/heads/"):]
-        try:
-            run_git(["rev-parse", "--verify", f"refs/heads/{local_name}"], cwd=cwd)
-            return local_name
-        except GitError:
-            pass
-        return local_name
+        return ref[len("refs/heads/"):]
 
     if ref.startswith("refs/remotes/"):
         ref = ref[len("refs/remotes/"):]
@@ -268,6 +267,23 @@ def get_remotes(cwd):
         return list_remotes if list_remotes else ["origin"]
     except GitError:
         return ["origin"]
+
+def strip_ref_prefixes(name, remotes):
+    """Reduce a possibly qualified ref (origin/foo, refs/heads/foo,
+    refs/remotes/origin/foo) to its short branch name."""
+    if name.startswith("refs/heads/"):
+        return name[len("refs/heads/"):]
+    if name.startswith("refs/remotes/"):
+        rest = name[len("refs/remotes/"):]
+        for remote in remotes:
+            if rest.startswith(f"{remote}/"):
+                return rest[len(f"{remote}/"):]
+        parts = rest.split("/", 1)
+        return parts[1] if len(parts) > 1 else rest
+    for remote in remotes:
+        if name.startswith(f"{remote}/"):
+            return name[len(f"{remote}/"):]
+    return name
 
 def get_recent_branches(cwd, ref_branch):
     remotes = get_remotes(cwd)
@@ -621,25 +637,14 @@ def main():
                 ref_branch = reference_override
             else:
                 curr = get_current_branch(cwd)
-                ti_short = target_input
-                if ti_short:
-                    for remote in get_remotes(cwd):
-                        if ti_short.startswith(f"{remote}/"):
-                            ti_short = ti_short[len(f"{remote}/"):]
-                            break
-                    if ti_short.startswith("refs/heads/"):
-                        ti_short = ti_short[len("refs/heads/"):]
-                    elif ti_short.startswith("refs/remotes/"):
-                        parts = ti_short.split("/")
-                        if len(parts) > 2:
-                            ti_short = "/".join(parts[3:])
+                ti_short = strip_ref_prefixes(target_input, get_remotes(cwd)) if target_input else target_input
                 if curr and curr != "HEAD" and curr != ti_short:
                     ref_branch = curr
                 else:
                     ref_branch = resolve_integration_branch(cwd)
                 
             try:
-                reference_commit_hash = run_git(["rev-parse", ref_branch], cwd=cwd)
+                reference_commit_hash = run_git(["rev-parse", "--verify", f"{ref_branch}^{{commit}}"], cwd=cwd)
             except GitError:
                 reference_commit_hash = None
 
@@ -680,32 +685,41 @@ def main():
                 }, indent=2))
                 sys.exit(0)
 
-            is_same = False
-            target_short = target_input
-            for remote in remotes:
-                if target_input.startswith(f"{remote}/"):
-                    target_short = target_input[len(f"{remote}/"):]
-                    break
-                elif target_input.startswith("refs/heads/"):
-                    target_short = target_input[len("refs/heads/"):]
-                    break
-                elif target_input.startswith(f"refs/remotes/{remote}/"):
-                    target_short = target_input[len(f"refs/remotes/{remote}/"):]
-                    break
-            
+            target_short = strip_ref_prefixes(target_input, remotes)
+
             if target_short == short_ref:
-                is_same = True
-            if is_same:
                 print(json.dumps({"error": f"Reference branch and feature branch are the same: {ref_branch}"}))
                 sys.exit(1)
-            
+
             for cand in branches:
-                if cand["branch_name"] == target_input or cand["full_name"] == target_input:
+                if target_input in (cand["branch_name"], cand["full_name"]):
                     selected_branch = cand
                     break
             if not selected_branch:
+                for cand in branches:
+                    if target_short in (cand["branch_name"], cand["full_name"]):
+                        selected_branch = cand
+                        break
+            if not selected_branch:
                 print(json.dumps({"error": f"Branch '{target_input}' not found."}))
                 sys.exit(1)
+
+            # A qualified input (e.g. origin/foo) may have matched a candidate that was
+            # deduplicated to a different ref of the same short name (e.g. local foo).
+            # Honor the exact ref the user asked for.
+            display_ref = target_input
+            for prefix in ("refs/remotes/", "refs/heads/"):
+                if display_ref.startswith(prefix):
+                    display_ref = display_ref[len(prefix):]
+                    break
+            if target_input != target_short and display_ref != selected_branch["full_name"]:
+                try:
+                    exact_hash = run_git(["rev-parse", "--verify", f"{target_input}^{{commit}}"], cwd=cwd)
+                    subject = run_git(["log", "-1", "--format=%s", exact_hash], cwd=cwd)
+                    selected_branch = dict(selected_branch, full_name=display_ref,
+                                           commit_hash=exact_hash, subject=subject)
+                except GitError:
+                    pass
                 
             if short_ref == selected_branch["branch_name"]:
                 print(json.dumps({"error": f"Reference branch and feature branch are the same: {ref_branch}"}))
@@ -740,10 +754,12 @@ def main():
                 "reference_ref": ref_branch,
                 "reference_commit_hash": reference_commit_hash,
                 "feature_branch": selected_branch["branch_name"],
+                "feature_ref": selected_branch["full_name"],
                 "ambiguous": False,
                 "worktree_path": wt_path,
                 "commit_hash": selected_branch["commit_hash"],
-                "subject": selected_branch["subject"]
+                "subject": selected_branch["subject"],
+                "fetch_error": fetch_error
             }, indent=2))
             
     except Exception as e:
