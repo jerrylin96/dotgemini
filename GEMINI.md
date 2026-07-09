@@ -92,10 +92,10 @@ To prevent test/execution collisions and avoid polluting the workspace or runnin
   python3 ~/.gemini/scripts/setup_review_env.py <workspace_path>
   ```
   Since dynamic branch workspaces (created via `invoke_subagent` in `branch` mode or local worktrees) have distinct file paths, their hashes will differ, ensuring perfect environment isolation for concurrent runs.
-* **Execution:** All testing and validation commands (`pytest`, `ruff`, etc.) inside the workspace (or dynamic branched workspaces) must be run using the binaries from that resolved environment:
-  * Running tests: `~/.gemini/tmp/<your-workspace-hash>/bin/pytest`
-  * Running linter: `~/.gemini/tmp/<your-workspace-hash>/bin/ruff check .`
-  * Running formatter: `~/.gemini/tmp/<your-workspace-hash>/bin/black`
+* **Execution**: All testing and validation commands (`pytest`, `ruff`, etc.) inside the workspace (or dynamic branched workspaces) must be run using the virtual environment command runner helper:
+  * Running tests: `python3 ~/.gemini/scripts/run_in_env.py <workspace_path> pytest`
+  * Running linter: `python3 ~/.gemini/scripts/run_in_env.py <workspace_path> ruff check .`
+  * Running formatter: `python3 ~/.gemini/scripts/run_in_env.py <workspace_path> black .`
 
 ---
 

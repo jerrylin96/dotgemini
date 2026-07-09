@@ -109,14 +109,15 @@ The script returns JSON on stdout. The schema depends on the outcome:
         ```bash
         python3 ~/.gemini/scripts/setup_review_env.py <worktree_path>
         ```
-     2. Run tests using the environment's pytest binary:
+     2. Run tests using the environment runner:
         ```bash
-        ~/.gemini/tmp/<workspace-hash>/bin/pytest
+        python3 ~/.gemini/scripts/run_in_env.py <worktree_path> pytest
         ```
-     3. Run ruff using the environment's ruff binary:
+     3. Run ruff using the environment runner:
         ```bash
-        ~/.gemini/tmp/<workspace-hash>/bin/ruff check .
+        python3 ~/.gemini/scripts/run_in_env.py <worktree_path> ruff check .
         ```
+
 4. **Perform Adversarial Review**:
    - Analyze the diff and perform an adversarial review focusing on:
      - **Technical Bugs** (Unconditional): Logical errors, performance issues, security vulnerabilities, regression risks, and code design.
