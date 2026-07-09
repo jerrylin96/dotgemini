@@ -256,8 +256,10 @@ def resolve_integration_branch(cwd):
 def fetch_all(cwd):
     try:
         run_git(["fetch", "--all", "--prune"], cwd=cwd, timeout=GIT_TIMEOUT)
+        return None
     except GitError as e:
         sys.stderr.write(f"Warning: git fetch failed: {str(e)}\n")
+        return str(e)
 
 def get_remotes(cwd):
     try:
@@ -602,7 +604,7 @@ def main():
 
     try:
         with FileLock(lock_path):
-            fetch_all(cwd)
+            fetch_error = fetch_all(cwd)
             
             if reference_override is not None:
                 reference_override = normalize_reference_ref(cwd, reference_override)
@@ -651,7 +653,8 @@ def main():
                     "feature_branch": None,
                     "ambiguous": False,
                     "candidates": [],
-                    "message": "No other branches found to compare."
+                    "message": "No other branches found to compare.",
+                    "fetch_error": fetch_error
                 }))
                 sys.exit(0)
                 
@@ -672,7 +675,8 @@ def main():
                     "reference_commit_hash": reference_commit_hash,
                     "feature_branch": None,
                     "ambiguous": True,
-                    "candidates": branches[:50]
+                    "candidates": branches[:50],
+                    "fetch_error": fetch_error
                 }, indent=2))
                 sys.exit(0)
 
