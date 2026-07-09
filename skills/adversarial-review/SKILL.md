@@ -5,7 +5,7 @@ description: Adversarial review and diff explanation of two git worktrees. Use w
 
 # Adversarial Review and Diff Explanation
 
-Automatically resolve context, create/update reference branch worktree, and perform adversarial diff review.
+Automatically resolve context, create/update feature branch worktree, and perform adversarial diff review.
 
 ## Context Resolution
 
@@ -31,7 +31,7 @@ The script returns JSON on stdout. The schema depends on the outcome:
      "reference_commit_hash": "b2c3d4e5...",
      "feature_branch": "feat/my-feature",
      "ambiguous": false,
-     "worktree_path": "/Users/user/.gemini/tmp/worktrees/a1b2c3d4_main_e5f6g7",
+     "worktree_path": "/Users/user/.gemini/tmp/worktrees/a1b2c3d4_feat-my-feature_e5f6g7",
      "commit_hash": "a1b2c3d4...",
      "subject": "commit message subject"
    }
@@ -81,12 +81,9 @@ The script returns JSON on stdout. The schema depends on the outcome:
    }
    ```
 
-2. **Ambiguity & Auto-pick Rule**: The resolver only auto-picks a candidate branch if:
-   - There is exactly one candidate feature branch in the repository.
-   - Or the current branch of the working copy is one of the candidates (and not the integration branch).
-   Otherwise, it flags `"ambiguous": true` and lists candidates. If the script output contains `"ambiguous": true`:
+2. **Ambiguity & Ask-User Rule**: If no target feature branch is specified as an argument to `resolve_branches.py`, it always flags `"ambiguous": true` and lists candidate branches (both local and remote) on stdout.
    - Present the candidate list to the user.
-   - Ask the user to clarify which branch is the intended feature branch.
+   - Ask the user to explicitly choose which feature branch is the intended target for review.
 3. If no candidate feature branch is found (e.g., `"feature_branch": null`):
    - Report that no feature branch is available to review, and ask the user to specify one.
 
@@ -95,7 +92,7 @@ The script returns JSON on stdout. The schema depends on the outcome:
 1. **Get the Diff**:
    - Run `git diff --merge-base <reference_commit_hash> <commit_hash>` (or `git diff <reference_commit_hash>...<commit_hash>`) using the resolved `reference_commit_hash` and the explicit feature branch `commit_hash` returned by the script. (This is more robust than using a branch name directly, as it avoids stale local tracking branch issues).
 2. **Note on Worktree**:
-   - The review worktree is created at `worktree_path` to allow running tests or inspecting files without disrupting the user's active working tree. If you need to run tests, execute linters, or view/run code, `cd` into `worktree_path` first.
+   - The review worktree is created at `worktree_path` to allow running tests or inspecting files without disrupting the user's active working tree. Note that the worktree at `worktree_path` is checked out to the feature branch (the target being reviewed), while the active workspace's current branch is treated as the reference branch (baseline). If you need to run tests, execute linters, or view/run code, `cd` into `worktree_path` first.
    - Paths under `~/.gemini/tmp/worktrees/` are disposable cache and may be force-removed or recreated at any time; do not use them for long-lived uncommitted work.
    - The file lock only serializes concurrent `resolve_branches.py` runs. Do not run git worktree commands against `~/.gemini/tmp/worktrees/` manually while a review is in progress.
    - Note: Git fetches are best-effort. If network resolution fails, the review may run against stale local tracking references.

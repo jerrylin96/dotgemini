@@ -619,7 +619,23 @@ def main():
             if reference_override:
                 ref_branch = reference_override
             else:
-                ref_branch = resolve_integration_branch(cwd)
+                curr = get_current_branch(cwd)
+                ti_short = target_input
+                if ti_short:
+                    for remote in get_remotes(cwd):
+                        if ti_short.startswith(f"{remote}/"):
+                            ti_short = ti_short[len(f"{remote}/"):]
+                            break
+                    if ti_short.startswith("refs/heads/"):
+                        ti_short = ti_short[len("refs/heads/"):]
+                    elif ti_short.startswith("refs/remotes/"):
+                        parts = ti_short.split("/")
+                        if len(parts) > 2:
+                            ti_short = "/".join(parts[3:])
+                if curr and curr != "HEAD" and curr != ti_short:
+                    ref_branch = curr
+                else:
+                    ref_branch = resolve_integration_branch(cwd)
                 
             try:
                 reference_commit_hash = run_git(["rev-parse", ref_branch], cwd=cwd)
@@ -684,15 +700,9 @@ def main():
                     print(json.dumps({"error": f"Branch '{target_input}' not found."}))
                     sys.exit(1)
             else:
-                if len(branches) == 1:
-                    selected_branch = branches[0]
-                else:
-                    matching_current = [b for b in branches if b["branch_name"] == current_local_branch]
-                    if len(matching_current) == 1:
-                        selected_branch = matching_current[0]
-                    else:
-                        ambiguous = True
-                        selected_branch = None
+                # Always ask the user if target_input is not provided
+                ambiguous = True
+                selected_branch = None
                         
             if ambiguous and not target_input:
                 print(json.dumps({
@@ -701,7 +711,7 @@ def main():
                     "reference_commit_hash": reference_commit_hash,
                     "feature_branch": None,
                     "ambiguous": True,
-                    "candidates": branches[:5]
+                    "candidates": branches[:50]
                 }, indent=2))
                 sys.exit(0)
                 
@@ -731,7 +741,7 @@ def main():
                     except GitError:
                         pass
                         
-            wt_path = setup_worktree(cwd, ref_branch, None, reference_commit_hash)
+            wt_path = setup_worktree(cwd, selected_branch["branch_name"], remote_ref, selected_branch["commit_hash"])
             
             print(json.dumps({
                 "reference_branch": ref_branch,
