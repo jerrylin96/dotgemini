@@ -3,6 +3,8 @@ import sys
 import unittest
 import hashlib
 import json
+import shutil
+import tempfile
 from unittest.mock import patch
 
 # Add scripts directory to path to import resolve_branches
@@ -12,7 +14,12 @@ import resolve_branches
 class TestResolveBranches(unittest.TestCase):
 
     def setUp(self):
-        self.wt_root = os.path.expanduser("~/.gemini/tmp/worktrees")
+        # Keep every test away from the real ~/.gemini/tmp/worktrees
+        self.wt_root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.wt_root, True)
+        env_patcher = patch.dict(os.environ, {"DOTGEMINI_WORKTREE_ROOT": self.wt_root})
+        env_patcher.start()
+        self.addCleanup(env_patcher.stop)
         # "/Users/user/repo" hashes to "532a6759"
         self.repo_hash = hashlib.sha256("/Users/user/repo".encode("utf-8")).hexdigest()[:8]
         # "feature-branch" hashes to "8a76ef"
@@ -111,8 +118,7 @@ class TestResolveBranches(unittest.TestCase):
 
     @patch("resolve_branches.run_git")
     @patch("resolve_branches.get_worktree_map")
-    @patch("shutil.rmtree")
-    def test_setup_worktree_recreates_dirty_managed(self, mock_rmtree, mock_get_worktrees, mock_run_git):
+    def test_setup_worktree_recreates_dirty_managed(self, mock_get_worktrees, mock_run_git):
         target_folder = f"feature-branch_{self.branch_hash}"
         target_path = os.path.join(self.wt_root, f"{self.repo_hash}_{target_folder}")
 
@@ -192,10 +198,11 @@ class TestResolveBranches(unittest.TestCase):
     @patch("resolve_branches.safe_rmtree")
     def test_prune_repo_prefix_only(self, mock_safe_rmtree, mock_scandir, mock_exists, mock_run_git):
         # Mock os.scandir to return DirEntry objects
+        wt_root = self.wt_root
         class MockDirEntry:
             def __init__(self, name, is_dir_val=True, is_symlink_val=False):
                 self.name = name
-                self.path = os.path.join(os.path.expanduser("~/.gemini/tmp/worktrees"), name)
+                self.path = os.path.join(wt_root, name)
                 self.is_dir_val = is_dir_val
                 self.is_symlink_val = is_symlink_val
 
@@ -266,7 +273,7 @@ class TestResolveBranches(unittest.TestCase):
                 if "origin/release" in args or "release" in args:
                     return "commit"
             if "rev-parse" in args:
-                if "origin/release" in args or "release" in args:
+                if any("release" in str(a) for a in args):
                     return "commit_hash_123"
             raise resolve_branches.GitError("Command failed")
             
@@ -364,6 +371,76 @@ class TestResolveBranches(unittest.TestCase):
                 self._run_stale_local_main_integration()
         finally:
             shutil.rmtree(test_wt_root)
+
+    def test_integration_qualified_target_names(self):
+        # Remote-qualified (origin/foo) and refs-qualified (refs/heads/foo) target
+        # names must resolve, and must review the exact ref that was requested even
+        # when a same-named branch with a newer commit exists elsewhere.
+        import tempfile
+        import subprocess
+        import time
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            origin_path = os.path.join(tmpdir, "origin")
+            local_path = os.path.join(tmpdir, "local")
+            os.makedirs(origin_path)
+
+            def run_cmd(args, cwd):
+                subprocess.run(args, cwd=cwd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+            def rev_parse(cwd):
+                return subprocess.run(["git", "rev-parse", "HEAD"], cwd=cwd, capture_output=True, text=True).stdout.strip()
+
+            run_cmd(["git", "init", "-b", "main"], origin_path)
+            run_cmd(["git", "config", "user.name", "Test User"], origin_path)
+            run_cmd(["git", "config", "user.email", "test@example.com"], origin_path)
+            with open(os.path.join(origin_path, "file.txt"), "w") as f:
+                f.write("initial")
+            run_cmd(["git", "add", "file.txt"], origin_path)
+            run_cmd(["git", "commit", "-m", "initial commit"], origin_path)
+            run_cmd(["git", "checkout", "-b", "foo"], origin_path)
+            with open(os.path.join(origin_path, "file.txt"), "w") as f:
+                f.write("remote foo")
+            run_cmd(["git", "commit", "-am", "remote foo commit"], origin_path)
+            remote_foo_commit = rev_parse(origin_path)
+            run_cmd(["git", "checkout", "main"], origin_path)
+
+            run_cmd(["git", "clone", origin_path, local_path], tmpdir)
+            run_cmd(["git", "config", "user.name", "Test User"], local_path)
+            run_cmd(["git", "config", "user.email", "test@example.com"], local_path)
+            run_cmd(["git", "checkout", "-b", "foo", "origin/foo"], local_path)
+            time.sleep(1)  # newer committer date so dedup keeps the local branch
+            with open(os.path.join(local_path, "file.txt"), "w") as f:
+                f.write("local foo")
+            run_cmd(["git", "commit", "-am", "newer local foo commit"], local_path)
+            local_foo_commit = rev_parse(local_path)
+            run_cmd(["git", "checkout", "main"], local_path)
+
+            def resolve(target):
+                import io
+                stdout_capture = io.StringIO()
+                with patch("sys.stdout", stdout_capture), patch("sys.exit", side_effect=SystemExit):
+                    with patch("sys.argv", ["resolve_branches.py", target]):
+                        resolve_branches.main()
+                return json.loads(stdout_capture.getvalue())
+
+            old_cwd = os.getcwd()
+            os.chdir(local_path)
+            try:
+                result = resolve("origin/foo")
+                self.assertEqual(result.get("feature_branch"), "foo")
+                self.assertEqual(result.get("feature_ref"), "origin/foo")
+                self.assertEqual(result.get("commit_hash"), remote_foo_commit)
+
+                result = resolve("refs/heads/foo")
+                self.assertEqual(result.get("feature_branch"), "foo")
+                self.assertEqual(result.get("commit_hash"), local_foo_commit)
+
+                result = resolve("foo")
+                self.assertEqual(result.get("feature_branch"), "foo")
+                self.assertEqual(result.get("commit_hash"), local_foo_commit)
+            finally:
+                os.chdir(old_cwd)
 
     def test_integration_reference_short_normalization(self):
         import tempfile
