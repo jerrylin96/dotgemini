@@ -15,11 +15,15 @@ metadata:
 This skill provides comprehensive guidance for BigQuery services, optimizations,
 and data handling. It acts as a routing table for specialized BigQuery topics.
 
-> [!IMPORTANT] For general standards on running BigQuery in notebooks (SQL
-> cells, `export` keyword), see `@skill:notebook-guidance`.
+> [!IMPORTANT]
+>
+> For general standards on running BigQuery in notebooks (SQL cells, `export`
+> keyword), see `@skill:notebook-guidance`.
 
-> [!IMPORTANT] You MUST check the data size before deciding on which libraries
-> to use. Use the data size to justify your decision.
+> [!IMPORTANT]
+>
+> You MUST check the data size before deciding on which libraries to use. Use
+> the data size to justify your decision.
 
 Refer to the following resources for expert guidance on specific BigQuery
 features:
@@ -28,13 +32,13 @@ features:
 
 Performance and efficiency guidelines for BigQuery SQL. Includes rules for
 column pruning, pushdown, and materialization strategies. - **Guide**:
-[OPTIMIZATION.md](resources/OPTIMIZATION.md)
+[OPTIMIZATION.md](references/OPTIMIZATION.md)
 
 ### 2. BigFrames (BigQuery DataFrames)
 
 Guidelines for generating valid BigFrames code for data manipulation, model
 development, and visualization. - **Guide**:
-[BIGFRAMES.md](resources/BIGFRAMES.md)
+[BIGFRAMES.md](references/BIGFRAMES.md)
 
 Bigframes should be the default library/tool as it is more efficient than using
 the BigQuery Python client library.
@@ -43,14 +47,14 @@ the BigQuery Python client library.
 
 Usage rules and syntax standards for all BigQuery AI/ML functions via SQL
 (Forecasting, Generative AI, Classification, etc.). - **Guide**:
-[BQML.md](resources/BQML.md) - **Functions Reference**: -
-[AI.FORECAST](resources/ai-forecast.md) -
-[AI.EVALUATE](resources/ai-evaluate.md) -
-[AI.GENERATE_TABLE](resources/ai-generate-table.md) -
-[AI.GENERATE_EMBEDDING](resources/ai-generate-embedding.md) -
-[Remote Models](resources/remote-models.md)
-[CONTRIBUTION_ANALYSIS](resources/ml-contribution-analysis.md)
-[VECTOR_SEARCH](resources/vector-search.md)
+[BQML.md](references/BQML.md) - **Functions Reference**: -
+[AI.FORECAST](references/ai-forecast.md) -
+[AI.EVALUATE](references/ai-evaluate.md) -
+[AI.GENERATE_TABLE](references/ai-generate-table.md) -
+[AI.GENERATE_EMBEDDING](references/ai-generate-embedding.md) -
+[Remote Models](references/remote-models.md)
+[CONTRIBUTION_ANALYSIS](references/ml-contribution-analysis.md)
+[VECTOR_SEARCH](references/vector-search.md)
 
 ### 4. Notebook SQL cells
 

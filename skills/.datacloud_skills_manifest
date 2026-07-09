@@ -1,53 +1,17 @@
 {
-  "bundleChecksum": "95f754ea65a7145a1cbf36b5e2cf1e5f717de2fc9a99bc53557ad53315f229d3",
+  "bundleChecksum": "5bdb3c4ab2cca281cd440bc71a9c6b07756135a31188a028baaab981eb3c665c",
   "skills": {
     "accidental-data-loss-prevention": {
       "status": "installed",
       "checksum": "b8f858f8143114ed9189b29ea8af1672378d66db3b8c92c5ec1b23712141ef1b"
     },
-    "bigquery-data-transfer-service": {
-      "status": "installed",
-      "checksum": "fb168d5fc5fdb54bef01e20b12852618aceaf986cc508905b65250af440fe016"
-    },
-    "building-data-apps": {
-      "status": "installed",
-      "checksum": "8bccab48325c1381972c435f912ad4e01bf97062747700e0f19e746d1a845faa"
-    },
     "data-autocleaning": {
       "status": "installed",
       "checksum": "14a97cd0a785e9ff334c385c4dc8f83599e9a6420200547d78fd5de6f84983a5"
     },
-    "dataform-bigquery": {
-      "status": "installed",
-      "checksum": "c21ad60de8d3f6eda9e6ac31e2ec51aad6be16dd9b1d5f4bb0d3e45c6596f87a"
-    },
-    "dbt-bigquery": {
-      "status": "installed",
-      "checksum": "9fb4aba0cbc05c4746fbfb96ed26511eef226b55c3decb3d99cc85f775aecacb"
-    },
-    "developing-with-bigquery": {
-      "status": "installed",
-      "checksum": "0be81c762d9f0eaa0de3d0da32308d36f74199cb56c5870aa84aaccc537e79e5"
-    },
-    "discovering-gcp-data-assets": {
-      "status": "installed",
-      "checksum": "9190bc08b04a3d80e9e5471a5074c3e69b18317c94c0cdc1b42f494b8e4264af"
-    },
     "gcloud-auth-verification": {
       "status": "installed",
       "checksum": "b4a6f58394290ad1c22de6e14e211b08b21ec015053929101e725dbccc0b6b09"
-    },
-    "gcp-composer-troubleshooting": {
-      "status": "installed",
-      "checksum": "443b143e6672d80929e10857b1edc284b44c8b8550e8e82260bb10c55c44623a"
-    },
-    "gcp-data-pipelines": {
-      "status": "installed",
-      "checksum": "2de5324a6d3ada4ac18599c2d664e5518b1cd208945522890c5f884e1cfc3261"
-    },
-    "gcp-dataflow": {
-      "status": "installed",
-      "checksum": "6239231b04044b8dafc018e847cb78bbab4eacbe9d0db012dfcf858d3db8dbb0"
     },
     "gcp-pipeline-orchestration": {
       "status": "installed",
@@ -56,14 +20,6 @@
     "gcp-pipeline-resource-provisioning": {
       "status": "installed",
       "checksum": "c7d31d4e4f5da4d7f3c79c717e8213a402085f5a9e6ecc2cebf6821cb8e02400"
-    },
-    "gcp-spark": {
-      "status": "installed",
-      "checksum": "3fa229bf567f1902ea9832f0a94d4d4a794bc6616c904ab9d08c2c40d5956f72"
-    },
-    "managing-python-dependencies": {
-      "status": "installed",
-      "checksum": "9c666d9ccb84741d6b59b69457fe790a7087208b0372e9219241f226b705c98a"
     },
     "ml-best-practices": {
       "status": "installed",
@@ -76,6 +32,54 @@
     "skill-repair": {
       "status": "installed",
       "checksum": "276efcab0cdeb25cb412644bcf0fd5fb827f4873b44a6ba24f4e49e035d25c3e"
+    },
+    "bigquery-data-transfer-service": {
+      "status": "installed",
+      "checksum": "d2b0bdd977e8dc50c06c82deb80b742eacb8eadd5a0c27a34cfacd94fc1d1723"
+    },
+    "building-data-apps": {
+      "status": "installed",
+      "checksum": "84fe4db0d4100f6644d4041c293c4fbcbf9a49d2a79743626c721d3634e9f46f"
+    },
+    "dataform-bigquery": {
+      "status": "installed",
+      "checksum": "3a4043aa3ee360a53984f4116a93cb53819c1143147503fca09d3993664ac13a"
+    },
+    "dbt-bigquery": {
+      "status": "installed",
+      "checksum": "510a275253e8704551fbdceaea4632af6053f5cf7ad07e7f058c667a369076d2"
+    },
+    "developing-with-bigquery": {
+      "status": "installed",
+      "checksum": "ff9d9c0186e6f916172bf276cb4a8b5a73b9adccaf98abed8d42d606991e9d3e"
+    },
+    "discovering-gcp-data-assets": {
+      "status": "installed",
+      "checksum": "553a6cd984882b1a63782885c54c0120f40de214c11fdbf46ec05e6acbf88840"
+    },
+    "federate-lakehouse-catalog": {
+      "status": "installed",
+      "checksum": "c1e071ca3d8c9eaa42ae814f2d4ae2e5e12f3e0f289367c74ced4d87ccf157d3"
+    },
+    "gcp-composer-troubleshooting": {
+      "status": "installed",
+      "checksum": "9128f016ece2b9dbde8a62af809685b152048694be672c93152ffc34e81dbe49"
+    },
+    "gcp-data-pipelines": {
+      "status": "installed",
+      "checksum": "8cd8124624e803a22cff67911a3542f1e5ec29bae6024ce33b9a76aceacb5ce5"
+    },
+    "gcp-dataflow": {
+      "status": "installed",
+      "checksum": "88603a6022611decbc0507b20892478ffd7368aeee0e9a0ae9b99de0d700dfac"
+    },
+    "gcp-spark": {
+      "status": "installed",
+      "checksum": "264922f636f2010886fb8108d4d98d731c51fa1c2a5dba632d2c255beb66b58d"
+    },
+    "managing-python-dependencies": {
+      "status": "installed",
+      "checksum": "04a1ab128e1167a02a605d6b1459d9512c4a58cfeb81a8f5303e814eafe089ef"
     }
   }
 }
