@@ -96,3 +96,12 @@ To prevent test/execution collisions and avoid polluting the workspace or runnin
   * Running tests: `~/.gemini/tmp/<your-workspace-hash>/bin/pytest`
   * Running linter: `~/.gemini/tmp/<your-workspace-hash>/bin/ruff check .`
   * Running formatter: `~/.gemini/tmp/<your-workspace-hash>/bin/black`
+
+---
+
+## 6. Execution & Review Constraints (Laptop vs. HPC)
+
+When performing reviews, running tests, or inspecting code in this codebase:
+* **Local Laptop Execution**: Assume the agent is executing on a local laptop, NOT the High-Performance Computing (HPC) system.
+* **No HPC Execution**: Do not attempt to run scripts or jobs that require HPC-level resources, compute clusters, or long runtimes.
+* **No Intermediate HPC Files**: Do not assume or search for intermediate/output files produced by HPC compute jobs. If a task or script depends on these files and they are missing, do not attempt to run or look for them. Instead, perform static analysis or mock the files if required for basic testing.
