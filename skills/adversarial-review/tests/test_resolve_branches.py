@@ -637,6 +637,145 @@ class TestResolveBranches(unittest.TestCase):
         finally:
             shutil.rmtree(test_wt_root)
 
+    def test_parse_pr_target(self):
+        self.assertEqual(resolve_branches.parse_pr_target("#42"), (42, None))
+        self.assertEqual(
+            resolve_branches.parse_pr_target("https://github.com/owner/repo/pull/7"),
+            (7, "https://github.com/owner/repo"))
+        self.assertEqual(
+            resolve_branches.parse_pr_target("https://github.com/owner/repo/pull/7/files"),
+            (7, "https://github.com/owner/repo"))
+        self.assertEqual(
+            resolve_branches.parse_pr_target("https://gitlab.com/group/sub/repo/-/merge_requests/13"),
+            (13, "https://gitlab.com/group/sub/repo"))
+        self.assertEqual(
+            resolve_branches.parse_pr_target("https://gitea.example.com/owner/repo/pulls/3"),
+            (3, "https://gitea.example.com/owner/repo"))
+        # Branch names and bare numbers must never be treated as PRs
+        self.assertIsNone(resolve_branches.parse_pr_target("feature/foo"))
+        self.assertIsNone(resolve_branches.parse_pr_target("origin/feature"))
+        self.assertIsNone(resolve_branches.parse_pr_target("42"))
+        self.assertIsNone(resolve_branches.parse_pr_target(None))
+
+    def test_normalize_git_url(self):
+        self.assertEqual(resolve_branches.normalize_git_url("git@github.com:owner/repo.git"),
+                         "github.com/owner/repo")
+        self.assertEqual(resolve_branches.normalize_git_url("https://github.com/Owner/Repo"),
+                         "github.com/owner/repo")
+        self.assertEqual(resolve_branches.normalize_git_url("ssh://git@gitlab.com/g/r.git"),
+                         "gitlab.com/g/r")
+
+    def test_pr_ref_candidates_host_order(self):
+        gh = resolve_branches.pr_ref_candidates("https://github.com/o/r.git", 5)
+        self.assertEqual(gh[0], "refs/pull/5/head")
+        self.assertIn("refs/merge-requests/5/head", gh)
+        gl = resolve_branches.pr_ref_candidates("git@gitlab.com:o/r.git", 5)
+        self.assertEqual(gl[0], "refs/merge-requests/5/head")
+
+    def _make_pr_fixture(self, tmpdir):
+        """Origin repo exposing refs/pull/1/head on a commit that is on NO branch,
+        mimicking a fork PR, plus a local clone. Returns (local_path, pr_commit)."""
+        import subprocess
+
+        origin_path = os.path.join(tmpdir, "origin")
+        local_path = os.path.join(tmpdir, "local")
+        os.makedirs(origin_path)
+
+        def run_cmd(args, cwd):
+            subprocess.run(args, cwd=cwd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+        run_cmd(["git", "init", "-b", "main"], origin_path)
+        run_cmd(["git", "config", "user.name", "Test User"], origin_path)
+        run_cmd(["git", "config", "user.email", "test@example.com"], origin_path)
+        with open(os.path.join(origin_path, "file.txt"), "w") as f:
+            f.write("initial")
+        run_cmd(["git", "add", "file.txt"], origin_path)
+        run_cmd(["git", "commit", "-m", "initial commit"], origin_path)
+
+        run_cmd(["git", "checkout", "-b", "tmp-pr-source"], origin_path)
+        with open(os.path.join(origin_path, "pr.txt"), "w") as f:
+            f.write("pr change")
+        run_cmd(["git", "add", "pr.txt"], origin_path)
+        run_cmd(["git", "commit", "-m", "pr head commit"], origin_path)
+        pr_commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=origin_path,
+                                   capture_output=True, text=True).stdout.strip()
+        run_cmd(["git", "checkout", "main"], origin_path)
+        run_cmd(["git", "update-ref", "refs/pull/1/head", pr_commit], origin_path)
+        run_cmd(["git", "branch", "-D", "tmp-pr-source"], origin_path)
+
+        run_cmd(["git", "clone", origin_path, local_path], tmpdir)
+        run_cmd(["git", "config", "user.name", "Test User"], local_path)
+        run_cmd(["git", "config", "user.email", "test@example.com"], local_path)
+        return local_path, pr_commit
+
+    def test_integration_pr_mode(self):
+        import io
+        import subprocess
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            local_path, pr_commit = self._make_pr_fixture(tmpdir)
+
+            def resolve(argv):
+                stdout_capture = io.StringIO()
+                with patch("sys.stdout", stdout_capture), patch("sys.exit", side_effect=SystemExit):
+                    with patch("sys.argv", ["resolve_branches.py"] + argv):
+                        with self.assertRaises(SystemExit):
+                            resolve_branches.main()
+                return json.loads(stdout_capture.getvalue())
+
+            old_cwd = os.getcwd()
+            os.chdir(local_path)
+            try:
+                for argv in (["--pr", "1"], ["#1"]):
+                    result = resolve(argv)
+                    self.assertNotIn("error", result, f"argv={argv}: {result}")
+                    self.assertEqual(result.get("pr_number"), 1)
+                    self.assertEqual(result.get("feature_branch"), "pr-1")
+                    self.assertEqual(result.get("feature_ref"), "origin/pull/1/head")
+                    self.assertEqual(result.get("commit_hash"), pr_commit)
+                    self.assertEqual(result.get("subject"), "pr head commit")
+                    self.assertEqual(result.get("reference_branch"), "main")
+                    wt_path = result.get("worktree_path")
+                    self.assertTrue(os.path.isdir(wt_path))
+                    wt_head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=wt_path,
+                                             capture_output=True, text=True).stdout.strip()
+                    self.assertEqual(wt_head, pr_commit)
+            finally:
+                os.chdir(old_cwd)
+
+    def test_integration_pr_mode_missing_pr_is_fatal(self):
+        import io
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            local_path, _ = self._make_pr_fixture(tmpdir)
+
+            old_cwd = os.getcwd()
+            os.chdir(local_path)
+            try:
+                stdout_capture = io.StringIO()
+                with patch("sys.stdout", stdout_capture), patch("sys.exit", side_effect=SystemExit):
+                    with patch("sys.argv", ["resolve_branches.py", "--pr", "99"]):
+                        with self.assertRaises(SystemExit):
+                            resolve_branches.main()
+                result = json.loads(stdout_capture.getvalue())
+                self.assertIn("error", result)
+                self.assertIn("99", result["error"])
+            finally:
+                os.chdir(old_cwd)
+
+    def test_pr_flag_rejects_branch_target_combo(self):
+        import io
+        stdout_capture = io.StringIO()
+        with patch("sys.stdout", stdout_capture), patch("sys.exit", side_effect=SystemExit):
+            with patch("sys.argv", ["resolve_branches.py", "--pr", "1", "somebranch"]):
+                with patch("resolve_branches.run_git", return_value="/Users/user/repo"):
+                    with self.assertRaises(SystemExit):
+                        resolve_branches.main()
+        result = json.loads(stdout_capture.getvalue())
+        self.assertIn("error", result)
+
     def test_integration_no_pollution(self):
         import tempfile
         import shutil

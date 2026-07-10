@@ -18,11 +18,12 @@ Automatically resolve context, create/update feature branch worktree, and perfor
 
 1. Run the helper branch resolution script to discover branches and manage worktree.
    ```bash
-   python3 ~/.gemini/skills/adversarial-review/scripts/resolve_branches.py [optional_target_branch] [--reference <branch>] [--prune] [--prune-all]
+   python3 ~/.gemini/skills/adversarial-review/scripts/resolve_branches.py [optional_target] [--pr <N>] [--reference <branch>] [--prune] [--prune-all]
    ```
 
 ### Script Flags
-- `[optional_target_branch]`: Explicitly specify the feature branch to review. Accepts short names (`feat/x`), remote-qualified names (`origin/feat/x`), or fully qualified refs (`refs/heads/feat/x`); a remote-qualified name reviews that exact remote ref even when a same-named local branch exists.
+- `[optional_target]`: Explicitly specify the feature branch to review. Accepts short names (`feat/x`), remote-qualified names (`origin/feat/x`), or fully qualified refs (`refs/heads/feat/x`); a remote-qualified name reviews that exact remote ref even when a same-named local branch exists. `#42` or a PR/MR web URL is treated as a pull request target (see `--pr`); a URL also selects the matching remote by comparing remote URLs.
+- `--pr <N>`: Review a pull/merge request by number instead of a branch. The script fetches the PR head ref directly from the remote (`refs/pull/N/head` on GitHub/Gitea/Forgejo, `refs/merge-requests/N/head` on GitLab) into `refs/gemini-review/<remote>/pr/N`, so it works even for fork PRs whose head branch is not in any configured remote, and for merged/closed PRs. Unsupported on remotes that do not expose PR refs (e.g. Bitbucket). Unlike branch fetches, a failed PR fetch is a fatal error — there is no stale local fallback.
 - `--reference <branch>`: Override the default integration branch to compare against.
 - `--prune`: Prune cached review worktrees for this repository.
 - `--prune-all`: Prune all cached review worktrees across all repositories.
@@ -48,6 +49,7 @@ The script returns JSON on stdout. The schema depends on the outcome:
    - `reference_ref` currently always mirrors `reference_branch`.
    - `feature_ref` is the exact ref the review targets (local name, or remote-qualified like `origin/feat/my-feature`), so you can tell whether a local or remote branch was resolved.
    - `fetch_error` is `null` when the best-effort `git fetch` succeeded; otherwise it holds the fetch failure message and the results may be based on stale local tracking refs. Mention this in the review report if set.
+   - **PR mode** returns the same success schema plus `"pr_number"`, with `feature_branch` like `"pr-42"` and `feature_ref` like `"origin/pull/42/head"`.
 * **Ambiguous Candidates (Need user clarification)**
    ```json
    {
@@ -100,6 +102,7 @@ The script returns JSON on stdout. The schema depends on the outcome:
    - Ask the user to explicitly choose which feature branch is the intended target for review.
 3. If no candidate feature branch is found (e.g., `"feature_branch": null`):
    - Report that no feature branch is available to review, and ask the user to specify one.
+4. **PR baseline**: In PR mode the baseline is still the checked-out branch (or the default integration branch) — plain git cannot know a PR's true base branch. Since the diff is merge-base-anchored this is usually harmless, but if the PR targets a different base, pass `--reference <base>`. If the `gh` CLI happens to be installed, you may best-effort run `gh pr view <N> --json baseRefName,title,body` to discover the base branch and enrich context; never treat `gh` as required and never fail because it is absent.
 
 ## Execution Steps
 
