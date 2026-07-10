@@ -5,20 +5,11 @@ import sys
 import subprocess
 import json
 import hashlib
-import time
-
-# Try importing fcntl for flock on Unix platforms (macOS/Linux)
-try:
-    import fcntl
-    HAS_FCNTL = True
-except ImportError:
-    HAS_FCNTL = False
-
 script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(script_dir, "..", "..", ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
-from scripts.file_lock import FileLock
+from scripts.file_lock import FileLock, HAS_FCNTL  # noqa: E402
 
 # Git command timeout (in seconds) used across fetches and other git actions.
 GIT_TIMEOUT = 30

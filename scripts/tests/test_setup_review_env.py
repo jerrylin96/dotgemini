@@ -10,6 +10,7 @@ from unittest.mock import patch
 # Add scripts directory to path to import setup_review_env
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import setup_review_env
+from scripts.file_lock import HAS_FCNTL  # noqa: E402
 
 class TestSetupReviewEnv(unittest.TestCase):
 
@@ -301,7 +302,7 @@ test = [
         lock_path = os.path.join(self.tmpdir, "test.lock")
         
         # Test success under normal flock conditions
-        if setup_review_env.HAS_FCNTL:
+        if HAS_FCNTL:
             with setup_review_env.FileLock(lock_path):
                 self.assertTrue(os.path.exists(lock_path))
                 

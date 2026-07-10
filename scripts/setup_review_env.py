@@ -28,11 +28,18 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(script_dir, ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
-from scripts.file_lock import FileLock, HAS_FCNTL
+from scripts.file_lock import FileLock  # noqa: E402
 
 # Subprocess timeouts (in seconds) configurable via env vars
-VENV_TIMEOUT = int(os.environ.get("VENV_TIMEOUT_SECS", "120"))
-UV_TIMEOUT = int(os.environ.get("UV_TIMEOUT_SECS", "600"))
+try:
+    VENV_TIMEOUT = int(os.environ.get("VENV_TIMEOUT_SECS", "120"))
+except ValueError:
+    VENV_TIMEOUT = 120
+
+try:
+    UV_TIMEOUT = int(os.environ.get("UV_TIMEOUT_SECS", "600"))
+except ValueError:
+    UV_TIMEOUT = 600
 
 def fallback_parse_toml(filepath):
     """
@@ -52,9 +59,9 @@ def fallback_parse_toml(filepath):
         in_double = False
         in_single = False
         for idx, char in enumerate(line):
-            if char == '"' and not in_single:
+            if char == '"' and not in_single and (idx == 0 or line[idx-1] != '\\'):
                 in_double = not in_double
-            elif char == "'" and not in_double:
+            elif char == "'" and not in_double and (idx == 0 or line[idx-1] != '\\'):
                 in_single = not in_single
             elif char == '#' and not in_double and not in_single:
                 comment_start = idx
