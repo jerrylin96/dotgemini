@@ -30,6 +30,10 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 from scripts.file_lock import FileLock, HAS_FCNTL
 
+# Subprocess timeouts (in seconds) configurable via env vars
+VENV_TIMEOUT = int(os.environ.get("VENV_TIMEOUT_SECS", "120"))
+UV_TIMEOUT = int(os.environ.get("UV_TIMEOUT_SECS", "600"))
+
 def fallback_parse_toml(filepath):
     """
     ponytail: Regex-based fallback TOML parser for Python 3.10 compatibility.
@@ -263,7 +267,7 @@ def main():
             if requires_python:
                 print(f"Detected Python requirement: {requires_python}")
                 cmd_venv += ["--python", requires_python]
-            subprocess.run(cmd_venv, env={**os.environ, "UV_PROJECT_ENVIRONMENT": env_path}, check=True, timeout=60)
+            subprocess.run(cmd_venv, env={**os.environ, "UV_PROJECT_ENVIRONMENT": env_path}, check=True, timeout=VENV_TIMEOUT)
 
         # 5. Determine dependencies to install
         print("Resolving dependencies...")
@@ -368,7 +372,7 @@ def main():
                         cwd=workspace_path,
                         env={**os.environ, "VIRTUAL_ENV": env_path, "UV_PROJECT_ENVIRONMENT": env_path},
                         check=True,
-                        timeout=300
+                        timeout=UV_TIMEOUT
                     )
                 except subprocess.CalledProcessError as e:
                     allow_unlocked = os.environ.get("ALLOW_UNLOCKED_SYNC") == "1"
@@ -380,7 +384,7 @@ def main():
                             cwd=workspace_path,
                             env={**os.environ, "VIRTUAL_ENV": env_path, "UV_PROJECT_ENVIRONMENT": env_path},
                             check=True,
-                            timeout=300
+                            timeout=UV_TIMEOUT
                         )
                         # Recompute fingerprint after sync since uv.lock might have mutated
                         current_fingerprint = compute_fingerprint(workspace_path, install_deps, requires_python, python_info)
@@ -393,7 +397,7 @@ def main():
                     [uv_bin, "pip", "install", "pytest", "pytest-cov", "black", "ruff"],
                     env={**os.environ, "VIRTUAL_ENV": env_path, "UV_PROJECT_ENVIRONMENT": env_path},
                     check=True,
-                    timeout=300
+                    timeout=UV_TIMEOUT
                 )
             else:
                 requirements_path = os.path.join(workspace_path, "requirements.txt")
@@ -403,14 +407,14 @@ def main():
                         [uv_bin, "pip", "install", "-r", requirements_path],
                         env={**os.environ, "VIRTUAL_ENV": env_path, "UV_PROJECT_ENVIRONMENT": env_path},
                         check=True,
-                        timeout=300
+                        timeout=UV_TIMEOUT
                     )
                     print("Installing review tools...")
                     subprocess.run(
                         [uv_bin, "pip", "install", "pytest", "pytest-cov", "black", "ruff"],
                         env={**os.environ, "VIRTUAL_ENV": env_path, "UV_PROJECT_ENVIRONMENT": env_path},
                         check=True,
-                        timeout=300
+                        timeout=UV_TIMEOUT
                     )
                 else:
                     print(f"Installing {len(install_deps)} dependencies via 'uv pip install'...")
@@ -419,7 +423,7 @@ def main():
                         cmd_install,
                         env={**os.environ, "VIRTUAL_ENV": env_path, "UV_PROJECT_ENVIRONMENT": env_path},
                         check=True,
-                        timeout=300
+                        timeout=UV_TIMEOUT
                     )
                 
             # 7. Install project in editable mode if pyproject.toml exists (and not uv.lock since uv sync does this)
@@ -429,7 +433,7 @@ def main():
                     [uv_bin, "pip", "install", "--no-deps", "-e", workspace_path],
                     env={**os.environ, "VIRTUAL_ENV": env_path, "UV_PROJECT_ENVIRONMENT": env_path},
                     check=True,
-                    timeout=300
+                    timeout=UV_TIMEOUT
                 )
                 
             # Save fingerprint
