@@ -25,8 +25,8 @@ class TestSetupReviewEnv(unittest.TestCase):
 name = "test-project"
 requires-python = ">=3.11"
 dependencies = [
-    "numpy>=1.20",
-    "pandas",
+    "numpy>=1.20", # comment here
+    "pandas#1.0.0", # comment with # inside quotes
 ]
 
 [project.optional-dependencies]
@@ -48,10 +48,10 @@ dev = [
         self.assertEqual(parsed.get("project", {}).get("name"), "test-project")
         self.assertEqual(parsed.get("project", {}).get("requires-python"), ">=3.11")
         
-        # Verify dependencies parsed completely despite brackets
+        # Verify dependencies parsed completely despite brackets and comments
         deps = parsed.get("project", {}).get("dependencies", [])
         self.assertIn("numpy>=1.20", deps)
-        self.assertIn("pandas", deps)
+        self.assertIn("pandas#1.0.0", deps)
         self.assertEqual(len(deps), 2)
         
         # Verify optional dependencies parsed completely
@@ -130,7 +130,7 @@ dev = [
                 setup_review_env.main()
                 
         # Calculate expected env path
-        path_hash = hashlib.md5(self.tmpdir.encode('utf-8')).hexdigest()
+        path_hash = hashlib.sha256(self.tmpdir.encode('utf-8')).hexdigest()
         expected_env_path = os.path.join(os.path.expanduser("~/.gemini/tmp"), path_hash)
         
         # Verify that subprocess.run was called for venv, sync, and pip install
@@ -312,7 +312,7 @@ test = [
                             pass
 
         # Test failure when fcntl is missing
-        with patch("setup_review_env.HAS_FCNTL", False):
+        with patch("scripts.file_lock.HAS_FCNTL", False):
             with self.assertRaises(RuntimeError):
                 with setup_review_env.FileLock(lock_path):
                     pass

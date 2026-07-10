@@ -24,46 +24,11 @@ except ImportError:
     except ImportError:
         HAS_TOMLLIB = False
 
-# Try importing fcntl for flock on Unix platforms (macOS/Linux)
-try:
-    import fcntl
-    HAS_FCNTL = True
-except ImportError:
-    HAS_FCNTL = False
-
-class FileLock:
-    def __init__(self, lock_path: str):
-        self.lock_path = lock_path
-        self.lock_file = None
-
-    def __enter__(self):
-        if not HAS_FCNTL:
-            raise RuntimeError("fcntl module is unavailable. POSIX file locking is required on macOS and Linux.")
-        self.lock_file = open(self.lock_path, "w")
-        import time
-        start_time = time.time()
-        timeout = 180  # generous timeout for environment setups
-        acquired = False
-        while not acquired:
-            try:
-                fcntl.flock(self.lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                acquired = True
-            except (BlockingIOError, OSError):
-                if time.time() - start_time > timeout:
-                    raise TimeoutError(f"Timed out waiting for file lock on {self.lock_path}")
-                time.sleep(0.5)
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.lock_file:
-            try:
-                fcntl.flock(self.lock_file, fcntl.LOCK_UN)
-            except Exception:
-                pass
-            try:
-                self.lock_file.close()
-            except Exception:
-                pass
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(script_dir, ".."))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+from scripts.file_lock import FileLock, HAS_FCNTL
 
 def fallback_parse_toml(filepath):
     """
@@ -76,8 +41,24 @@ def fallback_parse_toml(filepath):
     except Exception:
         return {}
     
-    # Strip comments
-    content = re.sub(r'#.*$', '', content, flags=re.MULTILINE)
+    # Strip comments (ignoring # inside quoted strings)
+    lines = []
+    for line in content.splitlines():
+        comment_start = -1
+        in_double = False
+        in_single = False
+        for idx, char in enumerate(line):
+            if char == '"' and not in_single:
+                in_double = not in_double
+            elif char == "'" and not in_double:
+                in_single = not in_single
+            elif char == '#' and not in_double and not in_single:
+                comment_start = idx
+                break
+        if comment_start != -1:
+            line = line[:comment_start]
+        lines.append(line)
+    content = "\n".join(lines)
     result = {}
     
     # Extract project section
@@ -156,7 +137,7 @@ def check_venv_compatible(venv_python, requires_python):
     if not os.path.exists(venv_python):
         return False
     try:
-        out = subprocess.run([venv_python, "-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}')"], capture_output=True, text=True, check=True)
+        out = subprocess.run([venv_python, "-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}')"], capture_output=True, text=True, check=True, timeout=10)
         version_str = out.stdout.strip()
         parts = version_str.split(".")
         if len(parts) == 2:
@@ -238,7 +219,7 @@ def main():
     print(f"Active workspace: {workspace_path}")
     
     # 2. Calculate dynamic env path based on workspace path hash
-    path_hash = hashlib.md5(workspace_path.encode('utf-8')).hexdigest()
+    path_hash = hashlib.sha256(workspace_path.encode('utf-8')).hexdigest()
     env_name = path_hash
     
     envs_root = os.path.expanduser("~/.gemini/tmp")
@@ -269,7 +250,7 @@ def main():
     venv_python = os.path.join(env_path, "bin", "python")
 
     # Acquire lock for target environment configuration
-    with FileLock(lock_path):
+    with FileLock(lock_path, default_timeout=180):
         # 4. Initialize virtual environment if it doesn't exist or is incompatible
         if os.path.exists(env_path):
             if not check_venv_compatible(venv_python, requires_python):
@@ -282,7 +263,7 @@ def main():
             if requires_python:
                 print(f"Detected Python requirement: {requires_python}")
                 cmd_venv += ["--python", requires_python]
-            subprocess.run(cmd_venv, env={**os.environ, "UV_PROJECT_ENVIRONMENT": env_path}, check=True)
+            subprocess.run(cmd_venv, env={**os.environ, "UV_PROJECT_ENVIRONMENT": env_path}, check=True, timeout=60)
 
         # 5. Determine dependencies to install
         print("Resolving dependencies...")
@@ -386,7 +367,8 @@ def main():
                         sync_cmd,
                         cwd=workspace_path,
                         env={**os.environ, "VIRTUAL_ENV": env_path, "UV_PROJECT_ENVIRONMENT": env_path},
-                        check=True
+                        check=True,
+                        timeout=300
                     )
                 except subprocess.CalledProcessError as e:
                     allow_unlocked = os.environ.get("ALLOW_UNLOCKED_SYNC") == "1"
@@ -397,7 +379,8 @@ def main():
                             sync_cmd,
                             cwd=workspace_path,
                             env={**os.environ, "VIRTUAL_ENV": env_path, "UV_PROJECT_ENVIRONMENT": env_path},
-                            check=True
+                            check=True,
+                            timeout=300
                         )
                         # Recompute fingerprint after sync since uv.lock might have mutated
                         current_fingerprint = compute_fingerprint(workspace_path, install_deps, requires_python, python_info)
@@ -409,7 +392,8 @@ def main():
                 subprocess.run(
                     [uv_bin, "pip", "install", "pytest", "pytest-cov", "black", "ruff"],
                     env={**os.environ, "VIRTUAL_ENV": env_path, "UV_PROJECT_ENVIRONMENT": env_path},
-                    check=True
+                    check=True,
+                    timeout=300
                 )
             else:
                 requirements_path = os.path.join(workspace_path, "requirements.txt")
@@ -418,13 +402,15 @@ def main():
                     subprocess.run(
                         [uv_bin, "pip", "install", "-r", requirements_path],
                         env={**os.environ, "VIRTUAL_ENV": env_path, "UV_PROJECT_ENVIRONMENT": env_path},
-                        check=True
+                        check=True,
+                        timeout=300
                     )
                     print("Installing review tools...")
                     subprocess.run(
                         [uv_bin, "pip", "install", "pytest", "pytest-cov", "black", "ruff"],
                         env={**os.environ, "VIRTUAL_ENV": env_path, "UV_PROJECT_ENVIRONMENT": env_path},
-                        check=True
+                        check=True,
+                        timeout=300
                     )
                 else:
                     print(f"Installing {len(install_deps)} dependencies via 'uv pip install'...")
@@ -432,7 +418,8 @@ def main():
                     subprocess.run(
                         cmd_install,
                         env={**os.environ, "VIRTUAL_ENV": env_path, "UV_PROJECT_ENVIRONMENT": env_path},
-                        check=True
+                        check=True,
+                        timeout=300
                     )
                 
             # 7. Install project in editable mode if pyproject.toml exists (and not uv.lock since uv sync does this)
@@ -441,7 +428,8 @@ def main():
                 subprocess.run(
                     [uv_bin, "pip", "install", "--no-deps", "-e", workspace_path],
                     env={**os.environ, "VIRTUAL_ENV": env_path, "UV_PROJECT_ENVIRONMENT": env_path},
-                    check=True
+                    check=True,
+                    timeout=300
                 )
                 
             # Save fingerprint

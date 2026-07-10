@@ -14,60 +14,18 @@ try:
 except ImportError:
     HAS_FCNTL = False
 
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(script_dir, "..", "..", ".."))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+from scripts.file_lock import FileLock
+
 # Git command timeout (in seconds) used across fetches and other git actions.
 GIT_TIMEOUT = 30
 
 class GitError(Exception):
     """Custom exception raised when a Git command fails or times out."""
     pass
-
-class FileLock:
-    def __init__(self, lock_path: str):
-        self.lock_path: str = lock_path
-        self.lock_file = None
-
-    def __enter__(self) -> "FileLock":
-        self.lock_file = open(self.lock_path, "w")
-
-        start_time = time.time()
-        try:
-            timeout = int(os.environ.get("LOCK_TIMEOUT_SECS", "15"))
-        except ValueError:
-            timeout = 15
-
-        try:
-            acquired = False
-            try:
-                fcntl.flock(self.lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                acquired = True
-            except (BlockingIOError, OSError):
-                sys.stderr.write("Another instance is running. Waiting for lock...\n")
-
-            while not acquired:
-                if time.time() - start_time > timeout:
-                    raise TimeoutError(f"Timed out waiting for file lock after {timeout} seconds.")
-                try:
-                    fcntl.flock(self.lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                    acquired = True
-                except (BlockingIOError, OSError):
-                    time.sleep(0.5)
-        except BaseException:
-            self.lock_file.close()
-            self.lock_file = None
-            raise
-
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        if self.lock_file:
-            try:
-                fcntl.flock(self.lock_file, fcntl.LOCK_UN)
-            except Exception:
-                pass
-            try:
-                self.lock_file.close()
-            except Exception:
-                pass
 
 def safe_rmtree(path: str):
     """

@@ -27,7 +27,7 @@ def main():
     else:
         print("uv is not available. Skipping setup_review_env.py and falling back to host environment.", flush=True)
         
-    path_hash = hashlib.md5(workspace_root.encode('utf-8')).hexdigest()
+    path_hash = hashlib.sha256(workspace_root.encode('utf-8')).hexdigest()
     pytest_bin = os.path.expanduser(f"~/.gemini/tmp/{path_hash}/bin/pytest")
     
     if setup_success and os.path.exists(pytest_bin):
@@ -50,11 +50,13 @@ def main():
             sys.exit(result.returncode)
         else:
             print("pytest not found on host. Running host unittest...", flush=True)
-            test_dirs = [
-                "scripts/tests",
-                "skills/adversarial-review/tests",
-                "skills/data-autocleaning/tests",
-            ]
+            test_dirs = ["scripts/tests"]
+            skills_root = os.path.join(workspace_root, "skills")
+            if os.path.isdir(skills_root):
+                for name in sorted(os.listdir(skills_root)):
+                    tests_dir = os.path.join(skills_root, name, "tests")
+                    if os.path.isdir(tests_dir):
+                        test_dirs.append(f"skills/{name}/tests")
             exit_code = 0
             for d in test_dirs:
                 if os.path.exists(os.path.join(workspace_root, d)):
