@@ -68,6 +68,12 @@ This configuration is developed and tested on macOS only. It should work on Linu
 * `explain-diff` — Interactive, read-only walkthrough explaining what changed between a feature branch, pull request, or specific commit/range and a reference branch.
   * **User Workflow**: Trigger with `/explain-diff`. Branch selection works exactly like `adversarial-review` (it reuses the same branch resolver and worktree cache). You then get an overall summary of the changeset and a numbered menu of changed files; pick one for a hunk-by-hunk explanation, ask follow-up questions, and return to the menu until done. Nothing is executed or modified — no tests, no linters.
 
+* `make-feature` — Git worktree-based isolated feature branch development helper.
+  * **User Workflow**: Trigger with `/make-feature` (or when preparing to write/contribute edits).
+    1. **Initialize Feature**: Antigravity creates a new feature branch prefixed with `gemini/` and checks it out to a clean, isolated worktree under `<repo_root>/tmp/worktrees/`, keeping your primary working directory branch checkout completely untouched.
+    2. **Isolated Edits**: Modify files, run tests, and execute git commit/push commands from inside the worktree directory.
+    3. **Cleanup**: Once the branch is pushed to origin, Antigravity removes the worktree and prunes git metadata, keeping the environment clean.
+
 * `/ponytail` — Lazy senior developer instructions.
 * `/caveman` — Token-efficient caveman communication mode.
 * `incremental-implementation` — Vertical slicing development guidelines.
