@@ -4,7 +4,7 @@ Personal global configuration and custom skills for Google Antigravity and Gemin
 
 ## Platform Support
 
-This configuration is developed and tested on macOS only. It should work on Linux (POSIX fcntl file locking, shell/git assumptions), but has not been validated there. It is not supported on Windows — the adversarial-review skill's branch resolver script will exit with an error on platforms without fcntl, and several paths assume POSIX semantics.
+This configuration is developed and tested on macOS only. It should work on Linux (POSIX fcntl file locking, shell/git assumptions), but has not been validated there. It is not supported on Windows — the branch resolver script used by the adversarial-review and explain-diff skills will exit with an error on platforms without fcntl, and several paths assume POSIX semantics.
 
 ## Setup on a New Machine
 
@@ -55,7 +55,7 @@ This configuration is developed and tested on macOS only. It should work on Linu
 * Isolates dynamic branch workspaces to prevent test collisions.
 
 ### 3. Custom Registered Skills (`skills/`)
-* `adversarial-review` — Git worktree-based adversarial code review and diff inspection helper.
+* `adversarial-review` — Git worktree-based adversarial code review helper.
   * **User Workflow**:
     1. **Prepare Baseline**: Prior to starting the review, checkout the intended **reference branch** (the baseline, e.g., `main` or a specific release branch) in your active workspace:
        ```bash
@@ -64,6 +64,9 @@ This configuration is developed and tested on macOS only. It should work on Linu
     2. **Activate Review**: Trigger the review by typing `/adversarial-review` in the chat.
     3. **Select Feature Branch**: Antigravity will automatically fetch the latest updates, detect your current checked-out branch as the reference branch, and present a list of all other local and remote branches. Select the **feature branch** (the target containing the new changes to review) when prompted.
     4. **Under the Hood**: Antigravity checks out the selected feature branch to a clean, isolated worktree under `~/.gemini/tmp/worktrees/`, leaving your active workspace untouched on the reference branch. It then generates the diff between the two branches, runs tests/linters in the feature branch worktree, and performs the adversarial review.
+
+* `explain-diff` — Interactive, read-only walkthrough explaining what changed between a feature branch (or a specific commit/range) and a reference branch.
+  * **User Workflow**: Trigger with `/explain-diff`. Branch selection works exactly like `adversarial-review` (it reuses the same branch resolver and worktree cache). You then get an overall summary of the changeset and a numbered menu of changed files; pick one for a hunk-by-hunk explanation, ask follow-up questions, and return to the menu until done. Nothing is executed or modified — no tests, no linters.
 
 * `/ponytail` — Lazy senior developer instructions.
 * `/caveman` — Token-efficient caveman communication mode.
