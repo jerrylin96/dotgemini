@@ -23,9 +23,13 @@ jobs:
         with:
           enable-cache: true
 
+      - name: Setup Environment
+        run: |
+          python3 scripts/setup_review_env.py .
+
       - name: Run Tests
         run: |
-          python3 scripts/run_tests.py
+          python3 scripts/run_in_env.py . pytest
 
       - name: Run Linter
         run: |
