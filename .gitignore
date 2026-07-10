@@ -2,33 +2,11 @@
 tmp/
 antigravity-backup/
 antigravity-browser-profile/
-antigravity-cli/bin/
-antigravity-cli/builtin/
-antigravity-cli/cache/
-antigravity-cli/crashes/
-antigravity-cli/implicit/
-antigravity-cli/knowledge/
-antigravity-cli/log/
-antigravity-cli/updater/
-antigravity-cli/brain/
-antigravity-cli/conversations/
-antigravity-cli/mcp/
+antigravity-cli/
 antigravity-ide/
 antigravity/
 config/
 history/
-
-# Ignore logs and state database files
-*.log
-antigravity-cli/cli.log
-antigravity-cli/conversation_summaries.db
-antigravity-cli/history.jsonl
-antigravity-cli/last_check.timestamp
-antigravity-cli/jetski_state.pbtxt
-
-# Ignore machine-specific configuration and IDs
-antigravity-cli/settings.json
-antigravity-cli/installation_id
 projects.json
 
 # Ignore sensitive credentials
