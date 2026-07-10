@@ -80,6 +80,7 @@ The global settings contain dedicated skills under `~/.gemini/skills/` which can
 * [incremental-implementation/SKILL.md](skills/incremental-implementation/SKILL.md) — Thin-slice execution cycles
 * [test-driven-development/SKILL.md](skills/test-driven-development/SKILL.md) — Red-Green-Refactor and Prove-It patterns
 * [debugging-and-error-recovery/SKILL.md](skills/debugging-and-error-recovery/SKILL.md) — Root-cause triage checklists
+* [make-feature/SKILL.md](skills/make-feature/SKILL.md) — Isolated feature branch development via git worktree
 
 ---
 
@@ -106,3 +107,9 @@ When performing reviews, running tests, or inspecting code in this codebase:
 * **Local Laptop Execution**: Assume the agent is executing on a local laptop, NOT the High-Performance Computing (HPC) system.
 * **No HPC Execution**: Do not attempt to run scripts or jobs that require HPC-level resources, compute clusters, or long runtimes.
 * **No Intermediate HPC Files**: Do not assume or search for intermediate/output files produced by HPC compute jobs. If a task or script depends on these files and they are missing, do not attempt to run or look for them. Instead, perform static analysis or mock the files if required for basic testing.
+
+---
+
+## 7. Isolated Development Constraint
+
+* **Isolated Development**: Never modify code directly in the primary workspace. Always invoke `/make-feature` to isolate the changes on a clean worktree feature branch first.

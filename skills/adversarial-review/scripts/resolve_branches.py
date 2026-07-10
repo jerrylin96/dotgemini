@@ -5,14 +5,11 @@ import sys
 import subprocess
 import json
 import hashlib
-import time
-
-# Try importing fcntl for flock on Unix platforms (macOS/Linux)
-try:
-    import fcntl
-    HAS_FCNTL = True
-except ImportError:
-    HAS_FCNTL = False
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(script_dir, "..", "..", ".."))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+from scripts.file_lock import FileLock, HAS_FCNTL  # noqa: E402
 
 # Git command timeout (in seconds) used across fetches and other git actions.
 GIT_TIMEOUT = 30
@@ -20,54 +17,6 @@ GIT_TIMEOUT = 30
 class GitError(Exception):
     """Custom exception raised when a Git command fails or times out."""
     pass
-
-class FileLock:
-    def __init__(self, lock_path: str):
-        self.lock_path: str = lock_path
-        self.lock_file = None
-
-    def __enter__(self) -> "FileLock":
-        self.lock_file = open(self.lock_path, "w")
-
-        start_time = time.time()
-        try:
-            timeout = int(os.environ.get("LOCK_TIMEOUT_SECS", "15"))
-        except ValueError:
-            timeout = 15
-
-        try:
-            acquired = False
-            try:
-                fcntl.flock(self.lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                acquired = True
-            except (BlockingIOError, OSError):
-                sys.stderr.write("Another instance is running. Waiting for lock...\n")
-
-            while not acquired:
-                if time.time() - start_time > timeout:
-                    raise TimeoutError(f"Timed out waiting for file lock after {timeout} seconds.")
-                try:
-                    fcntl.flock(self.lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                    acquired = True
-                except (BlockingIOError, OSError):
-                    time.sleep(0.5)
-        except BaseException:
-            self.lock_file.close()
-            self.lock_file = None
-            raise
-
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        if self.lock_file:
-            try:
-                fcntl.flock(self.lock_file, fcntl.LOCK_UN)
-            except Exception:
-                pass
-            try:
-                self.lock_file.close()
-            except Exception:
-                pass
 
 def safe_rmtree(path: str):
     """
@@ -545,6 +494,13 @@ def setup_worktree(cwd, branch_name, remote_ref=None, commit_hash=None):
             sys.stderr.write(f"Worktree for {branch_name} exists at {target_path}. Checking status...\n")
             
             # Check if dirty
+            # ponytail: TOCTOU — another process could write between this check and the
+            # reset/remove below. The FileLock serializes concurrent resolve_branches.py
+            # runs, but external writers (user, other agents) are not locked out. Acceptable
+            # because: (a) managed worktrees are ephemeral caches, not user workspaces,
+            # (b) dirty worktrees are recreated from scratch, and (c) the alternative
+            # (kernel-level mandatory locking) is not portable. If data-loss concerns arise,
+            # upgrade to inotify/kqueue watch on the worktree dir before reset.
             try:
                 status_out = run_git(["status", "--porcelain"], cwd=target_path)
                 is_dirty = bool(status_out.strip())

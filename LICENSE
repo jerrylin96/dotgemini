@@ -4,7 +4,7 @@ This repository contains code under two different licenses:
 
 1. **Apache License, Version 2.0**:
    - Files originating from Google projects (e.g., `skills/data-autocleaning/scripts/dataplex_scanner.py`, `skills/gcp-pipeline-orchestration/scripts/trigger/airflow_trigger.py`, and others carrying Google copyright headers) are licensed under the Apache License, Version 2.0.
-   - The full text of the Apache License 2.0 is included in [LICENSES/Apache-2.0.txt](file:///Users/jlin404/.gemini/LICENSES/Apache-2.0.txt).
+   - The full text of the Apache License 2.0 is included in [LICENSES/Apache-2.0.txt](LICENSES/Apache-2.0.txt).
 
 2. **MIT License**:
    - Custom configurations, guides, scripts, and skills created for this repository (such as `skills/adversarial-review/`, `scripts/setup_review_env.py`, `scripts/run_tests.py`, and config files) are licensed under the MIT License.

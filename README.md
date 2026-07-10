@@ -4,7 +4,7 @@ Personal global configuration and custom skills for Google Antigravity and Gemin
 
 ## Platform Support
 
-This configuration is developed and tested on macOS only. It should work on Linux (POSIX fcntl file locking, shell/git assumptions), but has not been validated there. It is not supported on Windows — the branch resolver script used by the adversarial-review and explain-diff skills will exit with an error on platforms without fcntl, and several paths assume POSIX semantics.
+This configuration is developed and tested on macOS and Linux (validated in CI). It is not supported on Windows — the branch resolver script used by the adversarial-review and explain-diff skills will exit with an error on platforms without fcntl, and several paths assume POSIX semantics.
 
 ## Setup on a New Machine
 
