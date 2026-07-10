@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import re
 import sys
 import subprocess
 import json
@@ -268,6 +269,97 @@ def get_remotes(cwd):
     except GitError:
         return ["origin"]
 
+def get_remote_url(cwd, remote):
+    try:
+        return run_git(["remote", "get-url", remote], cwd=cwd)
+    except GitError:
+        return ""
+
+def normalize_git_url(url):
+    """Reduce a git remote URL to lowercase host/path form for comparison."""
+    u = url.strip().lower()
+    if u.startswith("git@"):
+        u = u[len("git@"):].replace(":", "/", 1)
+    else:
+        for scheme in ("ssh://git@", "https://", "http://", "ssh://", "git://"):
+            if u.startswith(scheme):
+                u = u[len(scheme):]
+                break
+    u = u.rstrip("/")
+    if u.endswith(".git"):
+        u = u[:-len(".git")]
+    return u
+
+PR_URL_PATTERNS = [
+    # GitHub (/pull/42), Gitea/Forgejo (/pulls/42)
+    re.compile(r"^(?P<base>https?://[^/\s]+/\S+?)/pulls?/(?P<num>\d+)(?:[/?#]\S*)?$", re.IGNORECASE),
+    # GitLab (/-/merge_requests/42 or legacy /merge_requests/42)
+    re.compile(r"^(?P<base>https?://[^/\s]+/\S+?)(?:/-)?/merge_requests/(?P<num>\d+)(?:[/?#]\S*)?$", re.IGNORECASE),
+]
+
+def parse_pr_target(target_input):
+    """Return (pr_number, repo_url_or_None) if target_input names a PR/MR, else None.
+
+    Recognized forms: '#42' and GitHub/GitLab/Gitea PR or MR web URLs. Bare numbers
+    and branch names are never treated as PRs."""
+    if not target_input:
+        return None
+    s = target_input.strip()
+    m = re.fullmatch(r"#(\d+)", s)
+    if m:
+        return int(m.group(1)), None
+    for pat in PR_URL_PATTERNS:
+        m = pat.match(s)
+        if m:
+            return int(m.group("num")), m.group("base")
+    return None
+
+def resolve_pr_remote(cwd, repo_url):
+    """Pick the remote whose URL matches repo_url; origin-preferred default when no URL given."""
+    remotes = get_remotes(cwd)
+    if "origin" in remotes:
+        remotes = ["origin"] + [r for r in remotes if r != "origin"]
+    if not repo_url:
+        return remotes[0]
+    want = normalize_git_url(repo_url)
+    for remote in remotes:
+        if normalize_git_url(get_remote_url(cwd, remote)) == want:
+            return remote
+    raise GitError(
+        f"No git remote matches the PR URL repository '{repo_url}'. "
+        f"Configured remotes: {', '.join(remotes)}. Add that repository as a remote, "
+        f"or use --pr <N> if the PR lives on an already-configured remote."
+    )
+
+def pr_ref_candidates(remote_url, pr_number):
+    """Server-side PR head refs to try, ordered by likelihood for the remote host."""
+    github_style = f"refs/pull/{pr_number}/head"
+    gitlab_style = f"refs/merge-requests/{pr_number}/head"
+    if "gitlab" in normalize_git_url(remote_url):
+        return [gitlab_style, github_style]
+    return [github_style, gitlab_style]
+
+def fetch_pr_head(cwd, remote, pr_number):
+    """Fetch the PR head into refs/gemini-review/<remote>/pr/<N> (force-updated each
+    run so re-reviews track new pushes). Returns (source_ref, local_ref).
+
+    Unlike branch fetches, a failure here is fatal: a never-fetched PR ref has no
+    stale local fallback to degrade to."""
+    local_ref = f"refs/gemini-review/{remote}/pr/{pr_number}"
+    remote_url = get_remote_url(cwd, remote)
+    errors = []
+    for src in pr_ref_candidates(remote_url, pr_number):
+        try:
+            run_git(["fetch", remote, f"+{src}:{local_ref}"], cwd=cwd, timeout=GIT_TIMEOUT)
+            return src, local_ref
+        except GitError as e:
+            errors.append(str(e))
+    raise GitError(
+        f"Could not fetch PR/MR #{pr_number} from remote '{remote}'. "
+        f"The PR may not exist, the network may be down, or the remote may not "
+        f"expose PR refs (e.g. Bitbucket). Errors: {' | '.join(errors)}"
+    )
+
 def strip_ref_prefixes(name, remotes):
     """Reduce a possibly qualified ref (origin/foo, refs/heads/foo,
     refs/remotes/origin/foo) to its short branch name."""
@@ -526,7 +618,8 @@ def main():
     reference_override = None
     prune_flag = False
     prune_all_flag = False
-    
+    pr_flag = None
+
     args = sys.argv[1:]
     i = 0
     while i < len(args):
@@ -537,6 +630,16 @@ def main():
         elif arg == "--prune-all":
             prune_flag = True
             prune_all_flag = True
+            i += 1
+        elif arg == "--pr":
+            if i + 1 < len(args):
+                pr_flag = args[i+1]
+                i += 2
+            else:
+                print(json.dumps({"error": "--pr requires a PR/MR number"}))
+                sys.exit(1)
+        elif arg.startswith("--pr="):
+            pr_flag = arg[len("--pr="):]
             i += 1
         elif arg == "--reference":
             if i + 1 < len(args):
@@ -554,6 +657,23 @@ def main():
         else:
             target_input = arg
             i += 1
+
+    pr_number = None
+    pr_repo_url = None
+    if pr_flag is not None:
+        if target_input:
+            print(json.dumps({"error": "--pr cannot be combined with a branch target."}))
+            sys.exit(1)
+        digits = pr_flag.lstrip("#")
+        if not digits.isdigit():
+            print(json.dumps({"error": f"--pr expects a PR/MR number, got '{pr_flag}'"}))
+            sys.exit(1)
+        pr_number = int(digits)
+    elif target_input:
+        parsed_pr = parse_pr_target(target_input)
+        if parsed_pr:
+            pr_number, pr_repo_url = parsed_pr
+            target_input = None
 
     wt_root = os.environ.get("DOTGEMINI_WORKTREE_ROOT")
     if not wt_root:
@@ -648,8 +768,34 @@ def main():
             except GitError:
                 reference_commit_hash = None
 
+            if pr_number is not None:
+                try:
+                    pr_remote = resolve_pr_remote(cwd, pr_repo_url)
+                    pr_src_ref, pr_local_ref = fetch_pr_head(cwd, pr_remote, pr_number)
+                except GitError as e:
+                    print(json.dumps({"error": str(e)}))
+                    sys.exit(1)
+                commit_hash = run_git(["rev-parse", "--verify", f"{pr_local_ref}^{{commit}}"], cwd=cwd)
+                subject = run_git(["log", "-1", "--format=%s", commit_hash], cwd=cwd)
+                branch_name = f"pr-{pr_number}"
+                wt_path = setup_worktree(cwd, branch_name, None, commit_hash)
+                print(json.dumps({
+                    "reference_branch": ref_branch,
+                    "reference_ref": ref_branch,
+                    "reference_commit_hash": reference_commit_hash,
+                    "feature_branch": branch_name,
+                    "feature_ref": f"{pr_remote}/{pr_src_ref[len('refs/'):]}",
+                    "pr_number": pr_number,
+                    "ambiguous": False,
+                    "worktree_path": wt_path,
+                    "commit_hash": commit_hash,
+                    "subject": subject,
+                    "fetch_error": fetch_error
+                }, indent=2))
+                sys.exit(0)
+
             branches = get_recent_branches(cwd, ref_branch)
-            
+
             if not branches:
                 print(json.dumps({
                     "reference_branch": ref_branch,

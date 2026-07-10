@@ -1,6 +1,6 @@
 ---
 name: explain-diff
-description: Interactive, neutral explanation of what changed between a feature branch (or a specific commit/range) and a reference branch. Use when the user wants to understand a diff - an overall summary of the changes followed by a navigable per-file, hunk-by-hunk walkthrough with follow-up Q&A. Do NOT use if the user wants bugs or code quality issues found (use adversarial-review), wants code explained outside of a diff context, or only wants a raw git diff without explanation.
+description: Interactive, neutral explanation of what changed between a feature branch, pull request, or specific commit/range and a reference branch. Use when the user wants to understand a diff - an overall summary of the changes followed by a navigable per-file, hunk-by-hunk walkthrough with follow-up Q&A. Do NOT use if the user wants bugs or code quality issues found (use adversarial-review), wants code explained outside of a diff context, or only wants a raw git diff without explanation.
 ---
 
 # Diff Explanation Walkthrough
@@ -20,6 +20,7 @@ Two modes, chosen by what the user provides:
 * **Commit mode**: The user names a specific commit SHA or range. Skip the resolver and diff directly in the active workspace:
   - Single commit: `git show <sha>` (diff vs. its parent).
   - Range: `git diff <a>...<b>`.
+* **PR mode**: The user names a pull/merge request (number or web URL). Use the same resolver with the PR target — `--pr <N>`, or pass `#N`/the URL positionally. It fetches the PR head ref from the remote, so fork PRs work without a local branch; see [adversarial-review/SKILL.md](../adversarial-review/SKILL.md) for details, the extra `pr_number` JSON field, and the PR-baseline note (`--reference` override, optional best-effort `gh pr view` for the PR title/description — the description makes the "why" in the summary much better, but `gh` is never required).
 * **Branch mode (default)**: The user names a branch or gives no target. Reuse the adversarial-review branch resolver — same script, same worktree cache, same protocol:
   ```bash
   python3 ~/.gemini/skills/adversarial-review/scripts/resolve_branches.py [optional_target_branch] [--reference <branch>]
