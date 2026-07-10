@@ -73,7 +73,8 @@ Use the following commands to navigate the development lifecycle:
 
 The global settings contain dedicated skills under `~/.gemini/skills/` which can be loaded on demand:
 
-* [adversarial-review/SKILL.md](skills/adversarial-review/SKILL.md) — Git worktree-based adversarial code review and diff inspection helper
+* [adversarial-review/SKILL.md](skills/adversarial-review/SKILL.md) — Git worktree-based adversarial code review helper
+* [explain-diff/SKILL.md](skills/explain-diff/SKILL.md) — Interactive, read-only diff explanation walkthrough (overall summary, per-hunk explanations, drill-down Q&A)
 * [ponytail/SKILL.md](skills/ponytail/SKILL.md) — Detailed minimal-code YAGNI guidelines
 * [caveman/SKILL.md](skills/caveman/SKILL.md) — Concise style and compression levels
 * [incremental-implementation/SKILL.md](skills/incremental-implementation/SKILL.md) — Thin-slice execution cycles
