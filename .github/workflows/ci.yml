@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Setup Environment
+        run: |
+          python3 scripts/setup_review_env.py .
+
+      - name: Run Tests
+        run: |
+          python3 scripts/run_in_env.py . pytest
+
+      - name: Run Linter
+        run: |
+          python3 scripts/run_in_env.py . ruff check .
