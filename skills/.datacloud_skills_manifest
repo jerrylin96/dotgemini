@@ -1,5 +1,5 @@
 {
-  "bundleChecksum": "5bdb3c4ab2cca281cd440bc71a9c6b07756135a31188a028baaab981eb3c665c",
+  "bundleChecksum": "28524afdc5ff1e73a350d087e2bc0ecaa15b79cc7c3d7f28daf127ed822a95d5",
   "skills": {
     "accidental-data-loss-prevention": {
       "status": "installed",
@@ -80,6 +80,10 @@
     "managing-python-dependencies": {
       "status": "installed",
       "checksum": "04a1ab128e1167a02a605d6b1459d9512c4a58cfeb81a8f5303e814eafe089ef"
+    },
+    "make-feature": {
+      "status": "installed",
+      "checksum": "b549c2ee9a2bcf8a52c5e83a45ff2e65b872aec4272c31a7e45a15bd0fac1a07"
     }
   }
 }
