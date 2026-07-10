@@ -39,5 +39,6 @@ Two modes, chosen by what the user provides:
    - `[q]` finish.
    Ask the user to pick. This mirrors the branch-selection interaction of adversarial-review.
 4. **Explain a Selection**: For the chosen file, go **hunk by hunk**: quote each hunk verbatim in a ```diff block, then explain in plain language what changed, why, and how it connects to the rest of the changeset. Pull surrounding context from `worktree_path` or `git show` when a hunk is unclear in isolation.
+   - **Targeted Prose/Text Highlights**: For text/markup formats (e.g., `.tex`, `.md`, `.txt`, `.rst`) or whenever a modified line is long, identify and explicitly highlight the precise inline edits (e.g., `word_A` -> `word_B`) so that subtle changes are not lost in long diff paragraphs.
 5. **Drill-down**: After each file, invite follow-up questions (e.g. callers of a changed function, prior behavior via `git log`/`git blame`, related hunks elsewhere). Answer them, then re-present the menu abbreviated, marking already-explained files, until the user picks `[q]` or confirms they are done.
 6. Output everything directly in chat. Do not save reports to files unless requested.
