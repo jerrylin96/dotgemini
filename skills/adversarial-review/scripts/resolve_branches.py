@@ -494,6 +494,13 @@ def setup_worktree(cwd, branch_name, remote_ref=None, commit_hash=None):
             sys.stderr.write(f"Worktree for {branch_name} exists at {target_path}. Checking status...\n")
             
             # Check if dirty
+            # ponytail: TOCTOU — another process could write between this check and the
+            # reset/remove below. The FileLock serializes concurrent resolve_branches.py
+            # runs, but external writers (user, other agents) are not locked out. Acceptable
+            # because: (a) managed worktrees are ephemeral caches, not user workspaces,
+            # (b) dirty worktrees are recreated from scratch, and (c) the alternative
+            # (kernel-level mandatory locking) is not portable. If data-loss concerns arise,
+            # upgrade to inotify/kqueue watch on the worktree dir before reset.
             try:
                 status_out = run_git(["status", "--porcelain"], cwd=target_path)
                 is_dirty = bool(status_out.strip())

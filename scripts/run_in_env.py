@@ -13,7 +13,7 @@ def main():
     cmd = sys.argv[2]
     cmd_args = sys.argv[3:]
     
-    path_hash = hashlib.sha256(workspace_path.encode('utf-8')).hexdigest()
+    path_hash = hashlib.sha256(workspace_path.encode('utf-8')).hexdigest()[:16]
     env_bin_dir = os.path.expanduser(f"~/.gemini/tmp/{path_hash}/bin")
     
     executable = os.path.join(env_bin_dir, cmd)

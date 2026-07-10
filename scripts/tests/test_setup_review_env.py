@@ -131,7 +131,7 @@ dev = [
                 setup_review_env.main()
                 
         # Calculate expected env path
-        path_hash = hashlib.sha256(self.tmpdir.encode('utf-8')).hexdigest()
+        path_hash = hashlib.sha256(self.tmpdir.encode('utf-8')).hexdigest()[:16]
         expected_env_path = os.path.join(os.path.expanduser("~/.gemini/tmp"), path_hash)
         
         # Verify that subprocess.run was called for venv, sync, and pip install

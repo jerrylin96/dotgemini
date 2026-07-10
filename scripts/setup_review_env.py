@@ -230,7 +230,7 @@ def main():
     print(f"Active workspace: {workspace_path}")
     
     # 2. Calculate dynamic env path based on workspace path hash
-    path_hash = hashlib.sha256(workspace_path.encode('utf-8')).hexdigest()
+    path_hash = hashlib.sha256(workspace_path.encode('utf-8')).hexdigest()[:16]
     env_name = path_hash
     
     envs_root = os.path.expanduser("~/.gemini/tmp")

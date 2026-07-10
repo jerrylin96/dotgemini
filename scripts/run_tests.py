@@ -27,7 +27,7 @@ def main():
     else:
         print("uv is not available. Skipping setup_review_env.py and falling back to host environment.", flush=True)
         
-    path_hash = hashlib.sha256(workspace_root.encode('utf-8')).hexdigest()
+    path_hash = hashlib.sha256(workspace_root.encode('utf-8')).hexdigest()[:16]
     pytest_bin = os.path.expanduser(f"~/.gemini/tmp/{path_hash}/bin/pytest")
     
     if setup_success and os.path.exists(pytest_bin):
