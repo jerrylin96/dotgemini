@@ -1,6 +1,6 @@
-# Antigravity & Gemini CLI – Global Agent Guide
+# Global Agent Guide
 
-This guide establishes the primary engineering workflows, quality gates, and styles for AI agents globally across all project sessions.
+This guide establishes the primary engineering workflows, quality gates, and styles for AI agents globally across all project sessions. It is loaded by Antigravity and Gemini CLI as `GEMINI.md`, and by AGENTS.md-compatible agents (Claude Code, Cursor, etc.) via the `AGENTS.md` symlink.
 
 ## Core Philosophical Principles
 
