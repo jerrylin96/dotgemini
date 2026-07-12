@@ -43,10 +43,11 @@ This configuration is developed and tested on macOS and Linux (validated in CI).
 
 ## What's Included
 
-### 1. Global Rules (`GEMINI.md`)
+### 1. Global Rules (`GEMINI.md`, aliased as `AGENTS.md`)
 * Defines the **Ponytail (Lazy Senior Dev Mode)** YAGNI ladder.
 * Enforces the **Caveman (Terse Style)** communication formatting to save ~65% output tokens.
 * Enforces structured software development lifecycle gates.
+* Also exposed as `AGENTS.md` (a symlink to `GEMINI.md`, so there's a single source of truth) so non-Gemini agents that follow the [AGENTS.md](https://agents.md) convention — Claude Code, Cursor, etc. — load the same rules. Gemini CLI and Antigravity keep reading `GEMINI.md` by default.
 
 ### 2. Isolated Execution Environments
 * Integrates with `setup_review_env.py` to automatically bootstrap CPU-compatible testing and linting virtual environments under `~/.gemini/tmp/<workspace-hash>` using `uv`.
@@ -102,7 +103,7 @@ If `uv` is available but the environment setup fails, `run_tests.py` will exit w
 ### Project-Level Integration (Recommended for Sharing)
 If you want to bake this isolated environment setup directly into a specific project repository so that *any* agent working on it automatically uses it:
 1. **Copy the Env Manager**: Place the [setup_review_env.py](scripts/setup_review_env.py) script in the project repository (e.g., `scripts/setup_review_env.py`).
-2. **Add a Project-Level Guide**: Add a `GEMINI.md` to the project's root containing:
+2. **Add a Project-Level Guide**: Add a `GEMINI.md` (or `AGENTS.md` for cross-tool portability) to the project's root containing:
    ```markdown
    ## Isolated Testing & Execution Environment
    All testing and validation commands must run inside the CPU-isolated virtual environment:
