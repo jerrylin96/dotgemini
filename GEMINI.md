@@ -113,3 +113,13 @@ When performing reviews, running tests, or inspecting code in this codebase:
 ## 7. Isolated Development Constraint
 
 * **Isolated Development**: Never modify code directly in the primary workspace. Always invoke `/make-feature` to isolate the changes on a clean worktree feature branch first.
+
+---
+
+## 8. Command Execution Explanations
+
+* **High-Risk Command Explanations**: Before calling `run_command` for stateful, destructive, or network-active commands (e.g., git push, package installation, writing/deleting external resources), the agent MUST output a text explanation in the *same* turn as the tool call.
+* **Explanation Requirements**: The explanation must specify:
+  1. The purpose and expected outcome of the command.
+  2. Any potential downsides or risks (e.g., data loss, CPU load, external network access).
+* **Routine Command Exemption**: Do not explain routine read-only, local linting, or local testing commands (e.g., `git status`, `git diff`, `pytest`, `ruff`, `black`). Propose these directly to avoid token bloat and latency.
