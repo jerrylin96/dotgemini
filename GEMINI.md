@@ -118,7 +118,7 @@ When performing reviews, running tests, or inspecting code in this codebase:
 
 ## 8. Command Execution Explanations
 
-* **High-Risk Command Explanations**: Before calling `run_command` for stateful, destructive, or network-active commands (e.g., git push, package installation, writing/deleting external resources), the agent MUST output a text explanation in the *same* turn as the tool call.
+* **High-Risk Command Explanations**: Before calling `run_command` for stateful, destructive, or network-active commands (e.g., git push, package installation, writing/deleting external resources), the agent MUST output a text explanation in a separate turn *before* proposing the tool call. The agent must wait for the user to explicitly reply before triggering the tool call.
 * **Explanation Requirements**: The explanation must specify:
   1. The purpose and expected outcome of the command.
   2. Any potential downsides or risks (e.g., data loss, CPU load, external network access).
