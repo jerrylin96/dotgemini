@@ -73,6 +73,11 @@ def push_session(repo_root, conversation_id, brain_dir):
         if untracked_files:
             run_git(["reset", "--"] + untracked_files, cwd=repo_root)
 
+    # run_git() strips trailing whitespace, but `git apply` rejects a patch
+    # that lost its terminating newline ("corrupt patch at line N"). Restore it.
+    if patch_content and not patch_content.endswith("\n"):
+        patch_content += "\n"
+
     # 3. Create Tarball in Memory
     tar_stream = io.BytesIO()
     with tarfile.open(fileobj=tar_stream, mode='w:gz') as tar:
