@@ -59,18 +59,19 @@ def push_session(repo_root, conversation_id, brain_dir):
     remote = get_remote_url(repo_root)
 
     # 2. Get uncommitted changes (including untracked files via intent-to-add)
-    # Check if there are any untracked files
     untracked_out = run_git(["status", "--porcelain"], cwd=repo_root)
-    has_untracked = any(line.startswith("??") for line in untracked_out.splitlines())
+    untracked_files = [
+        line[3:] for line in untracked_out.splitlines() if line.startswith("?? ")
+    ]
 
-    if has_untracked:
-        run_git(["add", "-N", "."], cwd=repo_root)
+    if untracked_files:
+        run_git(["add", "-N"] + untracked_files, cwd=repo_root)
 
     try:
         patch_content = run_git(["diff", "HEAD"], cwd=repo_root)
     finally:
-        if has_untracked:
-            run_git(["reset"], cwd=repo_root)
+        if untracked_files:
+            run_git(["reset", "--"] + untracked_files, cwd=repo_root)
 
     # 3. Create Tarball in Memory
     tar_stream = io.BytesIO()
@@ -246,7 +247,10 @@ def pull_session(repo_root, conversation_id, brain_dir, on_dirty):
             for member in tar.getmembers():
                 if member.name.startswith("brain/"):
                     relpath = member.name[len("brain/"):]
-                    target_path = os.path.join(brain_dir, relpath)
+                    target_path = os.path.abspath(os.path.join(brain_dir, relpath))
+                    if not target_path.startswith(os.path.abspath(brain_dir) + os.sep):
+                        print(json.dumps({"error": f"Path traversal detected: {member.name}"}))
+                        sys.exit(1)
                     os.makedirs(os.path.dirname(target_path), exist_ok=True)
                     f_in = tar.extractfile(member)
                     if f_in:
@@ -264,13 +268,32 @@ def pull_session(repo_root, conversation_id, brain_dir, on_dirty):
     parent_commit = metadata.get("commit")
 
     try:
-        # Switch to correct branch
-        if target_branch and target_branch != "HEAD" and target_branch != get_current_branch(repo_root):
+        current_branch = get_current_branch(repo_root)
+        
+        # Best-effort fetch if parent_commit is missing locally
+        if parent_commit:
             try:
-                run_git(["checkout", target_branch], cwd=repo_root)
+                run_git(["cat-file", "-e", parent_commit], cwd=repo_root)
             except GitError:
-                # If target branch doesn't exist, try creating it from parent commit
-                run_git(["checkout", "-b", target_branch, parent_commit], cwd=repo_root)
+                try:
+                    run_git(["fetch", "origin", parent_commit], cwd=repo_root)
+                except GitError:
+                    if target_branch and target_branch != "HEAD":
+                        try:
+                            run_git(["fetch", "origin", f"{target_branch}:{target_branch}"], cwd=repo_root)
+                        except GitError:
+                            pass
+
+        if target_branch and target_branch != "HEAD":
+            if current_branch != target_branch:
+                try:
+                    run_git(["checkout", target_branch], cwd=repo_root)
+                except GitError:
+                    run_git(["checkout", "-b", target_branch, parent_commit], cwd=repo_root)
+            if parent_commit:
+                run_git(["reset", "--hard", parent_commit], cwd=repo_root)
+        elif parent_commit:
+            run_git(["checkout", parent_commit], cwd=repo_root)
 
         # Apply patch if it exists
         if patch_content.strip():
