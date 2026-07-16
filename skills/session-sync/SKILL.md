@@ -48,3 +48,31 @@ Use this skill when the user wants to sync, backup, push, or restore an Antigrav
        - For Stash: `python3 ~/.gemini/skills/session-sync/scripts/sync_session.py pull <session-id> --on-dirty stash`
        - For Overwrite: `python3 ~/.gemini/skills/session-sync/scripts/sync_session.py pull <session-id> --on-dirty overwrite`
 5. Report the final success. The user can now restart the CLI in this session or proceed with the restored context.
+
+---
+
+### 3. Listing Synced Sessions (List / Show)
+
+1. Propose executing the list command:
+   ```bash
+   python3 ~/.gemini/skills/session-sync/scripts/sync_session.py list
+   ```
+2. Present the JSON output formatted clearly to the user, displaying session IDs, creation timestamps (available only for local references), and local/remote status.
+
+---
+
+### 4. Clearing Synced Sessions (Delete / Prune)
+
+1. Explain the action:
+   - For a single session: "I will delete the Git refs for session `<session-id>` locally and on remote origin."
+   - For all sessions: "I will locate all synced sessions locally and on remote origin, and delete their Git refs."
+2. Propose executing the clear command:
+   - Specific session:
+     ```bash
+     python3 ~/.gemini/skills/session-sync/scripts/sync_session.py clear <session-id>
+     ```
+   - All sessions:
+     ```bash
+     python3 ~/.gemini/skills/session-sync/scripts/sync_session.py clear --all
+     ```
+3. Report success and list the cleared session IDs.

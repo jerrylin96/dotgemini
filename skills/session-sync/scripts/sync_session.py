@@ -328,6 +328,140 @@ def pull_session(repo_root, conversation_id, brain_dir, on_dirty):
         "stashed": stashed
     }))
 
+def list_sessions(repo_root):
+    # Find local refs
+    local_sessions = {}
+    try:
+        local_refs_out = run_git(["for-each-ref", "refs/gemini-sessions/*", "--format=%(refname) %(objectname) %(committerdate:iso-strict)"], cwd=repo_root)
+        for line in local_refs_out.splitlines():
+            if not line.strip():
+                continue
+            parts = line.split(None, 2)
+            if len(parts) >= 2:
+                ref = parts[0]
+                sha = parts[1]
+                date = parts[2] if len(parts) > 2 else "unknown"
+                session_id = ref.replace("refs/gemini-sessions/", "")
+                local_sessions[session_id] = {"sha": sha, "date": date, "local": True, "remote": False}
+    except GitError:
+        pass
+
+    # Find remote refs
+    remote_sessions = {}
+    has_remote = bool(get_remote_url(repo_root))
+    if has_remote:
+        try:
+            remote_refs_out = run_git(["ls-remote", "origin", "refs/gemini-sessions/*"], cwd=repo_root)
+            for line in remote_refs_out.splitlines():
+                if not line.strip():
+                    continue
+                parts = line.split(None, 1)
+                if len(parts) == 2:
+                    sha, ref = parts
+                    session_id = ref.replace("refs/gemini-sessions/", "")
+                    remote_sessions[session_id] = {"sha": sha, "local": False, "remote": True}
+        except GitError:
+            pass
+
+    # Merge lists
+    all_sessions = {}
+    for sid, info in local_sessions.items():
+        all_sessions[sid] = dict(info)
+    for sid, info in remote_sessions.items():
+        if sid in all_sessions:
+            all_sessions[sid]["remote"] = True
+        else:
+            all_sessions[sid] = {
+                "sha": info["sha"],
+                "date": "unknown (remote-only)",
+                "local": False,
+                "remote": True
+            }
+
+    print(json.dumps({
+        "success": True,
+        "sessions": all_sessions
+    }, indent=2))
+
+def clear_sessions(repo_root, conversation_id=None, clear_all=False):
+    if not conversation_id and not clear_all:
+        print(json.dumps({"error": "Must specify a conversation ID or use --all to clear all sessions."}))
+        sys.exit(1)
+
+    has_remote = bool(get_remote_url(repo_root))
+    remote_session_ids = set()
+
+    if has_remote:
+        try:
+            remote_refs = run_git(["ls-remote", "origin", "refs/gemini-sessions/*"], cwd=repo_root)
+            for line in remote_refs.splitlines():
+                if line.strip():
+                    parts = line.split(None, 1)
+                    if len(parts) == 2:
+                        ref = parts[1]
+                        sid = ref.replace("refs/gemini-sessions/", "")
+                        remote_session_ids.add(sid)
+        except GitError:
+            pass
+
+    sessions_to_clear = []
+    if clear_all:
+        # Find all local sessions
+        try:
+            local_refs = run_git(["for-each-ref", "refs/gemini-sessions/*", "--format=%(refname)"], cwd=repo_root)
+            for ref in local_refs.splitlines():
+                if ref.strip():
+                    sessions_to_clear.append(ref.strip().replace("refs/gemini-sessions/", ""))
+        except GitError:
+            pass
+        
+        # Add any remote sessions that aren't local
+        for sid in remote_session_ids:
+            if sid not in sessions_to_clear:
+                sessions_to_clear.append(sid)
+    else:
+        sessions_to_clear = [conversation_id]
+
+    if not sessions_to_clear:
+        print(json.dumps({"success": True, "message": "No sessions found to clear.", "cleared": []}))
+        return
+
+    cleared = []
+    errors = []
+    for sid in sessions_to_clear:
+        ref_name = f"refs/gemini-sessions/{sid}"
+        remote_deleted = False
+        local_deleted = False
+
+        # 1. Delete Remote Ref if configured and exists on remote
+        if has_remote and (clear_all or sid in remote_session_ids):
+            try:
+                run_git(["push", "origin", "--delete", ref_name], cwd=repo_root)
+                remote_deleted = True
+            except GitError as e:
+                errors.append(f"Remote delete failed for {sid}: {str(e)}")
+
+        # 2. Delete Local Ref
+        try:
+            run_git(["show-ref", "--verify", ref_name], cwd=repo_root)
+            run_git(["update-ref", "-d", ref_name], cwd=repo_root)
+            local_deleted = True
+        except GitError:
+            pass
+
+        if remote_deleted or local_deleted:
+            cleared.append({
+                "conversation_id": sid,
+                "local": local_deleted,
+                "remote": remote_deleted
+            })
+
+    print(json.dumps({
+        "success": len(errors) == 0,
+        "cleared": cleared,
+        "errors": errors
+    }, indent=2))
+
 def main():
     parser = argparse.ArgumentParser(description="Sync and restore conversation sessions via Git remote")
     subparsers = parser.add_subparsers(dest="action", required=True)
@@ -341,6 +475,14 @@ def main():
     pull_parser.add_argument("--repo-root", default=os.getcwd())
     pull_parser.add_argument("--on-dirty", choices=["abort", "stash", "overwrite"], default="abort")
 
+    list_parser = subparsers.add_parser("list")
+    list_parser.add_argument("--repo-root", default=os.getcwd())
+
+    clear_parser = subparsers.add_parser("clear")
+    clear_parser.add_argument("conversation_id", nargs="?")
+    clear_parser.add_argument("--all", action="store_true")
+    clear_parser.add_argument("--repo-root", default=os.getcwd())
+
     args = parser.parse_args()
 
     # Find the top-level repo directory
@@ -350,16 +492,19 @@ def main():
         print(json.dumps({"error": "Specified path is not in a Git repository."}))
         sys.exit(1)
 
-    if not args.conversation_id:
-        print(json.dumps({"error": "No conversation ID provided and ANTIGRAVITY_CONVERSATION_ID is unset."}))
-        sys.exit(1)
-
-    brain_dir = os.path.expanduser(f"~/.gemini/antigravity-cli/brain/{args.conversation_id}")
-
     if args.action == "push":
+        if not args.conversation_id:
+            print(json.dumps({"error": "No conversation ID provided and ANTIGRAVITY_CONVERSATION_ID is unset."}))
+            sys.exit(1)
+        brain_dir = os.path.expanduser(f"~/.gemini/antigravity-cli/brain/{args.conversation_id}")
         push_session(repo_root, args.conversation_id, brain_dir)
     elif args.action == "pull":
+        brain_dir = os.path.expanduser(f"~/.gemini/antigravity-cli/brain/{args.conversation_id}")
         pull_session(repo_root, args.conversation_id, brain_dir, args.on_dirty)
+    elif args.action == "list":
+        list_sessions(repo_root)
+    elif args.action == "clear":
+        clear_sessions(repo_root, args.conversation_id, args.all)
 
 if __name__ == "__main__":
     main()

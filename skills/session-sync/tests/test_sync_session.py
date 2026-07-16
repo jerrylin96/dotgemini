@@ -39,6 +39,73 @@ class TestSyncSession(unittest.TestCase):
         branch = sync_session.get_current_branch("/dummy/repo")
         self.assertEqual(branch, "HEAD")
 
+    @patch("sync_session.run_git")
+    def test_list_sessions(self, mock_run_git):
+        def run_git_mock(args, cwd):
+            if "config" in args:
+                return "https://github.com/user/repo"
+            elif "for-each-ref" in args:
+                return "refs/gemini-sessions/session-a sha-a 2026-07-16T10:00:00Z"
+            elif "ls-remote" in args:
+                return "sha-a\trefs/gemini-sessions/session-a\nsha-b\trefs/gemini-sessions/session-b"
+            return ""
+        mock_run_git.side_effect = run_git_mock
+
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            sync_session.list_sessions("/dummy/repo")
+        
+        result = json.loads(buf.getvalue().strip())
+        self.assertTrue(result["success"])
+        sessions = result["sessions"]
+        self.assertIn("session-a", sessions)
+        self.assertIn("session-b", sessions)
+        self.assertTrue(sessions["session-a"]["local"])
+        self.assertTrue(sessions["session-a"]["remote"])
+        self.assertFalse(sessions["session-b"]["local"])
+        self.assertTrue(sessions["session-b"]["remote"])
+
+    @patch("sync_session.run_git")
+    def test_clear_sessions_specific(self, mock_run_git):
+        def run_git_mock(args, cwd):
+            if "config" in args:
+                return "https://github.com/user/repo"
+            elif "ls-remote" in args:
+                return "sha-a\trefs/gemini-sessions/session-a"
+            return ""
+        mock_run_git.side_effect = run_git_mock
+
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            sync_session.clear_sessions("/dummy/repo", conversation_id="session-a")
+        
+        result = json.loads(buf.getvalue().strip())
+        self.assertTrue(result["success"])
+        self.assertEqual(len(result["cleared"]), 1)
+        self.assertEqual(result["cleared"][0]["conversation_id"], "session-a")
+
+    @patch("sync_session.run_git")
+    def test_clear_sessions_all(self, mock_run_git):
+        def run_git_mock(args, cwd):
+            if "config" in args:
+                return "https://github.com/user/repo"
+            elif "for-each-ref" in args:
+                return "refs/gemini-sessions/session-a"
+            elif "ls-remote" in args:
+                return "sha-a\trefs/gemini-sessions/session-b"
+            return ""
+        mock_run_git.side_effect = run_git_mock
+
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            sync_session.clear_sessions("/dummy/repo", clear_all=True)
+
+        result = json.loads(buf.getvalue().strip())
+        self.assertTrue(result["success"])
+        cids = [c["conversation_id"] for c in result["cleared"]]
+        self.assertIn("session-a", cids)
+        self.assertIn("session-b", cids)
+
 
 def _git(args, cwd):
     subprocess.run(
