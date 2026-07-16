@@ -115,12 +115,10 @@ When performing reviews, running tests, or inspecting code in this codebase:
 
 * **Isolated Development**: Never modify code directly in the primary workspace. Always invoke `/make-feature` to isolate the changes on a clean worktree feature branch first.
 
----
-
 ## 8. Command Execution Explanations
 
-* **High-Risk Command Explanations**: Before calling `run_command` for stateful, destructive, or network-active commands (e.g., git push, package installation, writing/deleting external resources), the agent MUST output a text explanation in a separate turn *before* proposing the tool call. The agent must wait for the user to explicitly reply before triggering the tool call.
+* **Explanation for Permission Prompts**: Before proposing any command or tool execution that will prompt the user for permission (i.e. falls under a `command(*): ask` or `write_file(/): ask` rule), the agent MUST output a text explanation in a separate turn *before* calling the tool. The agent must wait for the user to explicitly reply before triggering the tool call.
 * **Explanation Requirements**: The explanation must specify:
-  1. The purpose and expected outcome of the command.
+  1. The purpose and expected outcome of the command/action.
   2. Any potential downsides or risks (e.g., data loss, CPU load, external network access).
-* **Routine Command Exemption**: Do not explain routine read-only, local linting, or local testing commands (e.g., `git status`, `git diff`, `pytest`, `ruff`, `black`). Propose these directly to avoid token bloat and latency.
+* **Auto-Approved Exemption**: Do not explain or use a separate turn for commands or file writes that are whitelisted/auto-approved by default (e.g., `git status`, `git diff`, `git log`, `grep`, `find`, `cat`, `head`, `tail`, virtual environment runs via `python3 ~/.gemini/scripts/run_in_env.py`, or writes to workspace-whitelisted directories). Propose these directly to avoid token bloat and latency.
