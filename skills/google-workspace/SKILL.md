@@ -39,14 +39,14 @@ python3 ~/.gemini/skills/google-workspace/scripts/workspace_client.py calendar l
 #### Create Event
 Creates a new event on the primary calendar.
 ```bash
-python3 ~/.gemini/skills/google-workspace/scripts/workspace_client.py calendar create --title "Meeting Title" --start "2026-07-16T15:00:00" --end "2026-07-16T16:00:00" [--description "Description"]
+python3 ~/.gemini/skills/google-workspace/scripts/workspace_client.py calendar create --title "Meeting Title" --start "2026-07-16T15:00:00Z" --end "2026-07-16T16:00:00Z" [--description "Description"]
 ```
-*Note: Times should be in ISO 8601 format.*
+*Note: Start and end times must include timezone offset (e.g. `2026-07-16T15:00:00Z` or `2026-07-16T15:00:00-04:00`).*
 
 #### Update Event
 Updates properties of an existing event.
 ```bash
-python3 ~/.gemini/skills/google-workspace/scripts/workspace_client.py calendar update --event-id "EVENT_ID" [--title "New Title"] [--start "New Start"] [--end "New End"] [--description "New Desc"]
+python3 ~/.gemini/skills/google-workspace/scripts/workspace_client.py calendar update --event-id "EVENT_ID" [--title "New Title"] [--start "YYYY-MM-DDTHH:MM:SSZ"] [--end "YYYY-MM-DDTHH:MM:SSZ"] [--description "New Desc"]
 ```
 
 #### Delete Event
@@ -59,27 +59,29 @@ python3 ~/.gemini/skills/google-workspace/scripts/workspace_client.py calendar d
 
 ### 2. Google Tasks
 
+*Note: All task commands support an optional `--tasklist LIST_ID` argument (defaults to `@default`).*
+
 #### List Tasks
-Lists tasks from the default task list.
+Lists tasks from the default (or specified) task list.
 ```bash
-python3 ~/.gemini/skills/google-workspace/scripts/workspace_client.py tasks list [--completed]
+python3 ~/.gemini/skills/google-workspace/scripts/workspace_client.py tasks [--tasklist LIST_ID] list [--completed]
 ```
 
 #### Create Task
 Creates a new task.
 ```bash
-python3 ~/.gemini/skills/google-workspace/scripts/workspace_client.py tasks create --title "Task Title" [--notes "Additional details"] [--due "2026-07-16"]
+python3 ~/.gemini/skills/google-workspace/scripts/workspace_client.py tasks [--tasklist LIST_ID] create --title "Task Title" [--notes "Additional details"] [--due "2026-07-16"]
 ```
 *Note: Due dates should be in YYYY-MM-DD format.*
 
 #### Update Task
 Updates properties or marks a task as completed/incomplete.
 ```bash
-python3 ~/.gemini/skills/google-workspace/scripts/workspace_client.py tasks update --task-id "TASK_ID" [--title "New Title"] [--notes "New Notes"] [--due "New Due"] [--status "completed|needsAction"]
+python3 ~/.gemini/skills/google-workspace/scripts/workspace_client.py tasks [--tasklist LIST_ID] update --task-id "TASK_ID" [--title "New Title"] [--notes "New Notes"] [--due "New Due"] [--status "completed|needsAction"]
 ```
 
 #### Delete Task
 Deletes a task.
 ```bash
-python3 ~/.gemini/skills/google-workspace/scripts/workspace_client.py tasks delete --task-id "TASK_ID"
+python3 ~/.gemini/skills/google-workspace/scripts/workspace_client.py tasks [--tasklist LIST_ID] delete --task-id "TASK_ID"
 ```

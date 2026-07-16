@@ -27,6 +27,35 @@ class TestWorkspaceClient(unittest.TestCase):
         with self.assertRaises(SystemExit):
             workspace_client.get_credentials()
 
+    @patch("workspace_client.build_tasks_service")
+    @patch("workspace_client.build_calendar_service")
+    @patch("workspace_client.get_credentials")
+    @patch("sys.stdout", new_callable=io.StringIO)
+    def test_auth_check_success(
+        self, mock_stdout, mock_get_creds, mock_build_cal, mock_build_tasks
+    ):
+        mock_cal = MagicMock()
+        mock_tasks = MagicMock()
+        mock_build_cal.return_value = mock_cal
+        mock_build_tasks.return_value = mock_tasks
+
+        args = MagicMock()
+        workspace_client.handle_auth_check(args)
+
+        output = mock_stdout.getvalue()
+        self.assertIn("Authenticated successfully with Google Workspace APIs", output)
+
+    @patch("workspace_client.build_calendar_service")
+    @patch("workspace_client.get_credentials")
+    def test_auth_check_failure(self, mock_get_creds, mock_build_cal):
+        mock_cal = MagicMock()
+        mock_build_cal.return_value = mock_cal
+        mock_cal.events().list.side_effect = Exception("API error")
+
+        args = MagicMock()
+        with self.assertRaises(SystemExit):
+            workspace_client.handle_auth_check(args)
+
     @patch("workspace_client.build_calendar_service")
     @patch("workspace_client.get_credentials")
     @patch("sys.stdout", new_callable=io.StringIO)
@@ -54,6 +83,47 @@ class TestWorkspaceClient(unittest.TestCase):
         self.assertIn("Meeting 1", output)
         self.assertIn("ev2", output)
         self.assertIn("Meeting 2", output)
+
+    @patch("workspace_client.build_calendar_service")
+    @patch("workspace_client.get_credentials")
+    @patch("sys.stdout", new_callable=io.StringIO)
+    def test_calendar_list_pagination(
+        self, mock_stdout, mock_get_creds, mock_build_service
+    ):
+        mock_service = MagicMock()
+        mock_build_service.return_value = mock_service
+
+        # First call returns items + nextPageToken, second call returns items, no page token.
+        call_responses = [
+            {
+                "items": [
+                    {
+                        "id": "ev1",
+                        "summary": "Meeting 1",
+                        "start": {"date": "2026-07-16"},
+                    }
+                ],
+                "nextPageToken": "token123",
+            },
+            {
+                "items": [
+                    {
+                        "id": "ev2",
+                        "summary": "Meeting 2",
+                        "start": {"date": "2026-07-17"},
+                    }
+                ]
+            },
+        ]
+        mock_service.events().list().execute.side_effect = call_responses
+
+        args = MagicMock()
+        args.days = 7
+        workspace_client.handle_calendar_list(args)
+
+        output = mock_stdout.getvalue()
+        self.assertIn("ev1", output)
+        self.assertIn("ev2", output)
 
     @patch("workspace_client.build_calendar_service")
     @patch("workspace_client.get_credentials")
@@ -98,6 +168,8 @@ class TestWorkspaceClient(unittest.TestCase):
         mock_service.events().get().execute.return_value = {
             "id": "ev_id",
             "summary": "Old Summary",
+            "start": {"date": "2026-07-16"},
+            "end": {"date": "2026-07-17"},
         }
         mock_service.events().update().execute.return_value = {"id": "ev_id"}
 
@@ -105,13 +177,18 @@ class TestWorkspaceClient(unittest.TestCase):
         args.event_id = "ev_id"
         args.title = "New Summary"
         args.start = "2026-07-16T17:00:00Z"
-        args.end = None
+        args.end = "2026-07-16T18:00:00Z"
         args.description = None
 
         workspace_client.handle_calendar_update(args)
 
         output = mock_stdout.getvalue()
         self.assertIn("Updated Event ID: ev_id", output)
+
+        # Verify date key was popped from start/end to avoid schema mismatch
+        called_body = mock_service.events().update.call_args[1]["body"]
+        self.assertNotIn("date", called_body["start"])
+        self.assertNotIn("date", called_body["end"])
 
     @patch("workspace_client.build_calendar_service")
     @patch("workspace_client.get_credentials")
@@ -147,6 +224,7 @@ class TestWorkspaceClient(unittest.TestCase):
         mock_service.tasks().list().execute.return_value = {"items": mock_tasks}
 
         args = MagicMock()
+        args.tasklist = "list-123"
         args.completed = True
 
         workspace_client.handle_tasks_list(args)
@@ -157,6 +235,11 @@ class TestWorkspaceClient(unittest.TestCase):
         self.assertIn("[x]", output)
         self.assertIn("[ ]", output)
 
+        # Verify custom tasklist was used
+        mock_service.tasks().list.assert_called_with(
+            tasklist="list-123", showCompleted=True, pageToken=None
+        )
+
     @patch("workspace_client.build_tasks_service")
     @patch("workspace_client.get_credentials")
     @patch("sys.stdout", new_callable=io.StringIO)
@@ -166,6 +249,7 @@ class TestWorkspaceClient(unittest.TestCase):
         mock_service.tasks().insert().execute.return_value = {"id": "new_t_id"}
 
         args = MagicMock()
+        args.tasklist = "@default"
         args.title = "New Task"
         args.notes = "Task notes"
         args.due = "2026-07-16"
@@ -188,6 +272,7 @@ class TestWorkspaceClient(unittest.TestCase):
         mock_service.tasks().update().execute.return_value = {"id": "t_id"}
 
         args = MagicMock()
+        args.tasklist = "@default"
         args.task_id = "t_id"
         args.title = "New Title"
         args.notes = "New notes"
@@ -208,6 +293,7 @@ class TestWorkspaceClient(unittest.TestCase):
         mock_service.tasks().delete().execute.return_value = {}
 
         args = MagicMock()
+        args.tasklist = "list-123"
         args.task_id = "t_id"
 
         workspace_client.handle_tasks_delete(args)

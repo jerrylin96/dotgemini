@@ -58,9 +58,13 @@ def handle_auth_check(args):
     """Checks authentication status and scope validity."""
     creds = get_credentials()
     try:
-        # Build services to verify credentials
-        build_calendar_service(creds)
-        build_tasks_service(creds)
+        # Build services and make lightweight read calls to verify actual credentials/scopes
+        cal_service = build_calendar_service(creds)
+        cal_service.events().list(calendarId="primary", maxResults=1).execute()
+
+        tasks_service = build_tasks_service(creds)
+        tasks_service.tasks().list(tasklist="@default", maxResults=1).execute()
+
         print("Success: Authenticated successfully with Google Workspace APIs.")
     except Exception as e:
         print(f"Auth check failed: {e}", file=sys.stderr)
@@ -77,18 +81,25 @@ def handle_calendar_list(args):
     time_max = (now + datetime.timedelta(days=args.days)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     try:
-        events_result = (
-            service.events()
-            .list(
-                calendarId="primary",
-                timeMin=time_min,
-                timeMax=time_max,
-                singleEvents=True,
-                orderBy="startTime",
+        events = []
+        page_token = None
+        while True:
+            events_result = (
+                service.events()
+                .list(
+                    calendarId="primary",
+                    timeMin=time_min,
+                    timeMax=time_max,
+                    singleEvents=True,
+                    orderBy="startTime",
+                    pageToken=page_token,
+                )
+                .execute()
             )
-            .execute()
-        )
-        events = events_result.get("items", [])
+            events.extend(events_result.get("items", []))
+            page_token = events_result.get("nextPageToken")
+            if not page_token:
+                break
 
         if not events:
             print("No upcoming events found.")
@@ -139,9 +150,11 @@ def handle_calendar_update(args):
         if args.title:
             event["summary"] = args.title
         if args.start:
-            event["start"] = {"dateTime": args.start}
+            event.setdefault("start", {}).pop("date", None)
+            event["start"]["dateTime"] = args.start
         if args.end:
-            event["end"] = {"dateTime": args.end}
+            event.setdefault("end", {}).pop("date", None)
+            event["end"]["dateTime"] = args.end
         if args.description is not None:
             event["description"] = args.description
 
@@ -170,18 +183,27 @@ def handle_calendar_delete(args):
 
 
 def handle_tasks_list(args):
-    """Lists tasks from the default task list."""
+    """Lists tasks from the task list."""
     creds = get_credentials()
     service = build_tasks_service(creds)
 
     try:
-        # Use default tasklist
-        tasks_result = (
-            service.tasks()
-            .list(tasklist="@default", showCompleted=args.completed)
-            .execute()
-        )
-        tasks = tasks_result.get("items", [])
+        tasks = []
+        page_token = None
+        while True:
+            tasks_result = (
+                service.tasks()
+                .list(
+                    tasklist=args.tasklist,
+                    showCompleted=args.completed,
+                    pageToken=page_token,
+                )
+                .execute()
+            )
+            tasks.extend(tasks_result.get("items", []))
+            page_token = tasks_result.get("nextPageToken")
+            if not page_token:
+                break
 
         if not tasks:
             print("No tasks found.")
@@ -199,7 +221,7 @@ def handle_tasks_list(args):
 
 
 def handle_tasks_create(args):
-    """Creates a task in the default task list."""
+    """Creates a task in the task list."""
     creds = get_credentials()
     service = build_tasks_service(creds)
 
@@ -211,7 +233,7 @@ def handle_tasks_create(args):
         task_body["due"] = f"{args.due}T00:00:00Z"
 
     try:
-        task = service.tasks().insert(tasklist="@default", body=task_body).execute()
+        task = service.tasks().insert(tasklist=args.tasklist, body=task_body).execute()
         print(f"Created Task ID: {task.get('id')}")
     except HttpError as e:
         print(f"HTTP Error: {e}", file=sys.stderr)
@@ -219,12 +241,12 @@ def handle_tasks_create(args):
 
 
 def handle_tasks_update(args):
-    """Updates a task in the default task list."""
+    """Updates a task in the task list."""
     creds = get_credentials()
     service = build_tasks_service(creds)
 
     try:
-        task = service.tasks().get(tasklist="@default", task=args.task_id).execute()
+        task = service.tasks().get(tasklist=args.tasklist, task=args.task_id).execute()
 
         if args.title:
             task["title"] = args.title
@@ -237,7 +259,7 @@ def handle_tasks_update(args):
 
         updated_task = (
             service.tasks()
-            .update(tasklist="@default", task=args.task_id, body=task)
+            .update(tasklist=args.tasklist, task=args.task_id, body=task)
             .execute()
         )
         print(f"Updated Task ID: {updated_task.get('id')}")
@@ -247,12 +269,12 @@ def handle_tasks_update(args):
 
 
 def handle_tasks_delete(args):
-    """Deletes a task from the default task list."""
+    """Deletes a task from the task list."""
     creds = get_credentials()
     service = build_tasks_service(creds)
 
     try:
-        service.tasks().delete(tasklist="@default", task=args.task_id).execute()
+        service.tasks().delete(tasklist=args.tasklist, task=args.task_id).execute()
         print(f"Deleted Task ID: {args.task_id}")
     except HttpError as e:
         print(f"HTTP Error: {e}", file=sys.stderr)
@@ -301,6 +323,9 @@ def main():
 
     # Tasks subparsers
     tasks_parser = subparsers.add_parser("tasks", help="Google Tasks operations.")
+    tasks_parser.add_argument(
+        "--tasklist", default="@default", help="Task list ID (default: @default)."
+    )
     tasks_sub = tasks_parser.add_subparsers(dest="action", required=True)
 
     tasks_list = tasks_sub.add_parser("list", help="List tasks.")
