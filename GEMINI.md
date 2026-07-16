@@ -75,6 +75,7 @@ The global settings contain dedicated skills under `~/.gemini/skills/` which can
 
 * [adversarial-review/SKILL.md](skills/adversarial-review/SKILL.md) — Git worktree-based adversarial code review helper
 * [explain-diff/SKILL.md](skills/explain-diff/SKILL.md) — Interactive, read-only diff explanation walkthrough (overall summary, per-hunk explanations, drill-down Q&A)
+* [google-workspace/SKILL.md](skills/google-workspace/SKILL.md) — Manage Google Calendar events and Google Tasks (list, create, update, delete)
 * [ponytail/SKILL.md](skills/ponytail/SKILL.md) — Detailed minimal-code YAGNI guidelines
 * [caveman/SKILL.md](skills/caveman/SKILL.md) — Concise style and compression levels
 * [incremental-implementation/SKILL.md](skills/incremental-implementation/SKILL.md) — Thin-slice execution cycles
