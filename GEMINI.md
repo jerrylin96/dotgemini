@@ -81,6 +81,7 @@ The global settings contain dedicated skills under `~/.gemini/skills/` which can
 * [test-driven-development/SKILL.md](skills/test-driven-development/SKILL.md) — Red-Green-Refactor and Prove-It patterns
 * [debugging-and-error-recovery/SKILL.md](skills/debugging-and-error-recovery/SKILL.md) — Root-cause triage checklists
 * [make-feature/SKILL.md](skills/make-feature/SKILL.md) — Isolated feature branch development via git worktree
+* [session-sync/SKILL.md](skills/session-sync/SKILL.md) — Sync/restore an Antigravity CLI conversation session across machines via a shared Git remote
 
 ---
 

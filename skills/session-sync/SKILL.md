@@ -12,6 +12,7 @@ Use this skill when the user wants to sync, backup, push, or restore an Antigrav
 > [!IMPORTANT]
 > - **Security/Permissions**: Always explain the git remote operations (`git push` / `git fetch` / `git stash` / `git reset`) in a separate turn and obtain explicit user consent before execution.
 > - **Dirty State Handling**: If a pull operation detects uncommitted local changes, the script will return `{"status": "dirty", ...}`. You MUST stop, explain this to the user, and present the three choices: Abort, Stash, or Overwrite.
+> - **Destructive branch alignment**: On pull, the script runs `git reset --hard <source-commit>` to align the destination branch to the pushed session's commit. This discards any **committed** local work on that branch that is ahead of the source commit — the dirty-state check above only guards **uncommitted** changes. Before pulling, warn the user if the destination branch may hold unpushed commits.
 
 ## Execution Workflows
 
