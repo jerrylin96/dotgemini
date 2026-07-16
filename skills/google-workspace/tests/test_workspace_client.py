@@ -4,6 +4,8 @@ import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
+from googleapiclient.errors import HttpError
+
 # Insert scripts folder to sys.path
 sys.path.insert(
     0,
@@ -50,7 +52,9 @@ class TestWorkspaceClient(unittest.TestCase):
     def test_auth_check_failure(self, mock_get_creds, mock_build_cal):
         mock_cal = MagicMock()
         mock_build_cal.return_value = mock_cal
-        mock_cal.events().list.side_effect = Exception("API error")
+        mock_cal.events.return_value.list.return_value.execute.side_effect = Exception(
+            "API error"
+        )
 
         args = MagicMock()
         with self.assertRaises(SystemExit):
@@ -72,7 +76,9 @@ class TestWorkspaceClient(unittest.TestCase):
             },
             {"id": "ev2", "summary": "Meeting 2", "start": {"date": "2026-07-17"}},
         ]
-        mock_service.events().list().execute.return_value = {"items": mock_events}
+        mock_service.events.return_value.list.return_value.execute.return_value = {
+            "items": mock_events
+        }
 
         args = MagicMock()
         args.days = 7
@@ -115,7 +121,9 @@ class TestWorkspaceClient(unittest.TestCase):
                 ]
             },
         ]
-        mock_service.events().list().execute.side_effect = call_responses
+        mock_service.events.return_value.list.return_value.execute.side_effect = (
+            call_responses
+        )
 
         args = MagicMock()
         args.days = 7
@@ -131,7 +139,9 @@ class TestWorkspaceClient(unittest.TestCase):
     def test_calendar_list_empty(self, mock_stdout, mock_get_creds, mock_build_service):
         mock_service = MagicMock()
         mock_build_service.return_value = mock_service
-        mock_service.events().list().execute.return_value = {"items": []}
+        mock_service.events.return_value.list.return_value.execute.return_value = {
+            "items": []
+        }
 
         args = MagicMock()
         args.days = 7
@@ -146,7 +156,9 @@ class TestWorkspaceClient(unittest.TestCase):
     def test_calendar_create(self, mock_stdout, mock_get_creds, mock_build_service):
         mock_service = MagicMock()
         mock_build_service.return_value = mock_service
-        mock_service.events().insert().execute.return_value = {"id": "new_ev_id"}
+        mock_service.events.return_value.insert.return_value.execute.return_value = {
+            "id": "new_ev_id"
+        }
 
         args = MagicMock()
         args.title = "New Event"
@@ -159,19 +171,47 @@ class TestWorkspaceClient(unittest.TestCase):
         output = mock_stdout.getvalue()
         self.assertIn("Created Event ID: new_ev_id", output)
 
+        called_body = mock_service.events.return_value.insert.call_args[1]["body"]
+        self.assertEqual(called_body["summary"], "New Event")
+        self.assertEqual(called_body["start"]["dateTime"], "2026-07-16T15:00:00Z")
+        self.assertEqual(called_body["end"]["dateTime"], "2026-07-16T16:00:00Z")
+        self.assertEqual(called_body["description"], "Test Desc")
+
+    @patch("workspace_client.build_calendar_service")
+    @patch("workspace_client.get_credentials")
+    def test_calendar_create_http_error(self, mock_get_creds, mock_build_service):
+        mock_service = MagicMock()
+        mock_build_service.return_value = mock_service
+        mock_resp = MagicMock()
+        mock_resp.status = 400
+        mock_service.events.return_value.insert.return_value.execute.side_effect = (
+            HttpError(resp=mock_resp, content=b"")
+        )
+
+        args = MagicMock()
+        args.title = "New Event"
+        args.start = "2026-07-16T15:00:00Z"
+        args.end = "2026-07-16T16:00:00Z"
+        args.description = "Test Desc"
+
+        with self.assertRaises(SystemExit):
+            workspace_client.handle_calendar_create(args)
+
     @patch("workspace_client.build_calendar_service")
     @patch("workspace_client.get_credentials")
     @patch("sys.stdout", new_callable=io.StringIO)
     def test_calendar_update(self, mock_stdout, mock_get_creds, mock_build_service):
         mock_service = MagicMock()
         mock_build_service.return_value = mock_service
-        mock_service.events().get().execute.return_value = {
+        mock_service.events.return_value.get.return_value.execute.return_value = {
             "id": "ev_id",
             "summary": "Old Summary",
             "start": {"date": "2026-07-16"},
             "end": {"date": "2026-07-17"},
         }
-        mock_service.events().update().execute.return_value = {"id": "ev_id"}
+        mock_service.events.return_value.update.return_value.execute.return_value = {
+            "id": "ev_id"
+        }
 
         args = MagicMock()
         args.event_id = "ev_id"
@@ -186,9 +226,30 @@ class TestWorkspaceClient(unittest.TestCase):
         self.assertIn("Updated Event ID: ev_id", output)
 
         # Verify date key was popped from start/end to avoid schema mismatch
-        called_body = mock_service.events().update.call_args[1]["body"]
+        called_body = mock_service.events.return_value.update.call_args[1]["body"]
         self.assertNotIn("date", called_body["start"])
         self.assertNotIn("date", called_body["end"])
+
+    @patch("workspace_client.build_calendar_service")
+    @patch("workspace_client.get_credentials")
+    def test_calendar_update_http_error(self, mock_get_creds, mock_build_service):
+        mock_service = MagicMock()
+        mock_build_service.return_value = mock_service
+        mock_resp = MagicMock()
+        mock_resp.status = 400
+        mock_service.events.return_value.get.return_value.execute.side_effect = (
+            HttpError(resp=mock_resp, content=b"")
+        )
+
+        args = MagicMock()
+        args.event_id = "ev_id"
+        args.title = "New Summary"
+        args.start = "2026-07-16T17:00:00Z"
+        args.end = "2026-07-16T18:00:00Z"
+        args.description = None
+
+        with self.assertRaises(SystemExit):
+            workspace_client.handle_calendar_update(args)
 
     @patch("workspace_client.build_calendar_service")
     @patch("workspace_client.get_credentials")
@@ -196,7 +257,7 @@ class TestWorkspaceClient(unittest.TestCase):
     def test_calendar_delete(self, mock_stdout, mock_get_creds, mock_build_service):
         mock_service = MagicMock()
         mock_build_service.return_value = mock_service
-        mock_service.events().delete().execute.return_value = {}
+        mock_service.events.return_value.delete.return_value.execute.return_value = {}
 
         args = MagicMock()
         args.event_id = "ev_id"
@@ -205,6 +266,23 @@ class TestWorkspaceClient(unittest.TestCase):
 
         output = mock_stdout.getvalue()
         self.assertIn("Deleted Event ID: ev_id", output)
+
+    @patch("workspace_client.build_calendar_service")
+    @patch("workspace_client.get_credentials")
+    def test_calendar_delete_http_error(self, mock_get_creds, mock_build_service):
+        mock_service = MagicMock()
+        mock_build_service.return_value = mock_service
+        mock_resp = MagicMock()
+        mock_resp.status = 400
+        mock_service.events.return_value.delete.return_value.execute.side_effect = (
+            HttpError(resp=mock_resp, content=b"")
+        )
+
+        args = MagicMock()
+        args.event_id = "ev_id"
+
+        with self.assertRaises(SystemExit):
+            workspace_client.handle_calendar_delete(args)
 
     @patch("workspace_client.build_tasks_service")
     @patch("workspace_client.get_credentials")
@@ -221,7 +299,9 @@ class TestWorkspaceClient(unittest.TestCase):
                 "due": "2026-07-16T00:00:00Z",
             },
         ]
-        mock_service.tasks().list().execute.return_value = {"items": mock_tasks}
+        mock_service.tasks.return_value.list.return_value.execute.return_value = {
+            "items": mock_tasks
+        }
 
         args = MagicMock()
         args.tasklist = "list-123"
@@ -236,9 +316,54 @@ class TestWorkspaceClient(unittest.TestCase):
         self.assertIn("[ ]", output)
 
         # Verify custom tasklist was used
-        mock_service.tasks().list.assert_called_with(
+        mock_service.tasks.return_value.list.assert_called_with(
             tasklist="list-123", showCompleted=True, pageToken=None
         )
+
+    @patch("workspace_client.build_tasks_service")
+    @patch("workspace_client.get_credentials")
+    @patch("sys.stdout", new_callable=io.StringIO)
+    def test_tasks_list_pagination(
+        self, mock_stdout, mock_get_creds, mock_build_service
+    ):
+        mock_service = MagicMock()
+        mock_build_service.return_value = mock_service
+
+        call_responses = [
+            {
+                "items": [{"id": "t1", "title": "Task 1", "status": "needsAction"}],
+                "nextPageToken": "token456",
+            },
+            {
+                "items": [
+                    {
+                        "id": "t2",
+                        "title": "Task 2",
+                        "status": "completed",
+                        "due": "2026-07-16T00:00:00Z",
+                    }
+                ]
+            },
+        ]
+        mock_service.tasks.return_value.list.return_value.execute.side_effect = (
+            call_responses
+        )
+
+        args = MagicMock()
+        args.tasklist = "list-123"
+        args.completed = True
+
+        workspace_client.handle_tasks_list(args)
+
+        output = mock_stdout.getvalue()
+        self.assertIn("Task 1", output)
+        self.assertIn("Task 2", output)
+
+        # Verify pageToken was passed in the second call
+        list_calls = mock_service.tasks.return_value.list.call_args_list
+        self.assertEqual(len(list_calls), 2)
+        self.assertEqual(list_calls[0][1]["pageToken"], None)
+        self.assertEqual(list_calls[1][1]["pageToken"], "token456")
 
     @patch("workspace_client.build_tasks_service")
     @patch("workspace_client.get_credentials")
@@ -246,7 +371,9 @@ class TestWorkspaceClient(unittest.TestCase):
     def test_tasks_create(self, mock_stdout, mock_get_creds, mock_build_service):
         mock_service = MagicMock()
         mock_build_service.return_value = mock_service
-        mock_service.tasks().insert().execute.return_value = {"id": "new_t_id"}
+        mock_service.tasks.return_value.insert.return_value.execute.return_value = {
+            "id": "new_t_id"
+        }
 
         args = MagicMock()
         args.tasklist = "@default"
@@ -261,15 +388,37 @@ class TestWorkspaceClient(unittest.TestCase):
 
     @patch("workspace_client.build_tasks_service")
     @patch("workspace_client.get_credentials")
+    def test_tasks_create_http_error(self, mock_get_creds, mock_build_service):
+        mock_service = MagicMock()
+        mock_build_service.return_value = mock_service
+        mock_resp = MagicMock()
+        mock_resp.status = 400
+        mock_service.tasks.return_value.insert.return_value.execute.side_effect = (
+            HttpError(resp=mock_resp, content=b"")
+        )
+
+        args = MagicMock()
+        args.tasklist = "@default"
+        args.title = "New Task"
+        args.notes = "Task notes"
+        args.due = "2026-07-16"
+
+        with self.assertRaises(SystemExit):
+            workspace_client.handle_tasks_create(args)
+
+    @patch("workspace_client.build_tasks_service")
+    @patch("workspace_client.get_credentials")
     @patch("sys.stdout", new_callable=io.StringIO)
     def test_tasks_update(self, mock_stdout, mock_get_creds, mock_build_service):
         mock_service = MagicMock()
         mock_build_service.return_value = mock_service
-        mock_service.tasks().get().execute.return_value = {
+        mock_service.tasks.return_value.get.return_value.execute.return_value = {
             "id": "t_id",
             "title": "Old Title",
         }
-        mock_service.tasks().update().execute.return_value = {"id": "t_id"}
+        mock_service.tasks.return_value.update.return_value.execute.return_value = {
+            "id": "t_id"
+        }
 
         args = MagicMock()
         args.tasklist = "@default"
@@ -286,11 +435,33 @@ class TestWorkspaceClient(unittest.TestCase):
 
     @patch("workspace_client.build_tasks_service")
     @patch("workspace_client.get_credentials")
+    def test_tasks_update_http_error(self, mock_get_creds, mock_build_service):
+        mock_service = MagicMock()
+        mock_build_service.return_value = mock_service
+        mock_resp = MagicMock()
+        mock_resp.status = 400
+        mock_service.tasks.return_value.get.return_value.execute.side_effect = (
+            HttpError(resp=mock_resp, content=b"")
+        )
+
+        args = MagicMock()
+        args.tasklist = "@default"
+        args.task_id = "t_id"
+        args.title = "New Title"
+        args.notes = "New notes"
+        args.due = ""
+        args.status = "completed"
+
+        with self.assertRaises(SystemExit):
+            workspace_client.handle_tasks_update(args)
+
+    @patch("workspace_client.build_tasks_service")
+    @patch("workspace_client.get_credentials")
     @patch("sys.stdout", new_callable=io.StringIO)
     def test_tasks_delete(self, mock_stdout, mock_get_creds, mock_build_service):
         mock_service = MagicMock()
         mock_build_service.return_value = mock_service
-        mock_service.tasks().delete().execute.return_value = {}
+        mock_service.tasks.return_value.delete.return_value.execute.return_value = {}
 
         args = MagicMock()
         args.tasklist = "list-123"
@@ -300,6 +471,24 @@ class TestWorkspaceClient(unittest.TestCase):
 
         output = mock_stdout.getvalue()
         self.assertIn("Deleted Task ID: t_id", output)
+
+    @patch("workspace_client.build_tasks_service")
+    @patch("workspace_client.get_credentials")
+    def test_tasks_delete_http_error(self, mock_get_creds, mock_build_service):
+        mock_service = MagicMock()
+        mock_build_service.return_value = mock_service
+        mock_resp = MagicMock()
+        mock_resp.status = 400
+        mock_service.tasks.return_value.delete.return_value.execute.side_effect = (
+            HttpError(resp=mock_resp, content=b"")
+        )
+
+        args = MagicMock()
+        args.tasklist = "list-123"
+        args.task_id = "t_id"
+
+        with self.assertRaises(SystemExit):
+            workspace_client.handle_tasks_delete(args)
 
 
 if __name__ == "__main__":
