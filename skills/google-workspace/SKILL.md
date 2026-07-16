@@ -1,6 +1,6 @@
 ---
 name: google-workspace
-description: Manage Google Calendar events and Google Tasks. Allows listing, creating, and updating events and tasks.
+description: Manage Google Calendar events and Google Tasks. Allows listing, creating, updating, and deleting events and tasks.
 ---
 
 # Google Workspace (Calendar & Tasks) Integration
@@ -82,6 +82,7 @@ Updates properties or marks a task as completed/incomplete.
 ```bash
 python3 ~/.gemini/skills/google-workspace/scripts/workspace_client.py tasks [--tasklist LIST_ID] update --task-id "TASK_ID" [--title "New Title"] [--notes "New Notes"] [--due "New Due"] [--status "completed|needsAction"]
 ```
+*Note: Due dates should be in YYYY-MM-DD format. Pass an empty string (`--due ""`) to clear the due date.*
 
 #### Delete Task
 Deletes a task.

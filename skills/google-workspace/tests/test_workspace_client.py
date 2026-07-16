@@ -1,3 +1,4 @@
+import argparse
 import io
 import os
 import sys
@@ -15,6 +16,18 @@ import workspace_client
 
 
 class TestWorkspaceClient(unittest.TestCase):
+    def test_positive_int_valid(self):
+        self.assertEqual(workspace_client.positive_int("5"), 5)
+        self.assertEqual(workspace_client.positive_int("1"), 1)
+
+    def test_positive_int_invalid(self):
+        with self.assertRaises(argparse.ArgumentTypeError):
+            workspace_client.positive_int("0")
+        with self.assertRaises(argparse.ArgumentTypeError):
+            workspace_client.positive_int("-3")
+        with self.assertRaises(argparse.ArgumentTypeError):
+            workspace_client.positive_int("abc")
+
     @patch("workspace_client.google.auth.default")
     def test_get_credentials_success(self, mock_auth):
         mock_auth.return_value = ("credentials", "project")
@@ -232,6 +245,31 @@ class TestWorkspaceClient(unittest.TestCase):
 
     @patch("workspace_client.build_calendar_service")
     @patch("workspace_client.get_credentials")
+    def test_calendar_update_all_day_mixed_schema_error(
+        self, mock_get_creds, mock_build_service
+    ):
+        mock_service = MagicMock()
+        mock_build_service.return_value = mock_service
+        mock_service.events.return_value.get.return_value.execute.return_value = {
+            "id": "ev_id",
+            "summary": "All Day Event",
+            "start": {"date": "2026-07-16"},
+            "end": {"date": "2026-07-17"},
+        }
+
+        # Supply only start, which causes mixed schema on all-day event updates
+        args = MagicMock()
+        args.event_id = "ev_id"
+        args.title = None
+        args.start = "2026-07-16T17:00:00Z"
+        args.end = None
+        args.description = None
+
+        with self.assertRaises(SystemExit):
+            workspace_client.handle_calendar_update(args)
+
+    @patch("workspace_client.build_calendar_service")
+    @patch("workspace_client.get_credentials")
     def test_calendar_update_http_error(self, mock_get_creds, mock_build_service):
         mock_service = MagicMock()
         mock_build_service.return_value = mock_service
@@ -315,9 +353,9 @@ class TestWorkspaceClient(unittest.TestCase):
         self.assertIn("[x]", output)
         self.assertIn("[ ]", output)
 
-        # Verify custom tasklist was used
+        # Verify custom tasklist and showHidden was used
         mock_service.tasks.return_value.list.assert_called_with(
-            tasklist="list-123", showCompleted=True, pageToken=None
+            tasklist="list-123", showCompleted=True, showHidden=True, pageToken=None
         )
 
     @patch("workspace_client.build_tasks_service")
@@ -359,11 +397,13 @@ class TestWorkspaceClient(unittest.TestCase):
         self.assertIn("Task 1", output)
         self.assertIn("Task 2", output)
 
-        # Verify pageToken was passed in the second call
+        # Verify pageToken and showHidden was passed in the second call
         list_calls = mock_service.tasks.return_value.list.call_args_list
         self.assertEqual(len(list_calls), 2)
         self.assertEqual(list_calls[0][1]["pageToken"], None)
+        self.assertEqual(list_calls[0][1]["showHidden"], True)
         self.assertEqual(list_calls[1][1]["pageToken"], "token456")
+        self.assertEqual(list_calls[1][1]["showHidden"], True)
 
     @patch("workspace_client.build_tasks_service")
     @patch("workspace_client.get_credentials")
@@ -415,6 +455,8 @@ class TestWorkspaceClient(unittest.TestCase):
         mock_service.tasks.return_value.get.return_value.execute.return_value = {
             "id": "t_id",
             "title": "Old Title",
+            "status": "completed",
+            "completed": "2026-07-16T15:00:00Z",
         }
         mock_service.tasks.return_value.update.return_value.execute.return_value = {
             "id": "t_id"
@@ -426,12 +468,16 @@ class TestWorkspaceClient(unittest.TestCase):
         args.title = "New Title"
         args.notes = "New notes"
         args.due = ""
-        args.status = "completed"
+        args.status = "needsAction"
 
         workspace_client.handle_tasks_update(args)
 
         output = mock_stdout.getvalue()
         self.assertIn("Updated Task ID: t_id", output)
+
+        # Verify completed key was popped from the body when setting needsAction
+        called_body = mock_service.tasks.return_value.update.call_args[1]["body"]
+        self.assertNotIn("completed", called_body)
 
     @patch("workspace_client.build_tasks_service")
     @patch("workspace_client.get_credentials")

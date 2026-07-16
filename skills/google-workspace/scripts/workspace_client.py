@@ -1,17 +1,4 @@
 #!/usr/bin/env python3
-# Copyright 2026 Google LLC
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     https://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 """Google Workspace Integration Client for Calendar and Tasks."""
 
 import argparse
@@ -27,6 +14,17 @@ SCOPES = [
     "https://www.googleapis.com/auth/calendar",
     "https://www.googleapis.com/auth/tasks",
 ]
+
+
+def positive_int(value):
+    """Argument parser type validator for positive integers."""
+    try:
+        ivalue = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{value} must be an integer")
+    if ivalue <= 0:
+        raise argparse.ArgumentTypeError(f"{value} must be greater than or equal to 1")
+    return ivalue
 
 
 def get_credentials():
@@ -147,6 +145,18 @@ def handle_calendar_update(args):
             service.events().get(calendarId="primary", eventId=args.event_id).execute()
         )
 
+        # Check if the event is all-day and validation of start/end
+        is_all_day_start = "date" in event.get("start", {})
+        is_all_day_end = "date" in event.get("end", {})
+        is_all_day = is_all_day_start or is_all_day_end
+
+        if is_all_day and (args.start or args.end) and not (args.start and args.end):
+            print(
+                "Error: Both --start and --end must be provided when updating an all-day event.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
         if args.title:
             event["summary"] = args.title
         if args.start:
@@ -196,6 +206,7 @@ def handle_tasks_list(args):
                 .list(
                     tasklist=args.tasklist,
                     showCompleted=args.completed,
+                    showHidden=args.completed,
                     pageToken=page_token,
                 )
                 .execute()
@@ -256,6 +267,8 @@ def handle_tasks_update(args):
             task["due"] = f"{args.due}T00:00:00Z" if args.due else None
         if args.status:
             task["status"] = args.status
+            if args.status == "needsAction":
+                task.pop("completed", None)
 
         updated_task = (
             service.tasks()
@@ -294,7 +307,10 @@ def main():
 
     cal_list = cal_sub.add_parser("list", help="List upcoming events.")
     cal_list.add_argument(
-        "--days", type=int, default=7, help="Number of days of events to retrieve."
+        "--days",
+        type=positive_int,
+        default=7,
+        help="Number of days of events to retrieve (must be positive).",
     )
     cal_list.set_defaults(func=handle_calendar_list)
 
@@ -344,7 +360,9 @@ def main():
     tasks_update.add_argument("--task-id", required=True, help="Task ID to update.")
     tasks_update.add_argument("--title", help="New title.")
     tasks_update.add_argument("--notes", help="New description/notes.")
-    tasks_update.add_argument("--due", help="New due date (YYYY-MM-DD).")
+    tasks_update.add_argument(
+        "--due", help="New due date (YYYY-MM-DD, pass empty string to clear)."
+    )
     tasks_update.add_argument(
         "--status", choices=["completed", "needsAction"], help="Task status."
     )
