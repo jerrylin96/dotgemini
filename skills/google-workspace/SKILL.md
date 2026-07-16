@@ -25,6 +25,9 @@ python3 ~/.gemini/skills/google-workspace/scripts/workspace_client.py auth-check
 
 ## Agent Usage & Commands
 
+> [!IMPORTANT]
+> **Safety Rule**: You MUST explicitly confirm with the user before performing any delete operations or bulk changes to calendar events or tasks.
+
 All actions are executed by running the Python client:
 `python3 ~/.gemini/skills/google-workspace/scripts/workspace_client.py`
 
