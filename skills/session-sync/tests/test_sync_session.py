@@ -42,7 +42,9 @@ class TestSyncSession(unittest.TestCase):
     @patch("sync_session.run_git")
     def test_list_sessions(self, mock_run_git):
         def run_git_mock(args, cwd):
-            if "for-each-ref" in args:
+            if "config" in args:
+                return "https://github.com/user/repo"
+            elif "for-each-ref" in args:
                 return "refs/gemini-sessions/session-a sha-a 2026-07-16T10:00:00Z"
             elif "ls-remote" in args:
                 return "sha-a\trefs/gemini-sessions/session-a\nsha-b\trefs/gemini-sessions/session-b"
@@ -65,7 +67,13 @@ class TestSyncSession(unittest.TestCase):
 
     @patch("sync_session.run_git")
     def test_clear_sessions_specific(self, mock_run_git):
-        mock_run_git.return_value = ""
+        def run_git_mock(args, cwd):
+            if "config" in args:
+                return "https://github.com/user/repo"
+            elif "ls-remote" in args:
+                return "sha-a\trefs/gemini-sessions/session-a"
+            return ""
+        mock_run_git.side_effect = run_git_mock
 
         buf = io.StringIO()
         with redirect_stdout(buf):
@@ -79,7 +87,9 @@ class TestSyncSession(unittest.TestCase):
     @patch("sync_session.run_git")
     def test_clear_sessions_all(self, mock_run_git):
         def run_git_mock(args, cwd):
-            if "for-each-ref" in args:
+            if "config" in args:
+                return "https://github.com/user/repo"
+            elif "for-each-ref" in args:
                 return "refs/gemini-sessions/session-a"
             elif "ls-remote" in args:
                 return "sha-a\trefs/gemini-sessions/session-b"

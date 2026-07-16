@@ -348,23 +348,25 @@ def list_sessions(repo_root):
 
     # Find remote refs
     remote_sessions = {}
-    try:
-        remote_refs_out = run_git(["ls-remote", "origin", "refs/gemini-sessions/*"], cwd=repo_root)
-        for line in remote_refs_out.splitlines():
-            if not line.strip():
-                continue
-            parts = line.split(None, 1)
-            if len(parts) == 2:
-                sha, ref = parts
-                session_id = ref.replace("refs/gemini-sessions/", "")
-                remote_sessions[session_id] = {"sha": sha, "local": False, "remote": True}
-    except GitError:
-        pass
+    has_remote = bool(get_remote_url(repo_root))
+    if has_remote:
+        try:
+            remote_refs_out = run_git(["ls-remote", "origin", "refs/gemini-sessions/*"], cwd=repo_root)
+            for line in remote_refs_out.splitlines():
+                if not line.strip():
+                    continue
+                parts = line.split(None, 1)
+                if len(parts) == 2:
+                    sha, ref = parts
+                    session_id = ref.replace("refs/gemini-sessions/", "")
+                    remote_sessions[session_id] = {"sha": sha, "local": False, "remote": True}
+        except GitError:
+            pass
 
     # Merge lists
     all_sessions = {}
     for sid, info in local_sessions.items():
-        all_sessions[sid] = info
+        all_sessions[sid] = dict(info)
     for sid, info in remote_sessions.items():
         if sid in all_sessions:
             all_sessions[sid]["remote"] = True
@@ -386,6 +388,22 @@ def clear_sessions(repo_root, conversation_id=None, clear_all=False):
         print(json.dumps({"error": "Must specify a conversation ID or use --all to clear all sessions."}))
         sys.exit(1)
 
+    has_remote = bool(get_remote_url(repo_root))
+    remote_session_ids = set()
+
+    if has_remote:
+        try:
+            remote_refs = run_git(["ls-remote", "origin", "refs/gemini-sessions/*"], cwd=repo_root)
+            for line in remote_refs.splitlines():
+                if line.strip():
+                    parts = line.split(None, 1)
+                    if len(parts) == 2:
+                        ref = parts[1]
+                        sid = ref.replace("refs/gemini-sessions/", "")
+                        remote_session_ids.add(sid)
+        except GitError:
+            pass
+
     sessions_to_clear = []
     if clear_all:
         # Find all local sessions
@@ -397,19 +415,10 @@ def clear_sessions(repo_root, conversation_id=None, clear_all=False):
         except GitError:
             pass
         
-        # Find all remote sessions
-        try:
-            remote_refs = run_git(["ls-remote", "origin", "refs/gemini-sessions/*"], cwd=repo_root)
-            for line in remote_refs.splitlines():
-                if line.strip():
-                    parts = line.split(None, 1)
-                    if len(parts) == 2:
-                        ref = parts[1]
-                        sid = ref.replace("refs/gemini-sessions/", "")
-                        if sid not in sessions_to_clear:
-                            sessions_to_clear.append(sid)
-        except GitError:
-            pass
+        # Add any remote sessions that aren't local
+        for sid in remote_session_ids:
+            if sid not in sessions_to_clear:
+                sessions_to_clear.append(sid)
     else:
         sessions_to_clear = [conversation_id]
 
@@ -424,12 +433,13 @@ def clear_sessions(repo_root, conversation_id=None, clear_all=False):
         remote_deleted = False
         local_deleted = False
 
-        # 1. Delete Remote Ref
-        try:
-            run_git(["push", "origin", "--delete", ref_name], cwd=repo_root)
-            remote_deleted = True
-        except GitError as e:
-            errors.append(f"Remote delete failed for {sid}: {str(e)}")
+        # 1. Delete Remote Ref if configured and exists on remote
+        if has_remote and (clear_all or sid in remote_session_ids):
+            try:
+                run_git(["push", "origin", "--delete", ref_name], cwd=repo_root)
+                remote_deleted = True
+            except GitError as e:
+                errors.append(f"Remote delete failed for {sid}: {str(e)}")
 
         # 2. Delete Local Ref
         try:
@@ -447,7 +457,7 @@ def clear_sessions(repo_root, conversation_id=None, clear_all=False):
             })
 
     print(json.dumps({
-        "success": len(errors) == 0 or len(cleared) > 0,
+        "success": len(errors) == 0,
         "cleared": cleared,
         "errors": errors
     }, indent=2))

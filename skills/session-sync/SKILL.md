@@ -57,7 +57,7 @@ Use this skill when the user wants to sync, backup, push, or restore an Antigrav
    ```bash
    python3 ~/.gemini/skills/session-sync/scripts/sync_session.py list
    ```
-2. Present the JSON output formatted clearly to the user, displaying session IDs, creation timestamps, and local/remote status.
+2. Present the JSON output formatted clearly to the user, displaying session IDs, creation timestamps (available only for local references), and local/remote status.
 
 ---
 
