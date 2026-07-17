@@ -324,6 +324,15 @@ def handle_plan(args):
     # Map raw events to Interval objects
     calendar_intervals = []
     for item in raw_events:
+        # Skip free/reminder events
+        if item.get("transparency") == "transparent":
+            continue
+
+        # Skip events containing common reminder/birthday keywords in the summary
+        summary = item.get("summary", "").lower()
+        if any(kw in summary for kw in ["birthday", "bday", "anniversary", "reminder"]):
+            continue
+
         start_data = item.get("start", {})
         end_data = item.get("end", {})
 

@@ -175,3 +175,77 @@ def test_all_day_multi_day_expansion():
     assert calendar_intervals[2].start == datetime.datetime(
         2026, 7, 22, 9, 0, tzinfo=tz
     )
+
+
+def test_ignore_transparent_and_reminder_events():
+    # Mocking Calendar API events
+    raw_events = [
+        {
+            "start": {"date": "2026-07-20"},
+            "end": {"date": "2026-07-21"},
+            "summary": "Mom's Birthday",
+        },
+        {
+            "start": {"date": "2026-07-21"},
+            "end": {"date": "2026-07-22"},
+            "summary": "Rent reminder",
+        },
+        {
+            "start": {"dateTime": "2026-07-22T10:00:00Z"},
+            "end": {"dateTime": "2026-07-22T11:00:00Z"},
+            "summary": "Quick chat",
+            "transparency": "transparent",
+        },
+        {
+            "start": {"dateTime": "2026-07-22T13:00:00Z"},
+            "end": {"dateTime": "2026-07-22T14:00:00Z"},
+            "summary": "Important Meeting",
+            "transparency": "opaque",
+        },
+    ]
+
+    tz = ZoneInfo("UTC")
+    working_start_time = datetime.time(9, 0)
+    working_end_time = datetime.time(17, 0)
+
+    calendar_intervals = []
+    for item in raw_events:
+        # Skip free/reminder events
+        if item.get("transparency") == "transparent":
+            continue
+
+        # Skip events containing common reminder/birthday keywords in the summary
+        summary = item.get("summary", "").lower()
+        if any(kw in summary for kw in ["birthday", "bday", "anniversary", "reminder"]):
+            continue
+
+        start_data = item.get("start", {})
+        end_data = item.get("end", {})
+        if "date" in start_data:
+            start_date_val = datetime.datetime.strptime(
+                start_data["date"], "%Y-%m-%d"
+            ).date()
+            end_date_val = datetime.datetime.strptime(
+                end_data["date"], "%Y-%m-%d"
+            ).date()
+            curr_date = start_date_val
+            while curr_date < end_date_val:
+                ev_start = datetime.datetime.combine(
+                    curr_date, working_start_time, tzinfo=tz
+                )
+                ev_end = datetime.datetime.combine(
+                    curr_date, working_end_time, tzinfo=tz
+                )
+                calendar_intervals.append(Interval(ev_start, ev_end))
+                curr_date += datetime.timedelta(days=1)
+        elif "dateTime" in start_data:
+            ev_start = parse_iso_datetime(start_data["dateTime"]).astimezone(tz)
+            ev_end = parse_iso_datetime(end_data["dateTime"]).astimezone(tz)
+            calendar_intervals.append(Interval(ev_start, ev_end))
+
+    # Should only contain "Important Meeting"
+    assert len(calendar_intervals) == 1
+    assert calendar_intervals[0].start == datetime.datetime(
+        2026, 7, 22, 13, 0, tzinfo=tz
+    )
+    assert calendar_intervals[0].end == datetime.datetime(2026, 7, 22, 14, 0, tzinfo=tz)
