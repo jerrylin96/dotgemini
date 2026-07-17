@@ -9,7 +9,7 @@ Resolve context, generate the diff, and interactively explain it: overall summar
 
 ## Core Rules
 > [!IMPORTANT]
-> - **Read-only**: This skill never modifies the workspace or worktree and never runs tests, linters, or `setup_review_env.py`. Only read files (via the worktree or `git show`). Creating temporary, ephemeral scratch files under the conversation's scratch directory for diff reading does not violate this rule.
+> - **Read-only**: This skill never modifies the workspace or worktree and never runs tests, linters, or `setup_review_env.py`. Only read files (via the worktree or `git show`). Creating temporary, ephemeral scratch files under the conversation's scratch directory for diff reading does not violate this rule, provided cleanup only removes these generated scratch files.
 > - **Neutral, not adversarial**: Describe what changed and why (inferred from code and commit messages). Do not critique or hunt for bugs. If the user asks for issues to be found, suggest switching to `/adversarial-review`.
 > - **Exact hunks**: Quote diff hunks byte-for-byte in fenced `diff` blocks. Explanations may be terse (caveman), hunks may not be paraphrased.
 
@@ -36,12 +36,16 @@ Two modes, chosen by what the user provides:
    b. Save the target diff to a temporary file under the conversation's scratch directory:
       `git diff <reference_commit_hash>...<commit_hash> -- <file> > <appDataDir>/brain/<conversation-id>/scratch/temp_diff.txt`
    c. Read the diff file using the `view_file` tool. This guarantees paginated, untruncated access to every hunk.
-   
-   *Execution Details & Ephemeral Path Resolution:*
-   - Resolve `<appDataDir>` and `<conversation-id>` using the values provided in the agent's system prompt instructions.
-   - Re-add git log collection: Also run `git log --oneline <reference_commit_hash>..<commit_hash>` to retrieve commit subjects that inform the "why" in the overall summary.
-   - For whole-changeset diff needs (summary & navigation menu), save the full diff once via `git diff <reference_commit_hash>...<commit_hash> > <appDataDir>/brain/<conversation-id>/scratch/temp_diff_all.txt`.
-   - Clean up temporary files (e.g. by running `rm <file_path>`) after reading to keep the scratch directory tidy.
+
+   *Execution and Robustness Guidelines:*
+   - **Prerequisites & Tooling Fallbacks**: The `view_file` tool and `<appDataDir>/brain/<conversation-id>/scratch/` directory structure are capabilities of the Antigravity CLI environment. If running in a primitive runtime (e.g. standard Gemini CLI) where `view_file` is unavailable, fall back to the `read_file` tool or read the file in chunks via shell tools (e.g., `less` or `cat`) after redirecting to an OS temporary path (e.g., `$(mktemp -d)/temp_diff.txt`).
+   - **Directory Creation & Quoting**: Always ensure the target scratch directory exists by running `mkdir -p "<appDataDir>/brain/<conversation-id>/scratch"` before executing any redirections. Quote all shell paths and parameters in commands to handle paths containing spaces, special characters, mode changes, or renames.
+   - **Temp File Lifecycles & Overwrites**: 
+     - For the Overall Summary and Navigation Menu, save the whole-changeset diff once: `git diff <reference_commit_hash>...<commit_hash> > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_all.txt"`.
+     - For the per-file walkthrough, save each file's diff to a unique name like `temp_diff_<sanitized_filename>.txt` or use `temp_diff_all.txt` as a single source to avoid clobbering when iterating through multiple files.
+   - **Git Log Truncation**: Retrieve commit subjects via `git log --oneline <reference_commit_hash>..<commit_hash>`. If the history is extremely long and risks stdout truncation, redirect it to a file and read it using the file viewer tool as well.
+   - **Cleanup Constraint**: After reading, cleanly delete only the temporary files created under the scratch directory: run `rm -- "<file_path>"`. Never run removal commands inside the repository or worktree.
+   - **Pagination**: If a file/diff is extremely large, use successive chunked reads (`StartLine` and `EndLine` options of the file viewer tool) to consume the full content.
 2. **Overall Summary**: Open with a short summary of the whole changeset: what it does, why (inferred), and the changes grouped into logical themes (a theme may span files). Include scale (files touched, insertions/deletions).
 3. **Navigation Menu**: Present a numbered menu of changed files — path, `+/-` stats, hunk count, one-line gist — plus:
    - `[a]` walk through every file in order,
