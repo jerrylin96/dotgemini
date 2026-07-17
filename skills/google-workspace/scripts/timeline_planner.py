@@ -111,18 +111,21 @@ def fetch_calendar_events(calendar_service, time_min_iso, time_max_iso):
 
 
 def parse_proposed_timeline(markdown_content):
-    """Parses human-readable proposed_timeline.md into structured dict."""
+    """Parses proposed_timeline.md. Evaluates section presence and malformed entries."""
     lines = markdown_content.splitlines()
     tasklist_name = "My Goal Timeline"
     timezone_name = "UTC"
     tasks = []
     events = []
+    errors = []
 
     current_task = None
     current_event = None
     mode = None
 
-    for line in lines:
+    seen_sections = set()
+
+    for idx, line in enumerate(lines, start=1):
         stripped = line.strip()
         if not stripped:
             continue
@@ -130,16 +133,22 @@ def parse_proposed_timeline(markdown_content):
         if stripped.startswith("# Proposed Timeline"):
             continue
         elif stripped.startswith("## Metadata"):
+            seen_sections.add("metadata")
             mode = "metadata"
             continue
         elif stripped.startswith("## Proposed Google Tasks"):
+            seen_sections.add("tasks")
             mode = "tasks"
             continue
         elif stripped.startswith("## Proposed Calendar Events"):
+            seen_sections.add("events")
             mode = "events"
             continue
         elif stripped.startswith("## Unscheduled Tasks"):
             mode = "unscheduled"
+            continue
+        elif stripped.startswith("## "):
+            mode = None
             continue
 
         if mode == "metadata":
@@ -151,6 +160,12 @@ def parse_proposed_timeline(markdown_content):
                 "- **timezone**:"
             ):
                 timezone_name = stripped.split(":", 1)[1].strip()
+            elif stripped.startswith("- **Target Start Date**:") or stripped.startswith(
+                "- **Timeline State**:"
+            ):
+                pass
+            else:
+                errors.append(f"Line {idx}: Unrecognized metadata entry '{stripped}'.")
         elif mode == "tasks":
             # Match task header: "- [ ] **Task Title** <!-- task_id: ID -->"
             task_header_match = re.match(
@@ -166,6 +181,7 @@ def parse_proposed_timeline(markdown_content):
                     "notes": "",
                     "id": task_header_match.group(3) or "",
                     "completed": bool(task_header_match.group(1).strip()),
+                    "line_number": idx,
                 }
             elif current_task:
                 if stripped.startswith("- **Due**:") or stripped.startswith(
@@ -176,6 +192,14 @@ def parse_proposed_timeline(markdown_content):
                     "- **notes**:"
                 ):
                     current_task["notes"] = stripped.split(":", 1)[1].strip()
+                else:
+                    errors.append(
+                        f"Line {idx}: Unrecognized task property line '{stripped}' under task '{current_task['title']}'."
+                    )
+            else:
+                errors.append(
+                    f"Line {idx}: Malformed task entry. Expected task header: '- [ ] **Title**'. Got: '{stripped}'."
+                )
         elif mode == "events":
             event_header_match = re.match(
                 r"-\s+\*\*Event\*\*:\s*(.*?)(?:\s*<!--\s*event_id:\s*(\S+)\s*-->)?$",
@@ -190,6 +214,7 @@ def parse_proposed_timeline(markdown_content):
                     "end": "",
                     "description": "",
                     "id": event_header_match.group(2) or "",
+                    "line_number": idx,
                 }
             elif current_event:
                 if stripped.startswith("- **Start**:") or stripped.startswith(
@@ -204,23 +229,48 @@ def parse_proposed_timeline(markdown_content):
                     "- **description**:"
                 ):
                     current_event["description"] = stripped.split(":", 1)[1].strip()
+                else:
+                    errors.append(
+                        f"Line {idx}: Unrecognized event property line '{stripped}' under event '{current_event['summary']}'."
+                    )
+            else:
+                errors.append(
+                    f"Line {idx}: Malformed event entry. Expected event header: '- **Event**: Title'. Got: '{stripped}'."
+                )
 
     if current_task:
         tasks.append(current_task)
     if current_event:
         events.append(current_event)
 
+    # Validate section presence
+    if "metadata" not in seen_sections:
+        errors.append("Missing required markdown section: '## Metadata'")
+    if "tasks" not in seen_sections:
+        errors.append("Missing required markdown section: '## Proposed Google Tasks'")
+    if "events" not in seen_sections:
+        errors.append(
+            "Missing required markdown section: '## Proposed Calendar Events'"
+        )
+
     return {
         "tasklist_name": tasklist_name,
         "timezone": timezone_name,
         "tasks": tasks,
         "events": events,
+        "errors": errors,
     }
 
 
 def preflight_validate_timeline(plan_data):
     """Validates the complete parsed Markdown plan before calling Google APIs."""
-    errors = []
+    errors = list(plan_data.get("errors", []))
+
+    # Reject empty plans
+    if not plan_data.get("tasks") and not plan_data.get("events"):
+        errors.append(
+            "Validation error: Proposed timeline is empty. Plan must contain at least one task or event."
+        )
 
     # 1. Validate Metadata
     tasklist_name = plan_data.get("tasklist_name", "").strip()
@@ -292,6 +342,33 @@ def preflight_validate_timeline(plan_data):
     return errors
 
 
+def atomic_write_file(file_path, content, is_json=False):
+    """Writes content atomically to file_path using a temporary file and fsync."""
+    parent_dir = os.path.dirname(os.path.abspath(file_path))
+    os.makedirs(parent_dir, exist_ok=True)
+
+    temp_path = file_path + ".tmp"
+    try:
+        with open(temp_path, "w") as f:
+            if is_json:
+                json.dump(content, f, indent=2)
+            else:
+                if isinstance(content, list):
+                    f.writelines(content)
+                else:
+                    f.write(content)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temp_path, file_path)
+    except Exception as e:
+        if os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except Exception:
+                pass
+        raise RuntimeError(f"Atomic file write failed for '{file_path}': {e}")
+
+
 def update_markdown_file_with_id(file_path, match_type, item_index, resource_id):
     """Rewrites the markdown file, appending the resource ID to the target item."""
     with open(file_path, "r") as f:
@@ -340,12 +417,12 @@ def update_markdown_file_with_id(file_path, match_type, item_index, resource_id)
 
         new_lines.append(line)
 
-    with open(file_path, "w") as f:
-        f.writelines(new_lines)
+    # Perform atomic write to prevent truncation or data loss
+    atomic_write_file(file_path, new_lines)
 
 
 def update_markdown_state(file_path, new_state):
-    """Updates the Timeline State metadata line in the markdown file."""
+    """Updates the Timeline State metadata line in the markdown file atomically."""
     with open(file_path, "r") as f:
         lines = f.readlines()
 
@@ -358,12 +435,11 @@ def update_markdown_state(file_path, new_state):
             line = f"- **Timeline State**: {new_state}\n"
         new_lines.append(line)
 
-    with open(file_path, "w") as f:
-        f.writelines(new_lines)
+    atomic_write_file(file_path, new_lines)
 
 
 def update_json_state_file(state_file_path, tasklist_id, task_id=None, event_id=None):
-    """Incrementally updates the JSON state file with the new IDs."""
+    """Incrementally updates the JSON state file with the new IDs atomically."""
     state = {"tasklist_id": tasklist_id, "task_ids": [], "event_ids": []}
     if os.path.exists(state_file_path):
         try:
@@ -377,8 +453,7 @@ def update_json_state_file(state_file_path, tasklist_id, task_id=None, event_id=
     if event_id and event_id not in state["event_ids"]:
         state["event_ids"].append(event_id)
 
-    with open(state_file_path, "w") as f:
-        json.dump(state, f, indent=2)
+    atomic_write_file(state_file_path, state, is_json=True)
 
 
 def handle_plan(args):
@@ -591,39 +666,37 @@ def handle_plan(args):
                 }
             )
 
-    # Write Proposed Markdown
-    os.makedirs(os.path.dirname(os.path.abspath(args.proposed_file)), exist_ok=True)
-    with open(args.proposed_file, "w") as f:
-        f.write(f"# Proposed Timeline: {tasklist_name}\n\n")
-        f.write("## Metadata\n")
-        f.write(f"- **Task List Name**: {tasklist_name}\n")
-        f.write(f"- **Timezone**: {timezone_name}\n")
-        f.write(f"- **Target Start Date**: {start_date.strftime('%Y-%m-%d')}\n")
-        f.write("- **Timeline State**: pending_approval\n\n")
+    # Write Proposed Markdown (using atomic write)
+    markdown_content = (
+        f"# Proposed Timeline: {tasklist_name}\n\n"
+        "## Metadata\n"
+        f"- **Task List Name**: {tasklist_name}\n"
+        f"- **Timezone**: {timezone_name}\n"
+        f"- **Target Start Date**: {start_date.strftime('%Y-%m-%d')}\n"
+        "- **Timeline State**: pending_approval\n\n"
+        "## Proposed Google Tasks\n"
+    )
+    for task in proposed_tasks:
+        markdown_content += f"- [ ] **{task['title']}**\n"
+        markdown_content += f"  - **Due**: {task['due']}\n"
+        markdown_content += f"  - **Notes**: {task['notes']}\n"
 
-        f.write("## Proposed Google Tasks\n")
-        for task in proposed_tasks:
-            f.write(f"- [ ] **{task['title']}**\n")
-            f.write(f"  - **Due**: {task['due']}\n")
-            f.write(f"  - **Notes**: {task['notes']}\n")
+    markdown_content += "\n## Proposed Calendar Events\n"
+    for event in proposed_events:
+        markdown_content += f"- **Event**: {event['summary']}\n"
+        markdown_content += f"  - **Start**: {event['start']}\n"
+        markdown_content += f"  - **End**: {event['end']}\n"
+        markdown_content += f"  - **Description**: {event['description']}\n"
 
-        f.write("\n## Proposed Calendar Events\n")
-        for event in proposed_events:
-            f.write(f"- **Event**: {event['summary']}\n")
-            f.write(f"  - **Start**: {event['start']}\n")
-            f.write(f"  - **End**: {event['end']}\n")
-            f.write(f"  - **Description**: {event['description']}\n")
+    if unscheduled_tasks:
+        markdown_content += "\n## Unscheduled Tasks\n"
+        markdown_content += "*The following tasks could not be scheduled within the days limit due to calendar conflicts:*\n"
+        for ut in unscheduled_tasks:
+            markdown_content += f"- **{ut['title']}** ({ut['duration_hours']}h)\n"
+            if ut["notes"]:
+                markdown_content += f"  - **Notes**: {ut['notes']}\n"
 
-        if unscheduled_tasks:
-            f.write("\n## Unscheduled Tasks\n")
-            f.write(
-                "*The following tasks could not be scheduled within the days limit due to calendar conflicts:*\n"
-            )
-            for ut in unscheduled_tasks:
-                f.write(f"- **{ut['title']}** ({ut['duration_hours']}h)\n")
-                if ut["notes"]:
-                    f.write(f"  - **Notes**: {ut['notes']}\n")
-
+    atomic_write_file(args.proposed_file, markdown_content)
     print(f"Proposed timeline draft successfully written to {args.proposed_file}")
 
 
@@ -639,9 +712,8 @@ def handle_apply(args):
     with open(args.proposed_file, "r") as f:
         lines = f.readlines()
 
+    # Parse and preflight validate
     plan_data = parse_proposed_timeline("".join(lines))
-
-    # Preflight Validation: perform checks BEFORE get_credentials or writing any remote resource
     validation_errors = preflight_validate_timeline(plan_data)
     if validation_errors:
         print(
@@ -748,7 +820,16 @@ def handle_apply(args):
                             .execute()
                         )
                         task_id = created_task["id"]
-                        # Write ID back incrementally (durable local state)
+                    except Exception as e:
+                        print(
+                            f"Error creating task '{task['title']}': {e}",
+                            file=sys.stderr,
+                        )
+                        creation_errors += 1
+                        continue
+
+                    # Attempt to persist state atomically (critical recovery path)
+                    try:
                         update_markdown_file_with_id(
                             args.proposed_file, "task", task_idx_to_update, task_id
                         )
@@ -757,10 +838,18 @@ def handle_apply(args):
                         )
                     except Exception as e:
                         print(
-                            f"Error creating task '{task['title']}': {e}",
+                            f"CRITICAL STATE PERSISTENCE FAILURE after task '{task['title']}' creation: {e}",
                             file=sys.stderr,
                         )
-                        creation_errors += 1
+                        print(
+                            f"The task was successfully created with ID '{task_id}' on Google Tasks,",
+                            file=sys.stderr,
+                        )
+                        print(
+                            "but the local ID mapping could not be saved. Manual reconciliation is needed.",
+                            file=sys.stderr,
+                        )
+                        sys.exit(1)
 
         elif in_events:
             match = re.match(
@@ -789,7 +878,16 @@ def handle_apply(args):
                             .execute()
                         )
                         event_id = created_event["id"]
-                        # Write ID back incrementally (durable local state)
+                    except Exception as e:
+                        print(
+                            f"Error creating event '{event['summary']}': {e}",
+                            file=sys.stderr,
+                        )
+                        creation_errors += 1
+                        continue
+
+                    # Attempt to persist state atomically (critical recovery path)
+                    try:
                         update_markdown_file_with_id(
                             args.proposed_file, "event", event_idx_to_update, event_id
                         )
@@ -798,10 +896,18 @@ def handle_apply(args):
                         )
                     except Exception as e:
                         print(
-                            f"Error creating event '{event['summary']}': {e}",
+                            f"CRITICAL STATE PERSISTENCE FAILURE after event '{event['summary']}' creation: {e}",
                             file=sys.stderr,
                         )
-                        creation_errors += 1
+                        print(
+                            f"The event was successfully created with ID '{event_id}' on Google Calendar,",
+                            file=sys.stderr,
+                        )
+                        print(
+                            "but the local ID mapping could not be saved. Manual reconciliation is needed.",
+                            file=sys.stderr,
+                        )
+                        sys.exit(1)
 
     # 3. Update timeline state in markdown based on partial vs. complete successes
     if creation_errors > 0:
@@ -888,25 +994,27 @@ def handle_status(args):
 
         if in_tasks:
             match = re.match(
-                r"(-\s+\[\s*)([xX]?\s*)(\]\s+\*\*(.*?)\*\*(?:\s*<!--\s*task_id:\s*(\S+)\s*-->)?)",
-                line,
+                r"-\s+\[\s*[xX]?\s*\]\s+\*\*(.*?)\*\*(?:\s*<!--\s*task_id:\s*(\S+)\s*-->)?$",
+                stripped,
             )
             if match:
-                prefix = match.group(1)
-                suffix = match.group(3)
                 task = plan_data["tasks"][current_task_idx]
                 current_task_idx += 1
 
                 if task["id"] and task["id"] in completed_statuses:
                     is_completed = completed_statuses[task["id"]]
                     status_char = "x" if is_completed else " "
-                    line = f"{prefix}{status_char}{suffix}\n"
+                    indent = line[: line.find("-")]
+                    comment_str = (
+                        f" <!-- task_id: {task['id']} -->" if task["id"] else ""
+                    )
+                    line = (
+                        f"{indent}- [{status_char}] **{task['title']}**{comment_str}\n"
+                    )
 
         new_lines.append(line)
 
-    with open(args.proposed_file, "w") as f:
-        f.writelines(new_lines)
-
+    atomic_write_file(args.proposed_file, new_lines)
     print(f"Status sync completed. Updated checklist in {args.proposed_file}")
 
 
