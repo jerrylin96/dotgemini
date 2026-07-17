@@ -294,6 +294,38 @@ def handle_tasks_delete(args):
         sys.exit(1)
 
 
+def handle_tasklists_list(args):
+    """Lists all task lists."""
+    creds = get_credentials()
+    service = build_tasks_service(creds)
+    try:
+        results = service.tasklists().list().execute()
+        items = results.get("items", [])
+        if not items:
+            print("No task lists found.")
+            return
+        for item in items:
+            print(f"ID: {item['id']} | Title: {item['title']}")
+    except HttpError as e:
+        print(f"HTTP Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def handle_tasklists_create(args):
+    """Creates a new task list."""
+    creds = get_credentials()
+    service = build_tasks_service(creds)
+    try:
+        body = {"title": args.title}
+        result = service.tasklists().insert(body=body).execute()
+        print(
+            f"Created Task List ID: {result.get('id')} | Title: {result.get('title')}"
+        )
+    except HttpError as e:
+        print(f"HTTP Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Google Workspace Integration Client.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -371,6 +403,21 @@ def main():
     tasks_delete = tasks_sub.add_parser("delete", help="Delete a task.")
     tasks_delete.add_argument("--task-id", required=True, help="Task ID to delete.")
     tasks_delete.set_defaults(func=handle_tasks_delete)
+
+    # Tasklists subparsers
+    tasklists_parser = subparsers.add_parser(
+        "tasklists", help="Google Task Lists operations."
+    )
+    tasklists_sub = tasklists_parser.add_subparsers(dest="action", required=True)
+
+    tasklists_list = tasklists_sub.add_parser("list", help="List task lists.")
+    tasklists_list.set_defaults(func=handle_tasklists_list)
+
+    tasklists_create = tasklists_sub.add_parser("create", help="Create a task list.")
+    tasklists_create.add_argument(
+        "--title", required=True, help="Title of the task list."
+    )
+    tasklists_create.set_defaults(func=handle_tasklists_create)
 
     args = parser.parse_args()
 

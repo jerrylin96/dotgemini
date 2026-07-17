@@ -89,3 +89,58 @@ Deletes a task.
 ```bash
 python3 ~/.gemini/skills/google-workspace/scripts/workspace_client.py tasks [--tasklist LIST_ID] delete --task-id "TASK_ID"
 ```
+
+---
+
+### 3. Timeline Planner (Goals to Timeline)
+
+A specialized tool to decompose goals into scheduled timelines, resolving calendar conflicts by finding free blocks within working hours (Option B).
+
+#### Step 1: Initialize Goals
+Create a JSON configuration file under `artifacts/goals.json`. Example structure:
+```json
+{
+  "tasklist_title": "Project Alpha",
+  "timezone": "America/New_York",
+  "start_date": "2026-07-18",
+  "days_limit": 14,
+  "working_hours": {
+    "start": "09:00",
+    "end": "17:00"
+  },
+  "tasks": [
+    {
+      "title": "Set up project structure",
+      "duration_hours": 2,
+      "notes": "Create repo, setup venv, configure tools."
+    },
+    {
+      "title": "Implement API endpoints",
+      "duration_hours": 4,
+      "notes": "Build tasklist and calendar integration routes."
+    }
+  ]
+}
+```
+
+#### Step 2: Generate Proposed Timeline
+Generates `artifacts/proposed_timeline.md` by identifying free slots on the primary calendar:
+```bash
+python3 ~/.gemini/skills/google-workspace/scripts/timeline_planner.py plan --goals-file artifacts/goals.json --proposed-file artifacts/proposed_timeline.md
+```
+
+#### Step 3: Review and Edit
+The user reviews and edits `artifacts/proposed_timeline.md` (e.g. adjusting descriptions, due dates, or times).
+
+#### Step 4: Apply Timeline
+Provisions the Google TaskList, Google Tasks, and Google Calendar focus blocks:
+```bash
+python3 ~/.gemini/skills/google-workspace/scripts/timeline_planner.py apply --proposed-file artifacts/proposed_timeline.md --state-file artifacts/timeline_state.json
+```
+
+#### Step 5: Track Status
+Checks task status from Google Tasks and automatically updates the markdown checklist:
+```bash
+python3 ~/.gemini/skills/google-workspace/scripts/timeline_planner.py status --proposed-file artifacts/proposed_timeline.md --state-file artifacts/timeline_state.json
+```
+
