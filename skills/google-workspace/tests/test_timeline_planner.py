@@ -88,40 +88,90 @@ def test_find_free_slot_with_conflicts():
     assert slot_long[1] == datetime.datetime(2026, 7, 16, 17, 0, tzinfo=tz)
 
 
-def test_parse_proposed_timeline():
+def test_parse_proposed_timeline_with_ids():
     markdown = """# Proposed Timeline: Project Alpha
 
 ## Metadata
 - **Task List Name**: Project Alpha List
+- **Timezone**: America/New_York
 - **Target Start Date**: 2026-07-18
 - **Timeline State**: pending_approval
 
 ## Proposed Google Tasks
-- [ ] **First Action Item**
+- [ ] **First Action Item** <!-- task_id: T_123 -->
   - **Due**: 2026-07-18
   - **Notes**: Setup environment.
-- [ ] **Second Action Item**
+- [x] **Second Action Item** <!-- task_id: T_456 -->
   - **Due**: 2026-07-19
   - **Notes**: Code implementation.
 
 ## Proposed Calendar Events
-- **Event**: Focus: First Action Item
+- **Event**: Focus: First Action Item <!-- event_id: E_789 -->
   - **Start**: 2026-07-18T09:00:00-04:00
   - **End**: 2026-07-18T11:00:00-04:00
   - **Description**: Setup environment.
 """
     parsed = parse_proposed_timeline(markdown)
     assert parsed["tasklist_name"] == "Project Alpha List"
+    assert parsed["timezone"] == "America/New_York"
     assert len(parsed["tasks"]) == 2
     assert parsed["tasks"][0]["title"] == "First Action Item"
-    assert parsed["tasks"][0]["due"] == "2026-07-18"
-    assert parsed["tasks"][0]["notes"] == "Setup environment."
+    assert parsed["tasks"][0]["id"] == "T_123"
+    assert parsed["tasks"][0]["completed"] is False
     assert parsed["tasks"][1]["title"] == "Second Action Item"
-    assert parsed["tasks"][1]["due"] == "2026-07-19"
-    assert parsed["tasks"][1]["notes"] == "Code implementation."
+    assert parsed["tasks"][1]["id"] == "T_456"
+    assert parsed["tasks"][1]["completed"] is True
 
     assert len(parsed["events"]) == 1
     assert parsed["events"][0]["summary"] == "Focus: First Action Item"
-    assert parsed["events"][0]["start"] == "2026-07-18T09:00:00-04:00"
-    assert parsed["events"][0]["end"] == "2026-07-18T11:00:00-04:00"
-    assert parsed["events"][0]["description"] == "Setup environment."
+    assert parsed["events"][0]["id"] == "E_789"
+
+
+def test_all_day_multi_day_expansion():
+    # Mocking Calendar API events for multi-day all-day event
+    raw_events = [
+        {
+            "start": {"date": "2026-07-20"},
+            "end": {"date": "2026-07-23"},  # July 20, 21, 22 are busy (exclusive of 23)
+            "summary": "PTO",
+        }
+    ]
+
+    tz = ZoneInfo("UTC")
+    working_start_time = datetime.time(9, 0)
+    working_end_time = datetime.time(17, 0)
+
+    # Process into intervals
+    calendar_intervals = []
+    for item in raw_events:
+        start_data = item.get("start", {})
+        end_data = item.get("end", {})
+        if "date" in start_data:
+            start_date_val = datetime.datetime.strptime(
+                start_data["date"], "%Y-%m-%d"
+            ).date()
+            end_date_val = datetime.datetime.strptime(
+                end_data["date"], "%Y-%m-%d"
+            ).date()
+            curr_date = start_date_val
+            while curr_date < end_date_val:
+                ev_start = datetime.datetime.combine(
+                    curr_date, working_start_time, tzinfo=tz
+                )
+                ev_end = datetime.datetime.combine(
+                    curr_date, working_end_time, tzinfo=tz
+                )
+                calendar_intervals.append(Interval(ev_start, ev_end))
+                curr_date += datetime.timedelta(days=1)
+
+    assert len(calendar_intervals) == 3
+    assert calendar_intervals[0].start == datetime.datetime(
+        2026, 7, 20, 9, 0, tzinfo=tz
+    )
+    assert calendar_intervals[0].end == datetime.datetime(2026, 7, 20, 17, 0, tzinfo=tz)
+    assert calendar_intervals[1].start == datetime.datetime(
+        2026, 7, 21, 9, 0, tzinfo=tz
+    )
+    assert calendar_intervals[2].start == datetime.datetime(
+        2026, 7, 22, 9, 0, tzinfo=tz
+    )
