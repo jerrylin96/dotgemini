@@ -123,3 +123,11 @@ When performing reviews, running tests, or inspecting code in this codebase:
   1. The purpose and expected outcome of the command/action.
   2. Any potential downsides or risks (e.g., data loss, CPU load, external network access).
 * **Auto-Approved Exemption**: Do not explain or use a separate turn for commands or file writes that are whitelisted/auto-approved by default (e.g., `git status`, `git diff`, `git log`, `grep`, `find`, `cat`, `head`, `tail`, virtual environment runs via `python3 ~/.gemini/scripts/run_in_env.py`, or writes to workspace-whitelisted directories). Propose these directly to avoid token bloat and latency.
+
+---
+
+## 9. User-Facing Artifacts
+
+* **Storage Location**: Store any user-facing deliverables, planning timelines, code review specs, or roadmaps intended for user review or manual edits in the `artifacts/` folder at the root of the workspace (e.g., `artifacts/proposed_timeline.md`). Do NOT write these to deep system/cache directories.
+* **Ignored Folder**: Ensure `artifacts/` is in `.gitignore` to prevent session-specific planning state from polluting the Git tree.
+

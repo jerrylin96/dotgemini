@@ -536,6 +536,34 @@ class TestWorkspaceClient(unittest.TestCase):
         with self.assertRaises(SystemExit):
             workspace_client.handle_tasks_delete(args)
 
+    @patch("workspace_client.build_tasks_service")
+    def test_fetch_tasklists_pagination(self, mock_build_service):
+        mock_service = MagicMock()
+        mock_build_service.return_value = mock_service
+
+        call_responses = [
+            {
+                "items": [{"id": "tl1", "title": "TaskList 1"}],
+                "nextPageToken": "token789",
+            },
+            {
+                "items": [{"id": "tl2", "title": "TaskList 2"}],
+            },
+        ]
+        mock_service.tasklists.return_value.list.return_value.execute.side_effect = (
+            call_responses
+        )
+
+        lists = workspace_client.fetch_tasklists(mock_service)
+        self.assertEqual(len(lists), 2)
+        self.assertEqual(lists[0]["id"], "tl1")
+        self.assertEqual(lists[1]["id"], "tl2")
+
+        list_calls = mock_service.tasklists.return_value.list.call_args_list
+        self.assertEqual(len(list_calls), 2)
+        self.assertEqual(list_calls[0][1].get("pageToken"), None)
+        self.assertEqual(list_calls[1][1].get("pageToken"), "token789")
+
 
 if __name__ == "__main__":
     unittest.main()
