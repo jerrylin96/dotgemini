@@ -31,7 +31,11 @@ Two modes, chosen by what the user provides:
 
 ## Execution Steps
 
-1. **Get the Diff**: `git diff <reference_commit_hash>...<commit_hash>` using the hashes from the resolver (or the commit-mode equivalents above). Also collect `git log --oneline <reference_commit_hash>..<commit_hash>` — commit subjects inform the "why".
+1. **Get the Diff Safely**: To prevent terminal command output truncation (which silently trims long diff outputs or lines), do NOT read the raw output of `git diff` directly from the terminal tool. Instead:
+   a. Run `git diff <reference_commit_hash>...<commit_hash> --stat` to see all changed files.
+   b. Save the target diff to a temporary file under the conversation's scratch directory:
+      `git diff <reference_commit_hash>...<commit_hash> -- <file> > <appDataDir>/brain/<conversation-id>/scratch/temp_diff.txt`
+   c. Read the diff file using the `view_file` tool. This guarantees paginated, untruncated access to every hunk.
 2. **Overall Summary**: Open with a short summary of the whole changeset: what it does, why (inferred), and the changes grouped into logical themes (a theme may span files). Include scale (files touched, insertions/deletions).
 3. **Navigation Menu**: Present a numbered menu of changed files — path, `+/-` stats, hunk count, one-line gist — plus:
    - `[a]` walk through every file in order,
