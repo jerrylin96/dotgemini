@@ -9,7 +9,7 @@ Resolve context, generate the diff, and interactively explain it: overall summar
 
 ## Core Rules
 > [!IMPORTANT]
-> - **Read-only**: This skill never modifies the workspace or worktree and never runs tests, linters, or `setup_review_env.py`. Only read files (via the worktree or `git show`).
+> - **Read-only**: This skill never modifies the workspace or worktree and never runs tests, linters, or `setup_review_env.py`. Only read files (via the worktree or `git show`). Creating temporary, ephemeral scratch files under the conversation's scratch directory for diff reading does not violate this rule.
 > - **Neutral, not adversarial**: Describe what changed and why (inferred from code and commit messages). Do not critique or hunt for bugs. If the user asks for issues to be found, suggest switching to `/adversarial-review`.
 > - **Exact hunks**: Quote diff hunks byte-for-byte in fenced `diff` blocks. Explanations may be terse (caveman), hunks may not be paraphrased.
 
@@ -36,6 +36,12 @@ Two modes, chosen by what the user provides:
    b. Save the target diff to a temporary file under the conversation's scratch directory:
       `git diff <reference_commit_hash>...<commit_hash> -- <file> > <appDataDir>/brain/<conversation-id>/scratch/temp_diff.txt`
    c. Read the diff file using the `view_file` tool. This guarantees paginated, untruncated access to every hunk.
+   
+   *Execution Details & Ephemeral Path Resolution:*
+   - Resolve `<appDataDir>` and `<conversation-id>` using the values provided in the agent's system prompt instructions.
+   - Re-add git log collection: Also run `git log --oneline <reference_commit_hash>..<commit_hash>` to retrieve commit subjects that inform the "why" in the overall summary.
+   - For whole-changeset diff needs (summary & navigation menu), save the full diff once via `git diff <reference_commit_hash>...<commit_hash> > <appDataDir>/brain/<conversation-id>/scratch/temp_diff_all.txt`.
+   - Clean up temporary files (e.g. by running `rm <file_path>`) after reading to keep the scratch directory tidy.
 2. **Overall Summary**: Open with a short summary of the whole changeset: what it does, why (inferred), and the changes grouped into logical themes (a theme may span files). Include scale (files touched, insertions/deletions).
 3. **Navigation Menu**: Present a numbered menu of changed files — path, `+/-` stats, hunk count, one-line gist — plus:
    - `[a]` walk through every file in order,
