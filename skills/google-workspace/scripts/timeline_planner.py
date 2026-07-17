@@ -18,6 +18,7 @@ from workspace_client import (
     get_credentials,
     build_calendar_service,
     build_tasks_service,
+    fetch_tasklists,
 )
 
 
@@ -33,10 +34,18 @@ class Interval:
 
 
 def parse_iso_datetime(dt_str):
-    """Parses ISO-8601 datetime strings with timezone offsets/Z."""
+    """Parses ISO-8601 datetime strings, enforcing timezone offsets."""
     if dt_str.endswith("Z"):
         dt_str = dt_str[:-1] + "+00:00"
-    return datetime.datetime.fromisoformat(dt_str)
+    try:
+        dt = datetime.datetime.fromisoformat(dt_str)
+    except ValueError as e:
+        raise ValueError(f"Invalid ISO-8601 format: {e}")
+    if dt.tzinfo is None or dt.utcoffset() is None:
+        raise ValueError(
+            "Timezone offset/timezone indicator is required (e.g. -04:00 or Z). Naive datetimes are not allowed."
+        )
+    return dt
 
 
 def find_free_slot(working_start, working_end, busy_intervals, duration_td):
@@ -99,19 +108,6 @@ def fetch_calendar_events(calendar_service, time_min_iso, time_max_iso):
         if not page_token:
             break
     return events
-
-
-def fetch_tasklists(tasks_service):
-    """Fetches all Google Task Lists with pagination support."""
-    tasklists = []
-    page_token = None
-    while True:
-        result = tasks_service.tasklists().list(pageToken=page_token).execute()
-        tasklists.extend(result.get("items", []))
-        page_token = result.get("nextPageToken")
-        if not page_token:
-            break
-    return tasklists
 
 
 def parse_proposed_timeline(markdown_content):
@@ -222,6 +218,169 @@ def parse_proposed_timeline(markdown_content):
     }
 
 
+def preflight_validate_timeline(plan_data):
+    """Validates the complete parsed Markdown plan before calling Google APIs."""
+    errors = []
+
+    # 1. Validate Metadata
+    tasklist_name = plan_data.get("tasklist_name", "").strip()
+    if not tasklist_name:
+        errors.append("Metadata error: Task List Name cannot be empty.")
+
+    timezone_name = plan_data.get("timezone", "UTC").strip()
+    try:
+        ZoneInfo(timezone_name)
+    except Exception:
+        errors.append(f"Metadata error: Invalid timezone '{timezone_name}'.")
+
+    # 2. Validate Tasks
+    for i, task in enumerate(plan_data.get("tasks", [])):
+        title = task.get("title", "").strip()
+        if not title:
+            errors.append(f"Task error at index {i}: Title cannot be empty.")
+
+        due = task.get("due", "").strip()
+        if not due:
+            errors.append(f"Task '{title}' error: Due date cannot be empty.")
+        else:
+            try:
+                datetime.datetime.strptime(due, "%Y-%m-%d")
+            except ValueError:
+                errors.append(
+                    f"Task '{title}' error: Due date '{due}' must be in YYYY-MM-DD format."
+                )
+
+    # 3. Validate Events
+    for i, event in enumerate(plan_data.get("events", [])):
+        summary = event.get("summary", "").strip()
+        if not summary:
+            errors.append(f"Event error at index {i}: Summary cannot be empty.")
+
+        start_str = event.get("start", "").strip()
+        end_str = event.get("end", "").strip()
+
+        if not start_str:
+            errors.append(f"Event '{summary}' error: Start time is missing.")
+        if not end_str:
+            errors.append(f"Event '{summary}' error: End time is missing.")
+
+        start_dt = None
+        end_dt = None
+
+        if start_str:
+            try:
+                start_dt = parse_iso_datetime(start_str)
+            except ValueError as e:
+                errors.append(
+                    f"Event '{summary}' error: Start time '{start_str}' is invalid: {e}"
+                )
+
+        if end_str:
+            try:
+                end_dt = parse_iso_datetime(end_str)
+            except ValueError as e:
+                errors.append(
+                    f"Event '{summary}' error: End time '{end_str}' is invalid: {e}"
+                )
+
+        if start_dt and end_dt:
+            if end_dt <= start_dt:
+                errors.append(
+                    f"Event '{summary}' error: End time '{end_str}' must be strictly after start time '{start_str}'."
+                )
+
+    return errors
+
+
+def update_markdown_file_with_id(file_path, match_type, item_index, resource_id):
+    """Rewrites the markdown file, appending the resource ID to the target item."""
+    with open(file_path, "r") as f:
+        lines = f.readlines()
+
+    new_lines = []
+    current_idx = 0
+    in_section = False
+
+    for line in lines:
+        stripped = line.strip()
+        if match_type == "task":
+            if stripped.startswith("## Proposed Google Tasks"):
+                in_section = True
+            elif stripped.startswith("## "):
+                in_section = False
+
+            if in_section:
+                match = re.match(
+                    r"(-\s+\[\s*[xX]?\s*\]\s+\*\*(.*?)\*\*)(?:\s*<!--\s*task_id:\s*(\S+)\s*-->)?$",
+                    stripped,
+                )
+                if match:
+                    if current_idx == item_index:
+                        line = line.rstrip("\n")
+                        line = re.sub(r"\s*<!--\s*task_id:\s*\S+\s*-->", "", line)
+                        line = line + f" <!-- task_id: {resource_id} -->\n"
+                    current_idx += 1
+        elif match_type == "event":
+            if stripped.startswith("## Proposed Calendar Events"):
+                in_section = True
+            elif stripped.startswith("## "):
+                in_section = False
+
+            if in_section:
+                match = re.match(
+                    r"(-\s+\*\*Event\*\*:\s*(.*?))(?:\s*<!--\s*event_id:\s*(\S+)\s*-->)?$",
+                    stripped,
+                )
+                if match:
+                    if current_idx == item_index:
+                        line = line.rstrip("\n")
+                        line = re.sub(r"\s*<!--\s*event_id:\s*\S+\s*-->", "", line)
+                        line = line + f" <!-- event_id: {resource_id} -->\n"
+                    current_idx += 1
+
+        new_lines.append(line)
+
+    with open(file_path, "w") as f:
+        f.writelines(new_lines)
+
+
+def update_markdown_state(file_path, new_state):
+    """Updates the Timeline State metadata line in the markdown file."""
+    with open(file_path, "r") as f:
+        lines = f.readlines()
+
+    new_lines = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("- **Timeline State**:") or stripped.startswith(
+            "- \\*\\*Timeline State\\*\\*:"
+        ):
+            line = f"- **Timeline State**: {new_state}\n"
+        new_lines.append(line)
+
+    with open(file_path, "w") as f:
+        f.writelines(new_lines)
+
+
+def update_json_state_file(state_file_path, tasklist_id, task_id=None, event_id=None):
+    """Incrementally updates the JSON state file with the new IDs."""
+    state = {"tasklist_id": tasklist_id, "task_ids": [], "event_ids": []}
+    if os.path.exists(state_file_path):
+        try:
+            with open(state_file_path, "r") as f:
+                state = json.load(f)
+        except Exception:
+            pass
+
+    if task_id and task_id not in state["task_ids"]:
+        state["task_ids"].append(task_id)
+    if event_id and event_id not in state["event_ids"]:
+        state["event_ids"].append(event_id)
+
+    with open(state_file_path, "w") as f:
+        json.dump(state, f, indent=2)
+
+
 def handle_plan(args):
     """Computes free calendar slots and drafts proposed_timeline.md."""
     if not os.path.exists(args.goals_file):
@@ -298,17 +457,23 @@ def handle_plan(args):
             )
             sys.exit(1)
 
-    # 2. Resolve start date & planning horizon
+    # 2. Resolve start date & planning horizon (clamped to today if past start_date is supplied)
     start_date_str = data.get("start_date")
     now_local = datetime.datetime.now(tz)
+    today = now_local.date()
     if start_date_str:
         try:
             start_date = datetime.datetime.strptime(start_date_str, "%Y-%m-%d").date()
         except ValueError:
             print("Error: start_date must be in YYYY-MM-DD format.", file=sys.stderr)
             sys.exit(1)
+        if start_date < today:
+            print(
+                f"Warning: start_date {start_date} is in the past. Clamping to today: {today}"
+            )
+            start_date = today
     else:
-        start_date = now_local.date()
+        start_date = today
 
     # 3. Fetch Calendar Busy Times
     creds = get_credentials()
@@ -328,11 +493,6 @@ def handle_plan(args):
         if item.get("transparency") == "transparent":
             continue
 
-        # Skip events containing common reminder/birthday keywords in the summary
-        summary = item.get("summary", "").lower()
-        if any(kw in summary for kw in ["birthday", "bday", "anniversary", "reminder"]):
-            continue
-
         start_data = item.get("start", {})
         end_data = item.get("end", {})
 
@@ -344,9 +504,16 @@ def handle_plan(args):
             end_date_val = datetime.datetime.strptime(
                 end_data["date"], "%Y-%m-%d"
             ).date()
-            # Expand busy times across multi-day range [start.date, end.date)
-            curr_date = start_date_val
-            while curr_date < end_date_val:
+
+            # Intersect with the planning horizon range to avoid large out-of-bounds loops
+            horizon_start = start_date
+            horizon_end = start_date + datetime.timedelta(days=days_limit)
+
+            intersect_start = max(start_date_val, horizon_start)
+            intersect_end = min(end_date_val, horizon_end)
+
+            curr_date = intersect_start
+            while curr_date < intersect_end:
                 ev_start = datetime.datetime.combine(
                     curr_date, working_start_time, tzinfo=tz
                 )
@@ -469,6 +636,22 @@ def handle_apply(args):
         )
         sys.exit(1)
 
+    with open(args.proposed_file, "r") as f:
+        lines = f.readlines()
+
+    plan_data = parse_proposed_timeline("".join(lines))
+
+    # Preflight Validation: perform checks BEFORE get_credentials or writing any remote resource
+    validation_errors = preflight_validate_timeline(plan_data)
+    if validation_errors:
+        print(
+            "Preflight Validation Failed! Correct issues before applying:",
+            file=sys.stderr,
+        )
+        for error in validation_errors:
+            print(f"- {error}", file=sys.stderr)
+        sys.exit(1)
+
     # Explicit Safety Confirmation
     if not args.confirm:
         print(
@@ -479,23 +662,10 @@ def handle_apply(args):
             print("Abort.")
             sys.exit(0)
 
-    with open(args.proposed_file, "r") as f:
-        lines = f.readlines()
-
-    plan_data = parse_proposed_timeline("".join(lines))
-
-    # Validation: working range end after start, start/end date timezone offsets
+    # Setup timezones & API connection
     timezone_name = plan_data["timezone"]
-    try:
-        tz = ZoneInfo(timezone_name)
-    except Exception:
-        print(
-            f"Error: Invalid timezone '{timezone_name}' in markdown metadata.",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+    tz = ZoneInfo(timezone_name)
 
-    # Offset extraction for Google Tasks due dates (non-UTC offset shifts)
     now_local = datetime.datetime.now(tz)
     tz_offset_str = now_local.strftime("%z")
     if tz_offset_str and len(tz_offset_str) == 5:
@@ -526,43 +696,40 @@ def handle_apply(args):
     else:
         print(f"Using existing task list: {tasklist_name} (ID: {tasklist_id})")
 
-    # 2. Iterate and create Tasks/Events in place in the markdown (Idempotent & Edit-Resilient)
-    new_lines = []
+    # 2. Iterate and create Tasks/Events, writing back incrementally after each creation
     current_task_idx = 0
     current_event_idx = 0
+    creation_errors = 0
 
     in_tasks = False
     in_events = False
 
-    for line in lines:
+    for idx, line in enumerate(lines):
         stripped = line.strip()
         if not stripped:
-            new_lines.append(line)
             continue
 
         if stripped.startswith("## Proposed Google Tasks"):
             in_tasks = True
             in_events = False
-            new_lines.append(line)
             continue
         elif stripped.startswith("## Proposed Calendar Events"):
             in_tasks = False
             in_events = True
-            new_lines.append(line)
             continue
         elif stripped.startswith("## "):
             in_tasks = False
             in_events = False
-            new_lines.append(line)
             continue
 
         if in_tasks:
             match = re.match(
-                r"(-\s+\[\s*[xX]?\s*\]\s+\*\*(.*?)\*\*)(?:\s*<!--\s*task_id:\s*(\S+)\s*-->)?",
+                r"-\s+\[\s*[xX]?\s*\]\s+\*\*(.*?)\*\*(?:\s*<!--\s*task_id:\s*(\S+)\s*-->)?$",
                 stripped,
             )
             if match:
                 task = plan_data["tasks"][current_task_idx]
+                task_idx_to_update = current_task_idx
                 current_task_idx += 1
 
                 if not task["id"]:
@@ -581,36 +748,32 @@ def handle_apply(args):
                             .execute()
                         )
                         task_id = created_task["id"]
-                        line = line.rstrip("\n") + f" <!-- task_id: {task_id} -->\n"
+                        # Write ID back incrementally (durable local state)
+                        update_markdown_file_with_id(
+                            args.proposed_file, "task", task_idx_to_update, task_id
+                        )
+                        update_json_state_file(
+                            args.state_file, tasklist_id, task_id=task_id
+                        )
                     except Exception as e:
                         print(
                             f"Error creating task '{task['title']}': {e}",
                             file=sys.stderr,
                         )
-            new_lines.append(line)
+                        creation_errors += 1
 
         elif in_events:
             match = re.match(
-                r"(-\s+\*\*Event\*\*:\s*(.*?))(?:\s*<!--\s*event_id:\s*(\S+)\s*-->)?",
+                r"-\s+\*\*Event\*\*:\s*(.*?)(?:\s*<!--\s*event_id:\s*(\S+)\s*-->)?$",
                 stripped,
             )
             if match:
                 event = plan_data["events"][current_event_idx]
+                event_idx_to_update = current_event_idx
                 current_event_idx += 1
 
                 if not event["id"]:
                     print(f"Creating Calendar Event: {event['summary']}")
-                    # Validate timestamps have timezone offset
-                    try:
-                        parse_iso_datetime(event["start"])
-                        parse_iso_datetime(event["end"])
-                    except ValueError as e:
-                        print(
-                            f"Error: Invalid event time format for '{event['summary']}': {e}",
-                            file=sys.stderr,
-                        )
-                        sys.exit(1)
-
                     event_body = {
                         "summary": event["summary"],
                         "start": {"dateTime": event["start"]},
@@ -626,38 +789,31 @@ def handle_apply(args):
                             .execute()
                         )
                         event_id = created_event["id"]
-                        line = line.rstrip("\n") + f" <!-- event_id: {event_id} -->\n"
+                        # Write ID back incrementally (durable local state)
+                        update_markdown_file_with_id(
+                            args.proposed_file, "event", event_idx_to_update, event_id
+                        )
+                        update_json_state_file(
+                            args.state_file, tasklist_id, event_id=event_id
+                        )
                     except Exception as e:
                         print(
                             f"Error creating event '{event['summary']}': {e}",
                             file=sys.stderr,
                         )
-            new_lines.append(line)
-        else:
-            # Metadata or state lines
-            if stripped.startswith("- **Timeline State**:") or stripped.startswith(
-                "- \\*\\*Timeline State\\*\\*:"
-            ):
-                line = "- **Timeline State**: applied\n"
-            new_lines.append(line)
+                        creation_errors += 1
 
-    # Save modified proposed_timeline.md back
-    with open(args.proposed_file, "w") as f:
-        f.writelines(new_lines)
-
-    # Collect created IDs for backwards compatible JSON state file
-    updated_plan_data = parse_proposed_timeline("".join(new_lines))
-    state = {
-        "tasklist_id": tasklist_id,
-        "task_ids": [t["id"] for t in updated_plan_data["tasks"] if t["id"]],
-        "event_ids": [e["id"] for e in updated_plan_data["events"] if e["id"]],
-    }
-
-    os.makedirs(os.path.dirname(os.path.abspath(args.state_file)), exist_ok=True)
-    with open(args.state_file, "w") as f:
-        json.dump(state, f, indent=2)
-
-    print(f"Timeline successfully applied! State saved to {args.state_file}")
+    # 3. Update timeline state in markdown based on partial vs. complete successes
+    if creation_errors > 0:
+        print(
+            f"Apply finished with {creation_errors} failure(s). Marked state as partially_applied.",
+            file=sys.stderr,
+        )
+        update_markdown_state(args.proposed_file, "partially_applied")
+        sys.exit(1)
+    else:
+        update_markdown_state(args.proposed_file, "applied")
+        print(f"Timeline successfully applied! State saved to {args.state_file}")
 
 
 def handle_status(args):

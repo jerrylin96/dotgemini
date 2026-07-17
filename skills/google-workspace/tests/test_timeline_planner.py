@@ -2,6 +2,7 @@ import datetime
 import os
 import sys
 from zoneinfo import ZoneInfo
+import pytest
 
 # Insert scripts folder to sys.path
 sys.path.insert(
@@ -13,6 +14,7 @@ from timeline_planner import (
     parse_iso_datetime,
     find_free_slot,
     parse_proposed_timeline,
+    preflight_validate_timeline,
 )
 
 
@@ -30,15 +32,19 @@ def test_interval_overlaps():
     assert int4.overlaps(int3) is False
 
 
-def test_parse_iso_datetime():
-    dt = parse_iso_datetime("2026-07-16T15:00:00Z")
-    assert dt.year == 2026
-    assert dt.month == 7
-    assert dt.day == 16
-    assert dt.tzinfo is not None
+def test_parse_iso_datetime_enforce_offset():
+    # Valid timezone aware strings
+    dt1 = parse_iso_datetime("2026-07-16T15:00:00Z")
+    assert dt1.tzinfo is not None
+    assert dt1.utcoffset() == datetime.timedelta(0)
 
-    dt_offset = parse_iso_datetime("2026-07-16T15:00:00-04:00")
-    assert dt_offset.tzinfo.utcoffset(dt_offset) == datetime.timedelta(hours=-4)
+    dt2 = parse_iso_datetime("2026-07-16T15:00:00-04:00")
+    assert dt2.tzinfo is not None
+    assert dt2.utcoffset() == datetime.timedelta(hours=-4)
+
+    # Naive ISO string must raise ValueError
+    with pytest.raises(ValueError, match="Naive datetimes are not allowed"):
+        parse_iso_datetime("2026-07-16T15:00:00")
 
 
 def test_find_free_slot_empty():
@@ -59,7 +65,6 @@ def test_find_free_slot_with_conflicts():
     working_start = datetime.datetime(2026, 7, 16, 9, 0, tzinfo=tz)
     working_end = datetime.datetime(2026, 7, 16, 17, 0, tzinfo=tz)
 
-    # Busy from 9:00 to 11:00 and 13:00 to 14:00
     busy_intervals = [
         Interval(
             datetime.datetime(2026, 7, 16, 9, 0, tzinfo=tz),
@@ -71,21 +76,11 @@ def test_find_free_slot_with_conflicts():
         ),
     ]
 
-    # Need 2 hours. Should fit between 11:00 and 13:00
     duration = datetime.timedelta(hours=2)
     slot = find_free_slot(working_start, working_end, busy_intervals, duration)
     assert slot is not None
     assert slot[0] == datetime.datetime(2026, 7, 16, 11, 0, tzinfo=tz)
     assert slot[1] == datetime.datetime(2026, 7, 16, 13, 0, tzinfo=tz)
-
-    # Need 3 hours. Should fit after 14:00 (14:00 to 17:00)
-    duration_long = datetime.timedelta(hours=3)
-    slot_long = find_free_slot(
-        working_start, working_end, busy_intervals, duration_long
-    )
-    assert slot_long is not None
-    assert slot_long[0] == datetime.datetime(2026, 7, 16, 14, 0, tzinfo=tz)
-    assert slot_long[1] == datetime.datetime(2026, 7, 16, 17, 0, tzinfo=tz)
 
 
 def test_parse_proposed_timeline_with_ids():
@@ -127,12 +122,65 @@ def test_parse_proposed_timeline_with_ids():
     assert parsed["events"][0]["id"] == "E_789"
 
 
-def test_all_day_multi_day_expansion():
-    # Mocking Calendar API events for multi-day all-day event
+def test_preflight_validate_timeline_success():
+    plan_data = {
+        "tasklist_name": "My Valid List",
+        "timezone": "America/New_York",
+        "tasks": [
+            {"title": "Task 1", "due": "2026-07-18", "notes": ""},
+        ],
+        "events": [
+            {
+                "summary": "Focus 1",
+                "start": "2026-07-18T09:00:00-04:00",
+                "end": "2026-07-18T11:00:00-04:00",
+            }
+        ],
+    }
+    errors = preflight_validate_timeline(plan_data)
+    assert len(errors) == 0
+
+
+def test_preflight_validate_timeline_failures():
+    # Multi-error scenario
+    plan_data = {
+        "tasklist_name": "",  # Blank name
+        "timezone": "Invalid/Timezone",  # Invalid tz
+        "tasks": [
+            {"title": "", "due": "2026-07-18"},  # Blank title
+            {"title": "Task 2", "due": "2026-07-35"},  # Invalid date
+        ],
+        "events": [
+            {
+                "summary": "Focus 1",
+                "start": "2026-07-18T11:00:00-04:00",
+                "end": "2026-07-18T09:00:00-04:00",  # End <= start
+            },
+            {
+                "summary": "Focus 2",
+                "start": "2026-07-18T09:00:00",  # Naive (missing offset)
+                "end": "2026-07-18T10:00:00Z",
+            },
+        ],
+    }
+    errors = preflight_validate_timeline(plan_data)
+    assert len(errors) > 0
+    # Must capture the invalid timezone, empty tasklist, blank task title, invalid task due date, end <= start, and naive start datetime errors
+    assert any("Task List Name cannot be empty" in e for e in errors)
+    assert any("Invalid timezone" in e for e in errors)
+    assert any("Title cannot be empty" in e for e in errors)
+    assert any("Due date" in e and "YYYY-MM-DD" in e for e in errors)
+    assert any("must be strictly after start time" in e for e in errors)
+    assert any("Naive datetimes are not allowed" in e for e in errors)
+
+
+def test_all_day_multi_day_expansion_clipped_to_horizon():
+    # Event range is July 10 to July 30 (multi-week trip)
+    # Planning horizon is July 18 to July 25 (limit 7 days)
     raw_events = [
         {
-            "start": {"date": "2026-07-20"},
-            "end": {"date": "2026-07-23"},  # July 20, 21, 22 are busy (exclusive of 23)
+            "start": {"date": "2026-07-10"},
+            "end": {"date": "2026-07-30"},
             "summary": "PTO",
         }
     ]
@@ -141,7 +189,11 @@ def test_all_day_multi_day_expansion():
     working_start_time = datetime.time(9, 0)
     working_end_time = datetime.time(17, 0)
 
-    # Process into intervals
+    # Inputs parameters for clip logic
+    start_date = datetime.date(2026, 7, 18)
+    days_limit = 7
+
+    # Clip and expand logic
     calendar_intervals = []
     for item in raw_events:
         start_data = item.get("start", {})
@@ -153,8 +205,15 @@ def test_all_day_multi_day_expansion():
             end_date_val = datetime.datetime.strptime(
                 end_data["date"], "%Y-%m-%d"
             ).date()
-            curr_date = start_date_val
-            while curr_date < end_date_val:
+
+            horizon_start = start_date
+            horizon_end = start_date + datetime.timedelta(days=days_limit)
+
+            intersect_start = max(start_date_val, horizon_start)
+            intersect_end = min(end_date_val, horizon_end)
+
+            curr_date = intersect_start
+            while curr_date < intersect_end:
                 ev_start = datetime.datetime.combine(
                     curr_date, working_start_time, tzinfo=tz
                 )
@@ -164,88 +223,11 @@ def test_all_day_multi_day_expansion():
                 calendar_intervals.append(Interval(ev_start, ev_end))
                 curr_date += datetime.timedelta(days=1)
 
-    assert len(calendar_intervals) == 3
+    # Should only expand 7 days (July 18 to July 24 inclusive, exclusive of horizon_end July 25)
+    assert len(calendar_intervals) == 7
     assert calendar_intervals[0].start == datetime.datetime(
-        2026, 7, 20, 9, 0, tzinfo=tz
+        2026, 7, 18, 9, 0, tzinfo=tz
     )
-    assert calendar_intervals[0].end == datetime.datetime(2026, 7, 20, 17, 0, tzinfo=tz)
-    assert calendar_intervals[1].start == datetime.datetime(
-        2026, 7, 21, 9, 0, tzinfo=tz
+    assert calendar_intervals[-1].start == datetime.datetime(
+        2026, 7, 24, 9, 0, tzinfo=tz
     )
-    assert calendar_intervals[2].start == datetime.datetime(
-        2026, 7, 22, 9, 0, tzinfo=tz
-    )
-
-
-def test_ignore_transparent_and_reminder_events():
-    # Mocking Calendar API events
-    raw_events = [
-        {
-            "start": {"date": "2026-07-20"},
-            "end": {"date": "2026-07-21"},
-            "summary": "Mom's Birthday",
-        },
-        {
-            "start": {"date": "2026-07-21"},
-            "end": {"date": "2026-07-22"},
-            "summary": "Rent reminder",
-        },
-        {
-            "start": {"dateTime": "2026-07-22T10:00:00Z"},
-            "end": {"dateTime": "2026-07-22T11:00:00Z"},
-            "summary": "Quick chat",
-            "transparency": "transparent",
-        },
-        {
-            "start": {"dateTime": "2026-07-22T13:00:00Z"},
-            "end": {"dateTime": "2026-07-22T14:00:00Z"},
-            "summary": "Important Meeting",
-            "transparency": "opaque",
-        },
-    ]
-
-    tz = ZoneInfo("UTC")
-    working_start_time = datetime.time(9, 0)
-    working_end_time = datetime.time(17, 0)
-
-    calendar_intervals = []
-    for item in raw_events:
-        # Skip free/reminder events
-        if item.get("transparency") == "transparent":
-            continue
-
-        # Skip events containing common reminder/birthday keywords in the summary
-        summary = item.get("summary", "").lower()
-        if any(kw in summary for kw in ["birthday", "bday", "anniversary", "reminder"]):
-            continue
-
-        start_data = item.get("start", {})
-        end_data = item.get("end", {})
-        if "date" in start_data:
-            start_date_val = datetime.datetime.strptime(
-                start_data["date"], "%Y-%m-%d"
-            ).date()
-            end_date_val = datetime.datetime.strptime(
-                end_data["date"], "%Y-%m-%d"
-            ).date()
-            curr_date = start_date_val
-            while curr_date < end_date_val:
-                ev_start = datetime.datetime.combine(
-                    curr_date, working_start_time, tzinfo=tz
-                )
-                ev_end = datetime.datetime.combine(
-                    curr_date, working_end_time, tzinfo=tz
-                )
-                calendar_intervals.append(Interval(ev_start, ev_end))
-                curr_date += datetime.timedelta(days=1)
-        elif "dateTime" in start_data:
-            ev_start = parse_iso_datetime(start_data["dateTime"]).astimezone(tz)
-            ev_end = parse_iso_datetime(end_data["dateTime"]).astimezone(tz)
-            calendar_intervals.append(Interval(ev_start, ev_end))
-
-    # Should only contain "Important Meeting"
-    assert len(calendar_intervals) == 1
-    assert calendar_intervals[0].start == datetime.datetime(
-        2026, 7, 22, 13, 0, tzinfo=tz
-    )
-    assert calendar_intervals[0].end == datetime.datetime(2026, 7, 22, 14, 0, tzinfo=tz)

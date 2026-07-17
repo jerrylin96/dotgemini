@@ -52,6 +52,19 @@ def build_tasks_service(credentials):
     return build("tasks", "v1", credentials=credentials)
 
 
+def fetch_tasklists(service):
+    """Fetches all task lists using pagination."""
+    tasklists = []
+    page_token = None
+    while True:
+        results = service.tasklists().list(pageToken=page_token).execute()
+        tasklists.extend(results.get("items", []))
+        page_token = results.get("nextPageToken")
+        if not page_token:
+            break
+    return tasklists
+
+
 def handle_auth_check(args):
     """Checks authentication status and scope validity."""
     creds = get_credentials()
@@ -299,8 +312,7 @@ def handle_tasklists_list(args):
     creds = get_credentials()
     service = build_tasks_service(creds)
     try:
-        results = service.tasklists().list().execute()
-        items = results.get("items", [])
+        items = fetch_tasklists(service)
         if not items:
             print("No task lists found.")
             return
