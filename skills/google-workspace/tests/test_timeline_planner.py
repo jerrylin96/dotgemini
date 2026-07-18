@@ -18,6 +18,7 @@ from timeline_planner import (
     preflight_validate_timeline,
     handle_apply,
     handle_status,
+    resolve_artifact_path,
 )
 
 
@@ -449,3 +450,64 @@ def test_handle_status_duplicate_titles_sync_independently(
     updated_content = proposed_file.read_text()
     assert "- [x] **Duplicate Task** <!-- task_id: T_1 -->" in updated_content
     assert "- [ ] **Duplicate Task** <!-- task_id: T_2 -->" in updated_content
+
+
+def test_resolve_artifact_path(tmp_path, monkeypatch):
+    # 1. Non-artifact path remains unchanged
+    assert resolve_artifact_path("src/main.py") == "src/main.py"
+    assert resolve_artifact_path("foo/artifacts/bar.json") == "foo/artifacts/bar.json"
+    
+    # 2. Artifact path with no vault config remains unchanged
+    monkeypatch.delenv("ANTIGRAVITY_OBSIDIAN_VAULT", raising=False)
+    with mock.patch("os.path.exists", return_value=False), \
+         mock.patch("os.path.isdir", return_value=False):
+        assert resolve_artifact_path("artifacts/goals.json") == "artifacts/goals.json"
+        
+    # 3. Env var configuration
+    vault = tmp_path / "my_vault"
+    monkeypatch.setenv("ANTIGRAVITY_OBSIDIAN_VAULT", str(vault))
+    with mock.patch("os.getcwd", return_value="/workspace/ClimateShift-Alpha"), \
+         mock.patch("subprocess.check_output", return_value=b"/workspace/ClimateShift-Alpha"):
+        resolved = resolve_artifact_path("artifacts/sub/dir/goals.json")
+        expected = os.path.join(str(vault), "Projects", "ClimateShift-Alpha", "sub/dir/goals.json")
+        assert os.path.normpath(resolved) == os.path.normpath(expected)
+        assert os.path.isdir(os.path.dirname(resolved))
+
+    # 4. settings.json configuration
+    monkeypatch.delenv("ANTIGRAVITY_OBSIDIAN_VAULT", raising=False)
+    fake_settings = {"obsidian_vault_path": str(vault)}
+    
+    def mock_exists(path):
+        if "settings.json" in path:
+            return True
+        return False
+        
+    import json
+    mock_open_settings = mock.mock_open(read_data=json.dumps(fake_settings))
+    
+    with mock.patch("os.path.exists", side_effect=mock_exists), \
+         mock.patch("builtins.open", mock_open_settings), \
+         mock.patch("os.getcwd", return_value="/workspace/ClimateShift-Alpha"), \
+         mock.patch("subprocess.check_output", return_value=b"/workspace/ClimateShift-Alpha"):
+        resolved = resolve_artifact_path("artifacts/goals.json")
+        expected = os.path.join(str(vault), "Projects", "ClimateShift-Alpha", "goals.json")
+        assert os.path.normpath(resolved) == os.path.normpath(expected)
+        
+    # 5. Fallback directory exists
+    fallback_vault = tmp_path / "fallback_vault"
+    fallback_vault.mkdir()
+    
+    def mock_isdir(path):
+        if "fallback_vault" in path:
+            return True
+        return False
+        
+    with mock.patch("os.path.exists", return_value=False), \
+         mock.patch("os.path.isdir", side_effect=mock_isdir), \
+         mock.patch("os.path.expanduser", side_effect=lambda p: str(fallback_vault) if "Desktop" in p else p), \
+         mock.patch("os.getcwd", return_value="/workspace/ClimateShift-Alpha"), \
+         mock.patch("subprocess.check_output", return_value=b"/workspace/ClimateShift-Alpha"):
+        resolved = resolve_artifact_path("artifacts/goals.json")
+        expected = os.path.join(str(fallback_vault), "Projects", "ClimateShift-Alpha", "goals.json")
+        assert os.path.normpath(resolved) == os.path.normpath(expected)
+

@@ -1018,6 +1018,55 @@ def handle_status(args):
     print(f"Status sync completed. Updated checklist in {args.proposed_file}")
 
 
+def resolve_artifact_path(path):
+    """Resolves artifact paths to an Obsidian Vault if configured."""
+    if not path:
+        return path
+    
+    normalized_path = os.path.normpath(path)
+    parts = normalized_path.split(os.sep)
+    if parts[0] != "artifacts":
+        return path
+
+    vault_path = os.environ.get("ANTIGRAVITY_OBSIDIAN_VAULT")
+
+    if not vault_path:
+        settings_path = os.path.expanduser("~/.gemini/antigravity-cli/settings.json")
+        if os.path.exists(settings_path):
+            try:
+                with open(settings_path, "r") as f:
+                    settings = json.load(f)
+                    vault_path = settings.get("obsidian_vault_path")
+            except Exception:
+                pass
+
+    if not vault_path:
+        for fallback in ["~/Desktop/antigravity_vault", "~/Documents/antigravity_vault"]:
+            expanded = os.path.expanduser(fallback)
+            if os.path.isdir(expanded):
+                vault_path = expanded
+                break
+
+    if not vault_path:
+        return path
+
+    project_name = os.path.basename(os.getcwd())
+    try:
+        import subprocess
+        git_root = subprocess.check_output(
+            ["git", "rev-parse", "--show-toplevel"], cwd=os.getcwd(), stderr=subprocess.DEVNULL
+        ).decode().strip()
+        project_name = os.path.basename(git_root)
+    except Exception:
+        pass
+
+    relative_part = os.sep.join(parts[1:])
+    resolved = os.path.join(vault_path, "Projects", project_name, relative_part)
+    
+    os.makedirs(os.path.dirname(resolved), exist_ok=True)
+    return resolved
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Google Workspace Timeline Planner CLI."
@@ -1078,6 +1127,12 @@ def main():
     status_parser.set_defaults(func=handle_status)
 
     args = parser.parse_args()
+    
+    # Resolve artifacts paths dynamically to support Obsidian Vault
+    for attr in ["goals_file", "proposed_file", "state_file"]:
+        if hasattr(args, attr):
+            setattr(args, attr, resolve_artifact_path(getattr(args, attr)))
+
     args.func(args)
 
 
