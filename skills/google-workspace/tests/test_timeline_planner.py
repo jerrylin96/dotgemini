@@ -583,6 +583,13 @@ def test_resolve_artifact_path(tmp_path, monkeypatch):
         resolved = resolve_artifact_path("artifacts/goals.json")
         assert resolved == "artifacts/goals.json"
 
+    # C. True (invalid config type safety check)
+    settings_file.write_text(json.dumps({"obsidian_vault_path": True}))
+    with mock.patch("os.getcwd", return_value="/workspace/ClimateShift-Alpha"), \
+         mock.patch("os.path.isdir", return_value=True):
+        resolved = resolve_artifact_path("artifacts/goals.json")
+        assert resolved == "artifacts/goals.json"
+
     settings_file.unlink()
 
     # 6. Fallback directories lookup
@@ -596,5 +603,30 @@ def test_resolve_artifact_path(tmp_path, monkeypatch):
          mock.patch("os.getcwd", return_value="/workspace/ClimateShift-Alpha"):
         resolved = resolve_artifact_path("artifacts/goals.json")
         expected = os.path.join(str(desktop_vault), "Projects", "ClimateShift-Alpha", "goals.json")
+        assert os.path.normpath(resolved) == os.path.normpath(expected)
+
+    # 7. Symlink resolution check
+    real_dir = tmp_path / "real_project"
+    real_dir.mkdir()
+    symlink_dir = tmp_path / "symlink_project"
+    try:
+        os.symlink(str(real_dir), str(symlink_dir))
+    except (OSError, NotImplementedError):
+        return
+
+    timeline_planner.get_project_info.cache_clear()
+    
+    def mock_check_output_symlink(cmd, cwd=None, stderr=None):
+        if "rev-parse" in cmd:
+            return str(real_dir).encode()
+        return b""
+    monkeypatch.setattr("subprocess.check_output", mock_check_output_symlink)
+    
+    monkeypatch.setenv("ANTIGRAVITY_OBSIDIAN_VAULT", str(vault))
+    symlinked_artifact_path = os.path.join(str(symlink_dir), "artifacts", "goals.json")
+    
+    with mock.patch("os.getcwd", return_value=str(symlink_dir)):
+        resolved = resolve_artifact_path(symlinked_artifact_path)
+        expected = os.path.join(str(vault), "Projects", os.path.basename(str(real_dir)), "goals.json")
         assert os.path.normpath(resolved) == os.path.normpath(expected)
 

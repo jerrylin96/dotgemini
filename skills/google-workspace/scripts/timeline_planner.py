@@ -1046,8 +1046,10 @@ def resolve_artifact_path(path):
     
     git_root, project_name = get_project_info(os.path.realpath(os.getcwd()))
     local_artifacts_dir = os.path.join(git_root, "artifacts")
-    
-    abs_incoming = os.path.abspath(path)
+    incoming_abs = path
+    if not os.path.isabs(incoming_abs):
+        incoming_abs = os.path.join(os.getcwd(), incoming_abs)
+    abs_incoming = os.path.realpath(incoming_abs)
     is_artifact = False
     if abs_incoming == local_artifacts_dir:
         is_artifact = True
@@ -1076,7 +1078,10 @@ def resolve_artifact_path(path):
     if vault_path == "" or vault_path is False:
         return path
 
-    if isinstance(vault_path, str):
+    if vault_path is not None and not isinstance(vault_path, str):
+        return path
+
+    if vault_path is not None:
         vault_path = os.path.expanduser(vault_path)
 
     if not vault_path:
