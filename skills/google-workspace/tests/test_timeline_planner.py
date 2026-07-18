@@ -18,6 +18,7 @@ from timeline_planner import (
     preflight_validate_timeline,
     handle_apply,
     handle_status,
+    resolve_artifact_path,
 )
 
 
@@ -449,3 +450,183 @@ def test_handle_status_duplicate_titles_sync_independently(
     updated_content = proposed_file.read_text()
     assert "- [x] **Duplicate Task** <!-- task_id: T_1 -->" in updated_content
     assert "- [ ] **Duplicate Task** <!-- task_id: T_2 -->" in updated_content
+
+
+def test_resolve_artifact_path(tmp_path, monkeypatch):
+    import timeline_planner
+    # Clear global cache using cache_clear
+    timeline_planner.get_project_info.cache_clear()
+
+    # Helper to mock git root
+    def mock_check_output(cmd, cwd=None, stderr=None):
+        if "rev-parse" in cmd:
+            return b"/workspace/ClimateShift-Alpha"
+        return b""
+
+    monkeypatch.setattr("subprocess.check_output", mock_check_output)
+
+    # Set up HOME and USERPROFILE environment variables so expanduser resolves natively (Agent 4 Nit 6)
+    home_dir = tmp_path / "home_user"
+    home_dir.mkdir()
+    monkeypatch.setenv("HOME", str(home_dir))
+    monkeypatch.setenv("USERPROFILE", str(home_dir))
+
+    # 1. Non-artifact paths remain unchanged
+    assert resolve_artifact_path("src/main.py") == "src/main.py"
+    assert resolve_artifact_path("foo/artifacts/bar.json") == "foo/artifacts/bar.json"
+    assert resolve_artifact_path("subdir/artifacts/x.json") == "subdir/artifacts/x.json"
+
+    # 2. Artifact path with no vault config remains unchanged
+    monkeypatch.delenv("ANTIGRAVITY_OBSIDIAN_VAULT", raising=False)
+    with mock.patch("os.path.exists", return_value=False), \
+         mock.patch("os.path.isdir", return_value=False):
+        assert resolve_artifact_path("artifacts/goals.json") == "artifacts/goals.json"
+
+    # 3. Env var configuration & Home directory validation (Blocker 1)
+    # A. Valid Vault inside HOME
+    vault = home_dir / "my_vault"
+    vault.mkdir()
+    
+    # B. Env var precedence and tilde expansion (Agent 1 Point 1)
+    monkeypatch.setenv("ANTIGRAVITY_OBSIDIAN_VAULT", "~/my_vault")
+    with mock.patch("os.getcwd", return_value="/workspace/ClimateShift-Alpha"):
+        resolved = resolve_artifact_path("artifacts/sub/dir/goals.json")
+        expected = os.path.join(str(vault), "Projects", "ClimateShift-Alpha", "sub/dir/goals.json")
+        assert os.path.normpath(resolved) == os.path.normpath(expected)
+
+    # C. Invalid Vault outside HOME
+    outside_vault = tmp_path / "outside_vault"
+    outside_vault.mkdir()
+    monkeypatch.setenv("ANTIGRAVITY_OBSIDIAN_VAULT", str(outside_vault))
+    
+    import io
+    import sys
+    stderr_capture = io.StringIO()
+    monkeypatch.setattr(sys, "stderr", stderr_capture)
+    
+    with mock.patch("os.getcwd", return_value="/workspace/ClimateShift-Alpha"):
+        resolved = resolve_artifact_path("artifacts/goals.json")
+        assert resolved == "artifacts/goals.json"
+        assert "outside user's HOME directory" in stderr_capture.getvalue()
+
+    monkeypatch.setattr(sys, "stderr", sys.__stderr__)
+
+    # D. ValueError on commonpath (Agent 4 Nit 2)
+    monkeypatch.setenv("ANTIGRAVITY_OBSIDIAN_VAULT", str(vault))
+    stderr_capture = io.StringIO()
+    monkeypatch.setattr(sys, "stderr", stderr_capture)
+    
+    with mock.patch("os.path.commonpath", side_effect=ValueError("different drives")), \
+         mock.patch("os.getcwd", return_value="/workspace/ClimateShift-Alpha"):
+        resolved = resolve_artifact_path("artifacts/goals.json")
+        assert resolved == "artifacts/goals.json"
+        assert "Safety check failed for vault path" in stderr_capture.getvalue()
+
+    monkeypatch.setattr(sys, "stderr", sys.__stderr__)
+
+    # E. Existing local file fallback
+    monkeypatch.setenv("ANTIGRAVITY_OBSIDIAN_VAULT", str(vault))
+    
+    def mock_path_exists(path):
+        if "my_vault" in path:
+            return False
+        if "ClimateShift-Alpha/artifacts/goals.json" in path:
+            return True
+        return False
+        
+    with mock.patch("os.getcwd", return_value="/workspace/ClimateShift-Alpha"), \
+         mock.patch("os.path.exists", side_effect=mock_path_exists):
+        resolved = resolve_artifact_path("artifacts/goals.json")
+        assert os.path.normpath(resolved) == os.path.normpath("/workspace/ClimateShift-Alpha/artifacts/goals.json")
+
+    # 4. settings.json configuration
+    monkeypatch.delenv("ANTIGRAVITY_OBSIDIAN_VAULT", raising=False)
+    
+    cli_dir = home_dir / ".gemini" / "antigravity-cli"
+    cli_dir.mkdir(parents=True)
+    settings_file = cli_dir / "settings.json"
+    
+    # Test valid settings.json with tilde expansion
+    import json
+    settings_file.write_text(json.dumps({"obsidian_vault_path": "~/my_vault"}))
+    
+    with mock.patch("os.getcwd", return_value="/workspace/ClimateShift-Alpha"):
+        resolved = resolve_artifact_path("artifacts/goals.json")
+        expected = os.path.join(str(vault), "Projects", "ClimateShift-Alpha", "goals.json")
+        assert os.path.normpath(resolved) == os.path.normpath(expected)
+
+    # Test invalid JSON decode error in settings.json
+    settings_file.write_text("{invalid json")
+    stderr_capture = io.StringIO()
+    monkeypatch.setattr(sys, "stderr", stderr_capture)
+    
+    with mock.patch("os.getcwd", return_value="/workspace/ClimateShift-Alpha"):
+        resolved = resolve_artifact_path("artifacts/goals.json")
+        assert resolved == "artifacts/goals.json"
+        assert "Could not read obsidian_vault_path from settings.json" in stderr_capture.getvalue()
+        
+    settings_file.unlink()
+    monkeypatch.setattr(sys, "stderr", sys.__stderr__)
+
+    # 5. Respect explicit opt-outs
+    # A. Empty string ""
+    settings_file.write_text(json.dumps({"obsidian_vault_path": ""}))
+    with mock.patch("os.getcwd", return_value="/workspace/ClimateShift-Alpha"), \
+         mock.patch("os.path.isdir", return_value=True):
+        resolved = resolve_artifact_path("artifacts/goals.json")
+        assert resolved == "artifacts/goals.json"
+        
+    # B. False
+    settings_file.write_text(json.dumps({"obsidian_vault_path": False}))
+    with mock.patch("os.getcwd", return_value="/workspace/ClimateShift-Alpha"), \
+         mock.patch("os.path.isdir", return_value=True):
+        resolved = resolve_artifact_path("artifacts/goals.json")
+        assert resolved == "artifacts/goals.json"
+
+    # C. True (invalid config type safety check)
+    settings_file.write_text(json.dumps({"obsidian_vault_path": True}))
+    with mock.patch("os.getcwd", return_value="/workspace/ClimateShift-Alpha"), \
+         mock.patch("os.path.isdir", return_value=True):
+        resolved = resolve_artifact_path("artifacts/goals.json")
+        assert resolved == "artifacts/goals.json"
+
+    settings_file.unlink()
+
+    # 6. Fallback directories lookup
+    desktop_vault = home_dir / "Desktop" / "antigravity_vault"
+    desktop_vault.mkdir(parents=True)
+    
+    def mock_isdir(path):
+        return path == str(desktop_vault)
+        
+    with mock.patch("os.path.isdir", side_effect=mock_isdir), \
+         mock.patch("os.getcwd", return_value="/workspace/ClimateShift-Alpha"):
+        resolved = resolve_artifact_path("artifacts/goals.json")
+        expected = os.path.join(str(desktop_vault), "Projects", "ClimateShift-Alpha", "goals.json")
+        assert os.path.normpath(resolved) == os.path.normpath(expected)
+
+    # 7. Symlink resolution check
+    real_dir = tmp_path / "real_project"
+    real_dir.mkdir()
+    symlink_dir = tmp_path / "symlink_project"
+    try:
+        os.symlink(str(real_dir), str(symlink_dir))
+    except (OSError, NotImplementedError):
+        return
+
+    timeline_planner.get_project_info.cache_clear()
+    
+    def mock_check_output_symlink(cmd, cwd=None, stderr=None):
+        if "rev-parse" in cmd:
+            return str(real_dir).encode()
+        return b""
+    monkeypatch.setattr("subprocess.check_output", mock_check_output_symlink)
+    
+    monkeypatch.setenv("ANTIGRAVITY_OBSIDIAN_VAULT", str(vault))
+    symlinked_artifact_path = os.path.join(str(symlink_dir), "artifacts", "goals.json")
+    
+    with mock.patch("os.getcwd", return_value=str(symlink_dir)):
+        resolved = resolve_artifact_path(symlinked_artifact_path)
+        expected = os.path.join(str(vault), "Projects", os.path.basename(str(real_dir)), "goals.json")
+        assert os.path.normpath(resolved) == os.path.normpath(expected)
+

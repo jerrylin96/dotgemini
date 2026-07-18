@@ -128,8 +128,8 @@ When performing reviews, running tests, or inspecting code in this codebase:
 
 ## 9. User-Facing Artifacts
 
-* **Storage Location**: Store any user-facing deliverables, planning timelines, code review specs, or roadmaps intended for user review or manual edits in the `artifacts/` folder at the root of the workspace (e.g., `artifacts/proposed_timeline.md`). Do NOT write these to deep system/cache directories.
-* **Ignored Folder**: Ensure `artifacts/` is in `.gitignore` to prevent session-specific planning state from polluting the Git tree.
+* **Storage Location**: Prefer storing any user-facing deliverables, planning timelines, code review specs, or roadmaps in a centralized Obsidian Vault if configured/found (resolved in order: `ANTIGRAVITY_OBSIDIAN_VAULT` env var, `"obsidian_vault_path"` in `~/.gemini/antigravity-cli/settings.json`, or local fallbacks `~/Desktop/antigravity_vault` and `~/Documents/antigravity_vault`). Organize them under `Projects/<project-name>/<relative-path>` inside the vault. Note that `<project-name>` is resolved dynamically from the root directory of the active git repository; for git worktrees, this resolves to the checked-out worktree directory name (e.g., `<vault>/Projects/gemini_obsidian-artifacts/proposed_timeline.md`). If no Obsidian Vault is configured or detected, fall back to writing them in the `artifacts/` folder at the root of the workspace (e.g., `artifacts/proposed_timeline.md`). Do NOT write these to deep system/cache directories.
+* **Ignored Folder**: If falling back to the workspace root, ensure `artifacts/` is in `.gitignore` to prevent session-specific planning state from polluting the Git tree.
 
 ---
 
