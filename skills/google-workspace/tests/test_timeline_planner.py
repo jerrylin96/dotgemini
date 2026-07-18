@@ -877,3 +877,167 @@ def test_handle_apply_hierarchical(tmp_path, monkeypatch):
     assert inserted_tasks[2][0]["title"] == "Generate figures for 3.2"
     assert inserted_tasks[2][1] == "ID_Write_Section_3.2_of_the_paper"
 
+
+def test_preflight_validate_standalone_missing_due():
+    # A standalone task (not a parent, not referenced by anyone) missing a due date MUST fail
+    plan_data = {
+        "tasklist_name": "Project Alpha List",
+        "timezone": "America/New_York",
+        "tasks": [
+            {
+                "title": "Standalone Task",
+                "is_parent": False,
+                "parent_idx": None,
+                "due": "",
+            }
+        ],
+        "events": []
+    }
+    errors = preflight_validate_timeline(plan_data)
+    assert len(errors) == 1
+    assert "Due date cannot be empty" in errors[0]
+
+
+def test_handle_apply_parent_failure_skips_subtasks(tmp_path, monkeypatch):
+    import timeline_planner
+    proposed_file = tmp_path / "proposed.md"
+    state_file = tmp_path / "state.json"
+    
+    markdown = """# Proposed Timeline: Paper Writing
+
+## Metadata
+- **Task List Name**: Paper Writing List
+- **Timezone**: America/New_York
+- **Target Start Date**: 2026-07-18
+- **Timeline State**: pending_approval
+
+## Proposed Google Tasks
+- [ ] **Write Section 3.2 of the paper**
+  - [ ] **Validate code and results for 3.2**
+    - **Due**: 2026-07-18
+
+## Proposed Calendar Events
+- **Event**: Focus: Validate code and results for 3.2
+  - **Start**: 2026-07-18T09:00:00-04:00
+  - **End**: 2026-07-18T11:00:00-04:00
+"""
+    proposed_file.write_text(markdown)
+    
+    monkeypatch.setattr("timeline_planner.get_credentials", lambda: None)
+    monkeypatch.setattr("timeline_planner.fetch_tasklists", lambda service: [])
+    
+    inserted_tasks = []
+    
+    class MockTasksResource:
+        def insert(self, tasklist, body, parent=None):
+            if body["title"] == "Write Section 3.2 of the paper":
+                # Mock failure for parent task creation
+                raise Exception("API Error")
+            inserted_tasks.append((body, parent))
+            class Exec:
+                def execute(self):
+                    return {"id": "ID_" + body["title"].replace(" ", "_")}
+            return Exec()
+            
+    class MockTasklistsResource:
+        def insert(self, body):
+            class Exec:
+                def execute(self):
+                    return {"id": "TASKLIST_123"}
+            return Exec()
+            
+    class MockTasksService:
+        def tasklists(self):
+            return MockTasklistsResource()
+        def tasks(self):
+            return MockTasksResource()
+            
+    monkeypatch.setattr("timeline_planner.build_tasks_service", lambda creds: MockTasksService())
+    monkeypatch.setattr("timeline_planner.build_calendar_service", lambda creds: None)
+    
+    class Args:
+        def __init__(self):
+            self.proposed_file = str(proposed_file)
+            self.state_file = str(state_file)
+            self.confirm = True
+            
+    # Should not crash, and should skip the subtask because the parent failed to create
+    with pytest.raises(SystemExit) as exc_info:
+        timeline_planner.handle_apply(Args())
+    assert exc_info.value.code == 1
+    
+    assert len(inserted_tasks) == 0 # Subtask was skipped
+
+
+def test_parse_proposed_timeline_tab_and_space_indentation():
+    # Verify that properties indented with tabs or spaces are parsed correctly
+    markdown = """# Proposed Timeline: Project Alpha
+
+## Metadata
+- **Task List Name**: Project Alpha List
+- **Timezone**: America/New_York
+- **Target Start Date**: 2026-07-18
+- **Timeline State**: pending_approval
+
+## Proposed Google Tasks
+- [ ] **Write Section 3.2 of the paper**
+\t- [ ] **Subtask with tab**
+\t\t- **Due**: 2026-07-18
+\t\t- **Notes**: tab notes
+  - [ ] **Subtask with spaces**
+    - **Due**: 2026-07-19
+    - **Notes**: spaces notes
+
+## Proposed Calendar Events
+- **Event**: Focus: Subtask with tab
+  - **Start**: 2026-07-18T09:00:00-04:00
+  - **End**: 2026-07-18T11:00:00-04:00
+"""
+    parsed = parse_proposed_timeline(markdown)
+    assert len(parsed["errors"]) == 0
+    assert len(parsed["tasks"]) == 3
+    
+    # Subtask with tab
+    sub_tab = parsed["tasks"][1]
+    assert sub_tab["title"] == "Subtask with tab"
+    assert sub_tab["due"] == "2026-07-18"
+    assert sub_tab["notes"] == "tab notes"
+    
+    # Subtask with spaces
+    sub_spaces = parsed["tasks"][2]
+    assert sub_spaces["title"] == "Subtask with spaces"
+    assert sub_spaces["due"] == "2026-07-19"
+    assert sub_spaces["notes"] == "spaces notes"
+
+
+def test_handle_plan_invalid_subtasks_validation(tmp_path, monkeypatch, capsys):
+    import timeline_planner
+    goals_file = tmp_path / "goals.json"
+    
+    goals_data = {
+        "tasklist_title": "Paper Writing",
+        "timezone": "America/New_York",
+        "start_date": "2026-07-18",
+        "days_limit": 14,
+        "tasks": [
+            {
+                "title": "Write Section 3.2",
+                "subtasks": "not a list"
+            }
+        ]
+    }
+    import json
+    goals_file.write_text(json.dumps(goals_data))
+    
+    class Args:
+        def __init__(self):
+            self.goals_file = str(goals_file)
+            self.proposed_file = str(tmp_path / "proposed.md")
+            
+    with pytest.raises(SystemExit) as exc_info:
+        timeline_planner.handle_plan(Args())
+    assert exc_info.value.code == 1
+    
+    captured = capsys.readouterr()
+    assert "has a 'subtasks' field that is not a list" in captured.err
+

@@ -188,7 +188,8 @@ def parse_proposed_timeline(markdown_content):
                 }
                 
                 # Check hierarchy based on indentation
-                indent = len(line) - len(line.lstrip())
+                line_expanded = line.expandtabs(4)
+                indent = len(line_expanded) - len(line_expanded.lstrip())
                 if indent < 2:
                     # It's a parent / standalone task
                     new_task["is_parent"] = True
@@ -211,7 +212,8 @@ def parse_proposed_timeline(markdown_content):
                 
                 if is_due or is_notes:
                     val = stripped.split(":", 1)[1].strip()
-                    indent = len(line) - len(line.lstrip())
+                    line_expanded = line.expandtabs(4)
+                    indent = len(line_expanded) - len(line_expanded.lstrip())
                     # Level 2 properties (indent >= 4) belong to subtask
                     if current_subtask_idx is not None and indent >= 4:
                         target_task = tasks[current_subtask_idx]
@@ -311,13 +313,16 @@ def preflight_validate_timeline(plan_data):
     except Exception:
         errors.append(f"Metadata error: Invalid timezone '{timezone_name}'.")
 
+    tasks_list = plan_data.get("tasks", [])
+    parent_indices = {t.get("parent_idx") for t in tasks_list if t.get("parent_idx") is not None}
+
     # 2. Validate Tasks
-    for i, task in enumerate(plan_data.get("tasks", [])):
+    for i, task in enumerate(tasks_list):
         title = task.get("title", "").strip()
         if not title:
             errors.append(f"Task error at index {i}: Title cannot be empty.")
 
-        if task.get("is_parent"):
+        if i in parent_indices:
             continue
 
         due = task.get("due", "").strip()
@@ -556,13 +561,37 @@ def handle_plan(args):
             sys.exit(1)
             
         subtasks_cfg = t.get("subtasks", [])
-        if subtasks_cfg:
+        if "subtasks" in t:
+            if not isinstance(subtasks_cfg, list):
+                print(f"Error: Task '{title}' has a 'subtasks' field that is not a list.", file=sys.stderr)
+                sys.exit(1)
+            
+            if "duration_hours" in t:
+                print(
+                    f"Warning: Task '{title}' contains both 'subtasks' and 'duration_hours'. "
+                    "The parent task's duration_hours will be ignored.",
+                    file=sys.stderr,
+                )
+
             # Validate subtasks
             for j, sub in enumerate(subtasks_cfg):
+                if not isinstance(sub, dict):
+                    print(f"Error: Subtask at index {j} under task '{title}' is not an object.", file=sys.stderr)
+                    sys.exit(1)
+                
                 sub_title = sub.get("title", "").strip()
                 if not sub_title:
                     print(f"Error: Subtask at index {j} under task '{title}' is missing a title.", file=sys.stderr)
                     sys.exit(1)
+
+                if "subtasks" in sub:
+                    print(
+                        f"Error: Subtask '{sub_title}' under task '{title}' contains nested subtasks. "
+                        "Google Tasks supports at most one level of task nesting.",
+                        file=sys.stderr,
+                    )
+                    sys.exit(1)
+
                 sub_duration = sub.get("duration_hours", 1.0)
                 try:
                     sub_duration = float(sub_duration)
@@ -955,6 +984,14 @@ def handle_apply(args):
                             parent_idx = task["parent_idx"]
                             parent_task = plan_data["tasks"][parent_idx]
                             parent_id = parent_task.get("id")
+                            if not parent_id:
+                                print(
+                                    f"Error: Parent task '{parent_task['title']}' has no Google Task ID (probably failed creation). "
+                                    f"Skipping subtask '{task['title']}' to prevent creating it as a top-level task.",
+                                    file=sys.stderr,
+                                )
+                                creation_errors += 1
+                                continue
 
                         kwargs = {
                             "tasklist": tasklist_id,
