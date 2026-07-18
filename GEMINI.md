@@ -152,12 +152,10 @@ This delegation contract (using `invoke_subagent`, `define_subagent`, built-in `
 ### Heuristics & Guardrails
 *   **Context Isolation**: Subagents run using the same model as their parent but start with a clean slate, meaning they do not inherit the parent's existing conversation history (context window).
 *   **Nesting Limit**: Maximum nesting depth: 10 levels. Design delegation hierarchies accordingly to avoid recursion limits.
-*   **Scope & Permission Inheritance**: Subagents automatically inherit the parent's allowed terminal command prefixes and file read/write directory scopes. They cannot exceed the parent's allowed permissions.
+*   **Scope & Permission Inheritance**: Subagents automatically inherit the parent's allowed terminal command prefixes and file read/write directory scopes. They cannot exceed the parent's allowed permissions. If a subagent triggers a command requiring user confirmation, the confirmation request bubbles up to the parent's user interface.
+*   **Workspace Access**: Parent agents retain full read and write access to all subagent workspaces (e.g. to inspect intermediate files or perform manual conflict resolution).
 *   **Lifecycle & Cleanup**: Subagents execute asynchronously and communicate via messages. When a subagent is killed or finishes, its branched workspaces are automatically cleaned up, and its context is discarded (except for logs/artifacts).
 *   **Tool Selection**: Prefer `research` for log-diving, code exploration, and static analysis. Use `self` when command execution, virtual environment setups, or file writes are required.
 *   **Concurrency Guardrail**: Never use `share` mode concurrently for multiple writing subagents, to avoid clobbering workspaces. Use `branch` mode for concurrent writes.
 *   **Env Isolation**: Always instruct subagents operating on code changes to use the environment wrappers (`setup_review_env.py` and `run_in_env.py`) to keep validation clean.
 *   **Conflict Resolution**: When parallel slicing subagents finish, the main agent must manually reconcile and verify the integrated codebase via end-to-end tests before staging.
-
-
-
