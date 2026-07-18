@@ -31,6 +31,9 @@ Two modes, chosen by what the user provides:
 
 ## Execution Steps
 
+> [!TIP]
+> **Subagent Delegation (Antigravity Only)**: If the changeset is exceptionally large (many files or large diffs), the main agent should delegate the task. Invoke the built-in `research` subagent (optimized for read-only exploration) to analyze the diff chunks in the background and draft the overall summary and file-by-file gists; wait for its report before presenting the summary/menu. This delegation contract is Antigravity-only; in other runtimes (e.g. Gemini CLI), the main agent performs these steps directly.
+
 1. **Get the Diff Safely**: To prevent terminal command output truncation (which silently trims long diff outputs or lines), do NOT read the raw output of `git diff` directly from the terminal tool. Instead:
    a. Run `git diff "<reference_commit_hash>...<commit_hash>" --stat > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_stat.txt"` to see all changed files.
    b. Save the target diff to a temporary file under the conversation's scratch directory:
@@ -50,6 +53,7 @@ Two modes, chosen by what the user provides:
    - **Pagination & EOF Detection (Unterminated Final Lines)**: To prevent terminal output truncation on extremely large files, read files in successive, deterministic chunks. Do not rely on receiving a short chunk (fewer lines than requested) as an EOF signal. Instead, get the total logical line count of the file beforehand. Because `wc -l` counts newline characters rather than logical lines, verify if the file is non-empty and lacks a trailing newline character (e.g. check if the last byte of the file is not `\n`), and if so, increment the expected line count by 1 (or rely on file viewer metadata if it reports the exact logical line count). Read iteratively until the `StartLine` exceeds this logical line count.
    - **Special Git Cases & Binary Changes**: Explicitly check the diff headers for file renames, mode-only modifications (`old mode ... new mode`), and binary files (`Binary files ... differ`). Report binary changes in the overall summary and navigation menu, but omit detailed text hunks.
    - **Interactive Phase & Cleanup**: Preserve the temp files (`temp_diff_stat.txt`, `temp_diff_all.txt`, `temp_diff.txt`, and `temp_diff_paths.txt`) during the interactive follow-up phase to allow revisiting files. Once the walkthrough and follow-up Q&A end, cleanly delete only the temporary files and directories: run `rm -- "<file_path>"` for scratch files. If an OS temporary directory was created via `TEMP_DIR=$(mktemp -d)`, avoid recursive deletion (`rm -rf`); instead, delete the specific temporary files created inside the temp directory (`rm -- "$TEMP_DIR/temp_diff_stat.txt" "$TEMP_DIR/temp_diff_all.txt" "$TEMP_DIR/temp_diff.txt" "$TEMP_DIR/temp_diff_paths.txt"` etc.) and then safely remove the empty directory using `rmdir -- "$TEMP_DIR"`. Never run deletion commands inside the repository or worktree.
+
 2. **Overall Summary**: Open with a short summary of the whole changeset: what it does, why (inferred), and the changes grouped into logical themes (a theme may span files). Include scale (files touched, insertions/deletions).
 3. **Navigation Menu**: Present a numbered menu of changed files — path, `+/-` stats, hunk count, one-line gist — plus:
    - `[a]` walk through every file in order,

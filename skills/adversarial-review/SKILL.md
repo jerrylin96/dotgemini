@@ -132,6 +132,10 @@ The script returns JSON on stdout. The schema depends on the outcome:
    - Note: Git fetches are best-effort. If network resolution fails, the review may run against stale local tracking references.
 3. **Setup/Use Isolated Env**:
    - To run tests, execute linters, or run/view code:
+
+     > [!TIP]
+     > **Subagent Delegation (Antigravity Only)**: If the feature branch is large, has a massive diff, or has a complex test suite, the main agent can delegate this step. Invoke the built-in `research` subagent for read-only codebase exploration, or change directories into `<worktree_path>` and invoke the built-in `self` subagent with `Workspace: inherit` to set up the review environment and run tests. This delegation contract is Antigravity-only; in other runtimes (e.g. Gemini CLI), the main agent performs these steps directly.
+
      1. Initialize the review environment for the worktree:
         ```bash
         python3 ~/.gemini/scripts/setup_review_env.py <worktree_path>
