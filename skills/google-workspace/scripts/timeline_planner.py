@@ -12,6 +12,7 @@ import re
 import sys
 import subprocess
 from zoneinfo import ZoneInfo
+from functools import lru_cache
 
 # Add current directory to path to allow importing workspace_client
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -1022,30 +1023,20 @@ def handle_status(args):
     print(f"Status sync completed. Updated checklist in {args.proposed_file}")
 
 
-_git_root_cache = None
-_project_name_cache = None
-
-
-def get_project_info():
-    global _git_root_cache, _project_name_cache
-    if _git_root_cache is not None:
-        return _git_root_cache, _project_name_cache
-    
-    cwd = os.getcwd()
+@lru_cache(maxsize=16)
+def get_project_info(cwd):
     try:
         git_root = subprocess.check_output(
             ["git", "rev-parse", "--show-toplevel"], cwd=cwd, stderr=subprocess.DEVNULL
         ).decode().strip()
-        _git_root_cache = os.path.abspath(git_root)
+        git_root = os.path.abspath(git_root)
     except (subprocess.CalledProcessError, FileNotFoundError):
-        _git_root_cache = os.path.abspath(cwd)
+        git_root = os.path.abspath(cwd)
         
-    base = os.path.basename(_git_root_cache)
+    base = os.path.basename(git_root)
     if not base:
         base = "root"
-    _project_name_cache = base
-    
-    return _git_root_cache, _project_name_cache
+    return git_root, base
 
 
 def resolve_artifact_path(path):
@@ -1053,7 +1044,7 @@ def resolve_artifact_path(path):
     if not path:
         return path
     
-    git_root, project_name = get_project_info()
+    git_root, project_name = get_project_info(os.getcwd())
     local_artifacts_dir = os.path.join(git_root, "artifacts")
     
     abs_incoming = os.path.abspath(path)
@@ -1085,6 +1076,9 @@ def resolve_artifact_path(path):
     if vault_path == "" or vault_path is False:
         return path
 
+    if vault_path:
+        vault_path = os.path.expanduser(vault_path)
+
     if not vault_path:
         for fallback in ["~/Desktop/antigravity_vault", "~/Documents/antigravity_vault"]:
             expanded = os.path.expanduser(fallback)
@@ -1098,9 +1092,16 @@ def resolve_artifact_path(path):
     # Blocker 1: Validate vault path starts with user's HOME directory
     real_vault = os.path.realpath(vault_path)
     real_home = os.path.realpath(os.path.expanduser("~"))
-    if os.path.commonpath([real_home, real_vault]) != real_home:
+    try:
+        if os.path.commonpath([real_home, real_vault]) != real_home:
+            sys.stderr.write(
+                f"Warning: Obsidian Vault path '{vault_path}' is outside user's HOME directory. "
+                "Falling back to local workspace artifacts.\n"
+            )
+            return path
+    except ValueError as e:
         sys.stderr.write(
-            f"Warning: Obsidian Vault path '{vault_path}' is outside user's HOME directory. "
+            f"Warning: Safety check failed for vault path '{vault_path}': {e}. "
             "Falling back to local workspace artifacts.\n"
         )
         return path
@@ -1179,10 +1180,21 @@ def main():
     args = parser.parse_args()
     
     # Resolve artifacts paths dynamically to support Obsidian Vault
-    # Only resolve proposed_file (user-facing markdown timeline).
-    # Keep goals_file (input) and state_file (internal state) local to workspace.
-    if getattr(args, "proposed_file", None) is not None:
-        args.proposed_file = resolve_artifact_path(args.proposed_file)
+    # First, make all relative artifact paths absolute relative to the git root.
+    # This prevents directory-shifting inconsistency when changing cwd.
+    try:
+        git_root, _ = get_project_info(os.getcwd())
+    except Exception:
+        git_root = os.getcwd()
+
+    for attr in ["goals_file", "proposed_file", "state_file"]:
+        if getattr(args, attr, None) is not None:
+            val = getattr(args, attr)
+            if not os.path.isabs(val):
+                val = os.path.abspath(os.path.join(git_root, val))
+            if attr == "proposed_file":
+                val = resolve_artifact_path(val)
+            setattr(args, attr, val)
 
     args.func(args)
 

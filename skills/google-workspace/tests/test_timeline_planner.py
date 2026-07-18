@@ -454,9 +454,8 @@ def test_handle_status_duplicate_titles_sync_independently(
 
 def test_resolve_artifact_path(tmp_path, monkeypatch):
     import timeline_planner
-    # Clear global cache
-    timeline_planner._git_root_cache = None
-    timeline_planner._project_name_cache = None
+    # Clear global cache using cache_clear
+    timeline_planner.get_project_info.cache_clear()
 
     # Helper to mock git root
     def mock_check_output(cmd, cwd=None, stderr=None):
@@ -484,19 +483,21 @@ def test_resolve_artifact_path(tmp_path, monkeypatch):
     vault = home_dir / "my_vault"
     vault.mkdir()
     
-    monkeypatch.setenv("ANTIGRAVITY_OBSIDIAN_VAULT", str(vault))
+    # Mock expanduser
     def mock_expanduser(path):
         if path.startswith("~"):
             return str(home_dir) + path[1:]
         return path
     monkeypatch.setattr("os.path.expanduser", mock_expanduser)
 
+    # B. Env var precedence and tilde expansion (Agent 1 Point 1)
+    monkeypatch.setenv("ANTIGRAVITY_OBSIDIAN_VAULT", "~/my_vault")
     with mock.patch("os.getcwd", return_value="/workspace/ClimateShift-Alpha"):
         resolved = resolve_artifact_path("artifacts/sub/dir/goals.json")
         expected = os.path.join(str(vault), "Projects", "ClimateShift-Alpha", "sub/dir/goals.json")
         assert os.path.normpath(resolved) == os.path.normpath(expected)
 
-    # B. Invalid Vault outside HOME
+    # C. Invalid Vault outside HOME
     outside_vault = tmp_path / "outside_vault"
     outside_vault.mkdir()
     monkeypatch.setenv("ANTIGRAVITY_OBSIDIAN_VAULT", str(outside_vault))
@@ -513,7 +514,20 @@ def test_resolve_artifact_path(tmp_path, monkeypatch):
 
     monkeypatch.setattr(sys, "stderr", sys.__stderr__)
 
-    # C. Existing local file fallback
+    # D. ValueError on commonpath (Agent 4 Nit 2)
+    monkeypatch.setenv("ANTIGRAVITY_OBSIDIAN_VAULT", str(vault))
+    stderr_capture = io.StringIO()
+    monkeypatch.setattr(sys, "stderr", stderr_capture)
+    
+    with mock.patch("os.path.commonpath", side_effect=ValueError("different drives")), \
+         mock.patch("os.getcwd", return_value="/workspace/ClimateShift-Alpha"):
+        resolved = resolve_artifact_path("artifacts/goals.json")
+        assert resolved == "artifacts/goals.json"
+        assert "Safety check failed for vault path" in stderr_capture.getvalue()
+
+    monkeypatch.setattr(sys, "stderr", sys.__stderr__)
+
+    # E. Existing local file fallback
     monkeypatch.setenv("ANTIGRAVITY_OBSIDIAN_VAULT", str(vault))
     
     def mock_path_exists(path):
@@ -535,9 +549,9 @@ def test_resolve_artifact_path(tmp_path, monkeypatch):
     cli_dir.mkdir(parents=True)
     settings_file = cli_dir / "settings.json"
     
-    # Test valid settings.json
+    # Test valid settings.json with tilde expansion
     import json
-    settings_file.write_text(json.dumps({"obsidian_vault_path": str(vault)}))
+    settings_file.write_text(json.dumps({"obsidian_vault_path": "~/my_vault"}))
     
     with mock.patch("os.getcwd", return_value="/workspace/ClimateShift-Alpha"):
         resolved = resolve_artifact_path("artifacts/goals.json")
