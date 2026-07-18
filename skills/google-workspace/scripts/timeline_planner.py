@@ -322,12 +322,10 @@ def preflight_validate_timeline(plan_data):
         if not title:
             errors.append(f"Task error at index {i}: Title cannot be empty.")
 
-        if i in parent_indices:
-            continue
-
         due = task.get("due", "").strip()
         if not due:
-            errors.append(f"Task '{title}' error: Due date cannot be empty.")
+            if i not in parent_indices:
+                errors.append(f"Task '{title}' error: Due date cannot be empty.")
         else:
             try:
                 datetime.datetime.strptime(due, "%Y-%m-%d")
@@ -561,11 +559,15 @@ def handle_plan(args):
             sys.exit(1)
             
         subtasks_cfg = t.get("subtasks", [])
+        has_subtasks = False
         if "subtasks" in t:
             if not isinstance(subtasks_cfg, list):
                 print(f"Error: Task '{title}' has a 'subtasks' field that is not a list.", file=sys.stderr)
                 sys.exit(1)
-            
+            if subtasks_cfg:
+                has_subtasks = True
+
+        if has_subtasks:
             if "duration_hours" in t:
                 print(
                     f"Warning: Task '{title}' contains both 'subtasks' and 'duration_hours'. "

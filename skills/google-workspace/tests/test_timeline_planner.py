@@ -880,19 +880,21 @@ def test_handle_apply_hierarchical(tmp_path, monkeypatch):
 
 def test_preflight_validate_standalone_missing_due():
     # A standalone task (not a parent, not referenced by anyone) missing a due date MUST fail
-    plan_data = {
-        "tasklist_name": "Project Alpha List",
-        "timezone": "America/New_York",
-        "tasks": [
-            {
-                "title": "Standalone Task",
-                "is_parent": False,
-                "parent_idx": None,
-                "due": "",
-            }
-        ],
-        "events": []
-    }
+    markdown = """# Proposed Timeline: Project Alpha
+
+## Metadata
+- **Task List Name**: Project Alpha List
+- **Timezone**: America/New_York
+- **Target Start Date**: 2026-07-18
+- **Timeline State**: pending_approval
+
+## Proposed Google Tasks
+- [ ] **Standalone Task**
+  - **Notes**: Standalone task notes
+
+## Proposed Calendar Events
+"""
+    plan_data = parse_proposed_timeline(markdown)
     errors = preflight_validate_timeline(plan_data)
     assert len(errors) == 1
     assert "Due date cannot be empty" in errors[0]
@@ -1040,4 +1042,187 @@ def test_handle_plan_invalid_subtasks_validation(tmp_path, monkeypatch, capsys):
     
     captured = capsys.readouterr()
     assert "has a 'subtasks' field that is not a list" in captured.err
+
+
+def test_handle_plan_empty_subtasks_invalid_duration(tmp_path, monkeypatch, capsys):
+    import timeline_planner
+    goals_file = tmp_path / "goals.json"
+    
+    goals_data = {
+        "tasklist_title": "Paper Writing",
+        "timezone": "America/New_York",
+        "start_date": "2026-07-18",
+        "days_limit": 14,
+        "tasks": [
+            {
+                "title": "Write Section 3.2",
+                "subtasks": [],
+                "duration_hours": "banana"
+            }
+        ]
+    }
+    import json
+    goals_file.write_text(json.dumps(goals_data))
+    
+    class Args:
+        def __init__(self):
+            self.goals_file = str(goals_file)
+            self.proposed_file = str(tmp_path / "proposed.md")
+            
+    with pytest.raises(SystemExit) as exc_info:
+        timeline_planner.handle_plan(Args())
+    assert exc_info.value.code == 1
+    
+    captured = capsys.readouterr()
+    assert "must have a positive duration_hours" in captured.err
+
+
+def test_preflight_validate_parent_with_malformed_due():
+    # A parent task with a hand-added malformed due date MUST fail validation
+    markdown = """# Proposed Timeline: Project Alpha
+
+## Metadata
+- **Task List Name**: Project Alpha List
+- **Timezone**: America/New_York
+- **Target Start Date**: 2026-07-18
+- **Timeline State**: pending_approval
+
+## Proposed Google Tasks
+- [ ] **Parent Task**
+  - **Due**: malformed-date
+  - [ ] **Subtask**
+    - **Due**: 2026-07-18
+
+## Proposed Calendar Events
+"""
+    plan_data = parse_proposed_timeline(markdown)
+    errors = preflight_validate_timeline(plan_data)
+    assert len(errors) == 1
+    assert "must be in YYYY-MM-DD format" in errors[0]
+
+
+def test_handle_plan_mixed_tasks(tmp_path, monkeypatch):
+    import timeline_planner
+    goals_file = tmp_path / "goals.json"
+    proposed_file = tmp_path / "proposed.md"
+    
+    goals_data = {
+        "tasklist_title": "Mixed Tasks",
+        "timezone": "America/New_York",
+        "start_date": "2028-07-18",
+        "days_limit": 14,
+        "tasks": [
+            {
+                "title": "Standalone Task 1",
+                "duration_hours": 1.0
+            },
+            {
+                "title": "Parent Task 1",
+                "subtasks": [
+                    {
+                        "title": "Subtask 1",
+                        "duration_hours": 2.0
+                    }
+                ]
+            },
+            {
+                "title": "Standalone Task 2",
+                "duration_hours": 1.5
+            }
+        ]
+    }
+    import json
+    goals_file.write_text(json.dumps(goals_data))
+    
+    monkeypatch.setattr("timeline_planner.get_credentials", lambda: None)
+    
+    class MockEvents:
+        def list(self, *args, **kwargs):
+            return self
+        def execute(self):
+            return {"items": []}
+            
+    class MockService:
+        def events(self):
+            return MockEvents()
+            
+    monkeypatch.setattr("timeline_planner.build_calendar_service", lambda creds: MockService())
+    
+    class Args:
+        def __init__(self):
+            self.goals_file = str(goals_file)
+            self.proposed_file = str(proposed_file)
+            
+    timeline_planner.handle_plan(Args())
+    
+    # Read generated proposed file
+    content = proposed_file.read_text()
+    assert "# Proposed Timeline: Mixed Tasks" in content
+    assert "- [ ] **Standalone Task 1**" in content
+    assert "- [ ] **Parent Task 1**" in content
+    assert "  - [ ] **Subtask 1**" in content
+    assert "- [ ] **Standalone Task 2**" in content
+
+
+def test_handle_plan_partial_scheduling_conflict(tmp_path, monkeypatch):
+    import timeline_planner
+    goals_file = tmp_path / "goals.json"
+    proposed_file = tmp_path / "proposed.md"
+    
+    # Let's request 2 subtasks of 8 hours each (total 16 hours), but calendar only has 8 hours free total
+    goals_data = {
+        "tasklist_title": "Conflict Tasks",
+        "timezone": "America/New_York",
+        "start_date": "2028-07-18",
+        "days_limit": 1, # strictly 1 day
+        "working_hours": {
+            "start": "08:00",
+            "end": "16:00" # 8 hours total working time
+        },
+        "tasks": [
+            {
+                "title": "Parent Task",
+                "subtasks": [
+                    {
+                        "title": "Subtask 1",
+                        "duration_hours": 8.0 # fills the entire day
+                    },
+                    {
+                        "title": "Subtask 2",
+                        "duration_hours": 8.0 # cannot be scheduled
+                    }
+                ]
+            }
+        ]
+    }
+    import json
+    goals_file.write_text(json.dumps(goals_data))
+    
+    monkeypatch.setattr("timeline_planner.get_credentials", lambda: None)
+    
+    class MockEvents:
+        def list(self, *args, **kwargs):
+            return self
+        def execute(self):
+            return {"items": []}
+            
+    class MockService:
+        def events(self):
+            return MockEvents()
+            
+    monkeypatch.setattr("timeline_planner.build_calendar_service", lambda creds: MockService())
+    
+    class Args:
+        def __init__(self):
+            self.goals_file = str(goals_file)
+            self.proposed_file = str(proposed_file)
+            
+    timeline_planner.handle_plan(Args())
+    
+    content = proposed_file.read_text()
+    # Subtask 1 is scheduled
+    assert "  - [ ] **Subtask 1**" in content
+    # Subtask 2 could not be scheduled, so it ends up in ## Unscheduled Tasks
+    assert "## Unscheduled Tasks" in content
+    assert "Parent Task -> Subtask 2" in content
 
