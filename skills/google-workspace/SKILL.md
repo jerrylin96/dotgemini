@@ -111,8 +111,17 @@ Create a JSON configuration file under `artifacts/goals.json`. Example structure
   "tasks": [
     {
       "title": "Set up project structure",
-      "duration_hours": 2,
-      "notes": "Create repo, setup venv, configure tools."
+      "notes": "Verify run scripts and output files.",
+      "subtasks": [
+        {
+          "title": "Setup venv and dependencies",
+          "duration_hours": 1.0
+        },
+        {
+          "title": "Configure git and tooling config",
+          "duration_hours": 1.0
+        }
+      ]
     },
     {
       "title": "Implement API endpoints",
@@ -123,6 +132,11 @@ Create a JSON configuration file under `artifacts/goals.json`. Example structure
 }
 ```
 
+> [!NOTE]
+> **Subtask Constraints:**
+> - **Nesting Depth**: Google Tasks only supports at most one level of task nesting. Subtasks cannot contain nested grandchild tasks.
+> - **Duration Ignore**: If a task defines a `subtasks` list, any `duration_hours` defined at the parent task level will be ignored. The calendar blocks are scheduled exclusively for the subtasks.
+
 #### Step 2: Generate Proposed Timeline
 Generates `artifacts/proposed_timeline.md` by identifying free slots on the primary calendar:
 ```bash
@@ -131,6 +145,14 @@ python3 ~/.gemini/skills/google-workspace/scripts/timeline_planner.py plan --goa
 
 #### Step 3: Review and Edit
 The user reviews and edits `artifacts/proposed_timeline.md` (e.g. adjusting descriptions, due dates, or times).
+
+> [!WARNING]
+> **Indentation is Load-bearing:**
+> The parser determines task hierarchies using indentation levels (tabs or spaces):
+> - Parent Tasks: no indentation (indent < 2).
+> - Subtasks: indented by at least 2 characters (spaces or tabs).
+> - Subtask properties (Due, Notes): indented by at least 4 characters (spaces or tabs).
+> Improper indentation will cause properties/subtasks to misattach or parse incorrectly.
 
 #### Step 4: Apply Timeline
 Provisions the Google TaskList, Google Tasks, and Google Calendar focus blocks:
