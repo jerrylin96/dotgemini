@@ -465,6 +465,12 @@ def test_resolve_artifact_path(tmp_path, monkeypatch):
 
     monkeypatch.setattr("subprocess.check_output", mock_check_output)
 
+    # Set up HOME and USERPROFILE environment variables so expanduser resolves natively (Agent 4 Nit 6)
+    home_dir = tmp_path / "home_user"
+    home_dir.mkdir()
+    monkeypatch.setenv("HOME", str(home_dir))
+    monkeypatch.setenv("USERPROFILE", str(home_dir))
+
     # 1. Non-artifact paths remain unchanged
     assert resolve_artifact_path("src/main.py") == "src/main.py"
     assert resolve_artifact_path("foo/artifacts/bar.json") == "foo/artifacts/bar.json"
@@ -478,18 +484,9 @@ def test_resolve_artifact_path(tmp_path, monkeypatch):
 
     # 3. Env var configuration & Home directory validation (Blocker 1)
     # A. Valid Vault inside HOME
-    home_dir = tmp_path / "home_user"
-    home_dir.mkdir()
     vault = home_dir / "my_vault"
     vault.mkdir()
     
-    # Mock expanduser
-    def mock_expanduser(path):
-        if path.startswith("~"):
-            return str(home_dir) + path[1:]
-        return path
-    monkeypatch.setattr("os.path.expanduser", mock_expanduser)
-
     # B. Env var precedence and tilde expansion (Agent 1 Point 1)
     monkeypatch.setenv("ANTIGRAVITY_OBSIDIAN_VAULT", "~/my_vault")
     with mock.patch("os.getcwd", return_value="/workspace/ClimateShift-Alpha"):

@@ -1044,7 +1044,7 @@ def resolve_artifact_path(path):
     if not path:
         return path
     
-    git_root, project_name = get_project_info(os.getcwd())
+    git_root, project_name = get_project_info(os.path.realpath(os.getcwd()))
     local_artifacts_dir = os.path.join(git_root, "artifacts")
     
     abs_incoming = os.path.abspath(path)
@@ -1076,7 +1076,7 @@ def resolve_artifact_path(path):
     if vault_path == "" or vault_path is False:
         return path
 
-    if vault_path:
+    if isinstance(vault_path, str):
         vault_path = os.path.expanduser(vault_path)
 
     if not vault_path:
@@ -1180,18 +1180,13 @@ def main():
     args = parser.parse_args()
     
     # Resolve artifacts paths dynamically to support Obsidian Vault
-    # First, make all relative artifact paths absolute relative to the git root.
+    # First, make relative artifact paths absolute relative to getcwd().
     # This prevents directory-shifting inconsistency when changing cwd.
-    try:
-        git_root, _ = get_project_info(os.getcwd())
-    except Exception:
-        git_root = os.getcwd()
-
     for attr in ["goals_file", "proposed_file", "state_file"]:
         if getattr(args, attr, None) is not None:
             val = getattr(args, attr)
             if not os.path.isabs(val):
-                val = os.path.abspath(os.path.join(git_root, val))
+                val = os.path.abspath(val)
             if attr == "proposed_file":
                 val = resolve_artifact_path(val)
             setattr(args, attr, val)
