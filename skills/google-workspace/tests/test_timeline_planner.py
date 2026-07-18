@@ -630,3 +630,250 @@ def test_resolve_artifact_path(tmp_path, monkeypatch):
         expected = os.path.join(str(vault), "Projects", os.path.basename(str(real_dir)), "goals.json")
         assert os.path.normpath(resolved) == os.path.normpath(expected)
 
+
+def test_parse_proposed_timeline_hierarchical():
+    markdown = """# Proposed Timeline: Project Alpha
+
+## Metadata
+- **Task List Name**: Project Alpha List
+- **Timezone**: America/New_York
+- **Target Start Date**: 2026-07-18
+- **Timeline State**: pending_approval
+
+## Proposed Google Tasks
+- [ ] **Write Section 3.2 of the paper**
+  - **Notes**: parent notes
+  - [ ] **Validate code and results for 3.2** <!-- task_id: SUB_T_123 -->
+    - **Due**: 2026-07-18
+    - **Notes**: subtask 1 notes
+  - [ ] **Generate figures for 3.2**
+    - **Due**: 2026-07-19
+
+## Proposed Calendar Events
+- **Event**: Focus: Validate code and results for 3.2 <!-- event_id: E_789 -->
+  - **Start**: 2026-07-18T09:00:00-04:00
+  - **End**: 2026-07-18T11:00:00-04:00
+  - **Description**: subtask 1 notes
+"""
+    parsed = parse_proposed_timeline(markdown)
+    assert len(parsed["errors"]) == 0
+    assert len(parsed["tasks"]) == 3
+    
+    # Check parent task
+    parent = parsed["tasks"][0]
+    assert parent["title"] == "Write Section 3.2 of the paper"
+    assert parent["is_parent"] is True
+    assert parent["parent_idx"] is None
+    assert parent["notes"] == "parent notes"
+    
+    # Check subtask 1
+    sub1 = parsed["tasks"][1]
+    assert sub1["title"] == "Validate code and results for 3.2"
+    assert sub1["is_parent"] is False
+    assert sub1["parent_idx"] == 0
+    assert sub1["due"] == "2026-07-18"
+    assert sub1["notes"] == "subtask 1 notes"
+    assert sub1["id"] == "SUB_T_123"
+
+    # Check subtask 2
+    sub2 = parsed["tasks"][2]
+    assert sub2["title"] == "Generate figures for 3.2"
+    assert sub2["is_parent"] is False
+    assert sub2["parent_idx"] == 0
+    assert sub2["due"] == "2026-07-19"
+
+
+def test_preflight_validate_timeline_hierarchical():
+    # Verify that parent tasks without a due date validate successfully
+    plan_data = {
+        "tasklist_name": "Project Alpha List",
+        "timezone": "America/New_York",
+        "tasks": [
+            {
+                "title": "Write Section 3.2 of the paper",
+                "is_parent": True,
+                "parent_idx": None,
+                "due": "",
+            },
+            {
+                "title": "Validate code and results for 3.2",
+                "is_parent": False,
+                "parent_idx": 0,
+                "due": "2026-07-18",
+            }
+        ],
+        "events": [
+            {
+                "summary": "Focus: Validate code and results for 3.2",
+                "start": "2026-07-18T09:00:00-04:00",
+                "end": "2026-07-18T11:00:00-04:00",
+            }
+        ]
+    }
+    errors = preflight_validate_timeline(plan_data)
+    assert len(errors) == 0
+
+
+def test_handle_plan_hierarchical(tmp_path, monkeypatch):
+    import timeline_planner
+    goals_file = tmp_path / "goals.json"
+    proposed_file = tmp_path / "proposed.md"
+    
+    goals_data = {
+        "tasklist_title": "Paper Writing",
+        "timezone": "America/New_York",
+        "start_date": "2026-07-18",
+        "days_limit": 14,
+        "working_hours": {
+            "start": "09:00",
+            "end": "17:00"
+        },
+        "tasks": [
+            {
+                "title": "Write Section 3.2 of the paper",
+                "notes": "parent notes",
+                "subtasks": [
+                    {
+                        "title": "Validate code and results for 3.2",
+                        "duration_hours": 1.5,
+                        "notes": "subtask 1 notes"
+                    },
+                    {
+                        "title": "Generate figures for 3.2",
+                        "duration_hours": 1.0,
+                    }
+                ]
+            }
+        ]
+    }
+    import json
+    goals_file.write_text(json.dumps(goals_data))
+    
+    # Mock credentials and service builds
+    monkeypatch.setattr("timeline_planner.get_credentials", lambda: None)
+    
+    class MockEvents:
+        def list(self, *args, **kwargs):
+            return self
+        def execute(self):
+            return {"items": []}
+            
+    class MockService:
+        def events(self):
+            return MockEvents()
+            
+    monkeypatch.setattr("timeline_planner.build_calendar_service", lambda creds: MockService())
+    
+    class Args:
+        def __init__(self):
+            self.goals_file = str(goals_file)
+            self.proposed_file = str(proposed_file)
+    
+    timeline_planner.handle_plan(Args())
+    
+    # Read generated proposed file
+    content = proposed_file.read_text()
+    assert "# Proposed Timeline: Paper Writing" in content
+    assert "- [ ] **Write Section 3.2 of the paper**" in content
+    assert "  - **Notes**: parent notes" in content
+    assert "  - [ ] **Validate code and results for 3.2**" in content
+    assert "    - **Notes**: subtask 1 notes" in content
+    assert "  - [ ] **Generate figures for 3.2**" in content
+    assert "- **Event**: Focus: Validate code and results for 3.2" in content
+
+
+def test_handle_apply_hierarchical(tmp_path, monkeypatch):
+    import timeline_planner
+    proposed_file = tmp_path / "proposed.md"
+    state_file = tmp_path / "state.json"
+    
+    markdown = """# Proposed Timeline: Paper Writing
+
+## Metadata
+- **Task List Name**: Paper Writing List
+- **Timezone**: America/New_York
+- **Target Start Date**: 2026-07-18
+- **Timeline State**: pending_approval
+
+## Proposed Google Tasks
+- [ ] **Write Section 3.2 of the paper**
+  - **Notes**: parent notes
+  - [ ] **Validate code and results for 3.2**
+    - **Due**: 2026-07-18
+    - **Notes**: subtask 1 notes
+  - [ ] **Generate figures for 3.2**
+    - **Due**: 2026-07-19
+
+## Proposed Calendar Events
+- **Event**: Focus: Validate code and results for 3.2
+  - **Start**: 2026-07-18T09:00:00-04:00
+  - **End**: 2026-07-18T11:00:00-04:00
+  - **Description**: subtask 1 notes
+"""
+    proposed_file.write_text(markdown)
+    
+    # Mock credentials and services
+    monkeypatch.setattr("timeline_planner.get_credentials", lambda: None)
+    monkeypatch.setattr("timeline_planner.fetch_tasklists", lambda service: [])
+    
+    # Track Tasks API insert calls
+    inserted_tasks = []
+    
+    class MockTasksResource:
+        def insert(self, tasklist, body, parent=None):
+            inserted_tasks.append((body, parent))
+            class Exec:
+                def execute(self):
+                    # Return deterministic ID based on title
+                    return {"id": "ID_" + body["title"].replace(" ", "_")}
+            return Exec()
+            
+    class MockTasklistsResource:
+        def insert(self, body):
+            class Exec:
+                def execute(self):
+                    return {"id": "TASKLIST_123"}
+            return Exec()
+            
+    class MockTasksService:
+        def tasklists(self):
+            return MockTasklistsResource()
+        def tasks(self):
+            return MockTasksResource()
+            
+    class MockCalendarEventsResource:
+        def insert(self, calendarId, body):
+            class Exec:
+                def execute(self):
+                    return {"id": "EVENT_123"}
+            return Exec()
+            
+    class MockCalendarService:
+        def events(self):
+            return MockCalendarEventsResource()
+            
+    monkeypatch.setattr("timeline_planner.build_tasks_service", lambda creds: MockTasksService())
+    monkeypatch.setattr("timeline_planner.build_calendar_service", lambda creds: MockCalendarService())
+    
+    class Args:
+        def __init__(self):
+            self.proposed_file = str(proposed_file)
+            self.state_file = str(state_file)
+            self.confirm = True
+            
+    timeline_planner.handle_apply(Args())
+    
+    # Check inserted tasks and hierarchies
+    assert len(inserted_tasks) == 3
+    # Parent task created first
+    assert inserted_tasks[0][0]["title"] == "Write Section 3.2 of the paper"
+    assert inserted_tasks[0][1] is None # No parent
+    
+    # Subtask 1 created second, with parent ID pointing to parent task
+    assert inserted_tasks[1][0]["title"] == "Validate code and results for 3.2"
+    assert inserted_tasks[1][1] == "ID_Write_Section_3.2_of_the_paper"
+    
+    # Subtask 2 created third, with parent ID pointing to parent task
+    assert inserted_tasks[2][0]["title"] == "Generate figures for 3.2"
+    assert inserted_tasks[2][1] == "ID_Write_Section_3.2_of_the_paper"
+

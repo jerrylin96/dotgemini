@@ -111,8 +111,17 @@ Create a JSON configuration file under `artifacts/goals.json`. Example structure
   "tasks": [
     {
       "title": "Set up project structure",
-      "duration_hours": 2,
-      "notes": "Create repo, setup venv, configure tools."
+      "notes": "Verify run scripts and output files.",
+      "subtasks": [
+        {
+          "title": "Setup venv and dependencies",
+          "duration_hours": 1.0
+        },
+        {
+          "title": "Configure git and tooling config",
+          "duration_hours": 1.0
+        }
+      ]
     },
     {
       "title": "Implement API endpoints",

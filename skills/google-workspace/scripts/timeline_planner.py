@@ -121,7 +121,8 @@ def parse_proposed_timeline(markdown_content):
     events = []
     errors = []
 
-    current_task = None
+    current_parent_idx = None
+    current_subtask_idx = None
     current_event = None
     mode = None
 
@@ -175,28 +176,55 @@ def parse_proposed_timeline(markdown_content):
                 stripped,
             )
             if task_header_match:
-                if current_task:
-                    tasks.append(current_task)
-                current_task = {
+                new_task = {
                     "title": task_header_match.group(2).strip(),
                     "due": "",
                     "notes": "",
                     "id": task_header_match.group(3) or "",
                     "completed": bool(task_header_match.group(1).strip()),
                     "line_number": idx,
+                    "is_parent": False,
+                    "parent_idx": None,
                 }
-            elif current_task:
-                if stripped.startswith("- **Due**:") or stripped.startswith(
-                    "- **due**:"
-                ):
-                    current_task["due"] = stripped.split(":", 1)[1].strip()
-                elif stripped.startswith("- **Notes**:") or stripped.startswith(
-                    "- **notes**:"
-                ):
-                    current_task["notes"] = stripped.split(":", 1)[1].strip()
+                
+                # Check hierarchy based on indentation
+                indent = len(line) - len(line.lstrip())
+                if indent < 2:
+                    # It's a parent / standalone task
+                    new_task["is_parent"] = True
+                    tasks.append(new_task)
+                    current_parent_idx = len(tasks) - 1
+                    current_subtask_idx = None
+                else:
+                    # It's a subtask
+                    if current_parent_idx is None:
+                        errors.append(f"Line {idx}: Subtask found without a parent task.")
+                        continue
+                    new_task["is_parent"] = False
+                    new_task["parent_idx"] = current_parent_idx
+                    tasks.append(new_task)
+                    current_subtask_idx = len(tasks) - 1
+            elif current_parent_idx is not None:
+                # Property line
+                is_due = stripped.startswith("- **Due**:") or stripped.startswith("- **due**:")
+                is_notes = stripped.startswith("- **Notes**:") or stripped.startswith("- **notes**:")
+                
+                if is_due or is_notes:
+                    val = stripped.split(":", 1)[1].strip()
+                    indent = len(line) - len(line.lstrip())
+                    # Level 2 properties (indent >= 4) belong to subtask
+                    if current_subtask_idx is not None and indent >= 4:
+                        target_task = tasks[current_subtask_idx]
+                    else:
+                        target_task = tasks[current_parent_idx]
+                        
+                    if is_due:
+                        target_task["due"] = val
+                    else:
+                        target_task["notes"] = val
                 else:
                     errors.append(
-                        f"Line {idx}: Unrecognized task property line '{stripped}' under task '{current_task['title']}'."
+                        f"Line {idx}: Unrecognized task property line '{stripped}'."
                     )
             else:
                 errors.append(
@@ -240,8 +268,6 @@ def parse_proposed_timeline(markdown_content):
                     f"Line {idx}: Malformed event entry. Expected event header: '- **Event**: Title'. Got: '{stripped}'."
                 )
 
-    if current_task:
-        tasks.append(current_task)
     if current_event:
         events.append(current_event)
 
@@ -290,6 +316,9 @@ def preflight_validate_timeline(plan_data):
         title = task.get("title", "").strip()
         if not title:
             errors.append(f"Task error at index {i}: Title cannot be empty.")
+
+        if task.get("is_parent"):
+            continue
 
         due = task.get("due", "").strip()
         if not due:
@@ -525,17 +554,39 @@ def handle_plan(args):
         if not title:
             print(f"Error: Task at index {i} is missing a title.", file=sys.stderr)
             sys.exit(1)
-        duration = t.get("duration_hours", 1.0)
-        try:
-            duration = float(duration)
-            if duration <= 0:
-                raise ValueError
-        except (ValueError, TypeError):
-            print(
-                f"Error: Task '{title}' must have a positive duration_hours.",
-                file=sys.stderr,
-            )
-            sys.exit(1)
+            
+        subtasks_cfg = t.get("subtasks", [])
+        if subtasks_cfg:
+            # Validate subtasks
+            for j, sub in enumerate(subtasks_cfg):
+                sub_title = sub.get("title", "").strip()
+                if not sub_title:
+                    print(f"Error: Subtask at index {j} under task '{title}' is missing a title.", file=sys.stderr)
+                    sys.exit(1)
+                sub_duration = sub.get("duration_hours", 1.0)
+                try:
+                    sub_duration = float(sub_duration)
+                    if sub_duration <= 0:
+                        raise ValueError
+                except (ValueError, TypeError):
+                    print(
+                        f"Error: Subtask '{sub_title}' under task '{title}' must have a positive duration_hours.",
+                        file=sys.stderr,
+                    )
+                    sys.exit(1)
+        else:
+            # Validate standalone task duration
+            duration = t.get("duration_hours", 1.0)
+            try:
+                duration = float(duration)
+                if duration <= 0:
+                    raise ValueError
+            except (ValueError, TypeError):
+                print(
+                    f"Error: Task '{title}' must have a positive duration_hours.",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
 
     # 2. Resolve start date & planning horizon (clamped to today if past start_date is supplied)
     start_date_str = data.get("start_date")
@@ -615,61 +666,130 @@ def handle_plan(args):
     current_schedule_date = start_date
 
     for task_info in tasks_cfg:
-        duration_hours = float(task_info.get("duration_hours", 1.0))
-        duration_td = datetime.timedelta(hours=duration_hours)
+        subtasks_cfg = task_info.get("subtasks", [])
+        if subtasks_cfg:
+            # It's a parent task
+            parent_task_entry = {
+                "title": task_info["title"],
+                "notes": task_info.get("notes", ""),
+                "subtasks": []
+            }
+            # Schedule each subtask
+            for sub_info in subtasks_cfg:
+                duration_hours = float(sub_info.get("duration_hours", 1.0))
+                duration_td = datetime.timedelta(hours=duration_hours)
+                
+                scheduled = False
+                attempts = 0
+                while not scheduled and attempts < days_limit:
+                    check_date = current_schedule_date + datetime.timedelta(days=attempts)
+                    if check_date >= (start_date + datetime.timedelta(days=days_limit)):
+                        break
+                        
+                    working_start = datetime.datetime.combine(
+                        check_date, working_start_time, tzinfo=tz
+                    )
+                    working_end = datetime.datetime.combine(
+                        check_date, working_end_time, tzinfo=tz
+                    )
+                    
+                    if check_date == now_local.date():
+                        working_start = max(working_start, now_local)
+                        
+                    slot = find_free_slot(
+                        working_start, working_end, calendar_intervals, duration_td
+                    )
+                    if slot:
+                        slot_start, slot_end = slot
+                        parent_task_entry["subtasks"].append(
+                            {
+                                "title": sub_info["title"],
+                                "due": check_date.strftime("%Y-%m-%d"),
+                                "notes": sub_info.get("notes", ""),
+                            }
+                        )
+                        proposed_events.append(
+                            {
+                                "summary": f"Focus: {sub_info['title']}",
+                                "start": slot_start.isoformat(),
+                                "end": slot_end.isoformat(),
+                                "description": sub_info.get("notes", ""),
+                            }
+                        )
+                        calendar_intervals.append(Interval(slot_start, slot_end))
+                        current_schedule_date = check_date
+                        scheduled = True
+                    else:
+                        attempts += 1
+                        
+                if not scheduled:
+                    unscheduled_tasks.append(
+                        {
+                            "title": f"{task_info['title']} -> {sub_info['title']}",
+                            "duration_hours": duration_hours,
+                            "notes": sub_info.get("notes", ""),
+                        }
+                    )
+            # Add parent task to proposed_tasks if any of its subtasks were scheduled
+            if parent_task_entry["subtasks"]:
+                proposed_tasks.append(parent_task_entry)
+        else:
+            # Standalone task
+            duration_hours = float(task_info.get("duration_hours", 1.0))
+            duration_td = datetime.timedelta(hours=duration_hours)
 
-        scheduled = False
-        attempts = 0
-        while not scheduled and attempts < days_limit:
-            check_date = current_schedule_date + datetime.timedelta(days=attempts)
-            if check_date >= (start_date + datetime.timedelta(days=days_limit)):
-                break
+            scheduled = False
+            attempts = 0
+            while not scheduled and attempts < days_limit:
+                check_date = current_schedule_date + datetime.timedelta(days=attempts)
+                if check_date >= (start_date + datetime.timedelta(days=days_limit)):
+                    break
 
-            working_start = datetime.datetime.combine(
-                check_date, working_start_time, tzinfo=tz
-            )
-            working_end = datetime.datetime.combine(
-                check_date, working_end_time, tzinfo=tz
-            )
+                working_start = datetime.datetime.combine(
+                    check_date, working_start_time, tzinfo=tz
+                )
+                working_end = datetime.datetime.combine(
+                    check_date, working_end_time, tzinfo=tz
+                )
 
-            # Avoid scheduling in the past if start_date is today
-            if check_date == now_local.date():
-                working_start = max(working_start, now_local)
+                # Avoid scheduling in the past if start_date is today
+                if check_date == now_local.date():
+                    working_start = max(working_start, now_local)
 
-            slot = find_free_slot(
-                working_start, working_end, calendar_intervals, duration_td
-            )
-            if slot:
-                slot_start, slot_end = slot
-                proposed_tasks.append(
+                slot = find_free_slot(
+                    working_start, working_end, calendar_intervals, duration_td
+                )
+                if slot:
+                    slot_start, slot_end = slot
+                    proposed_tasks.append(
+                        {
+                            "title": task_info["title"],
+                            "due": check_date.strftime("%Y-%m-%d"),
+                            "notes": task_info.get("notes", ""),
+                        }
+                    )
+                    proposed_events.append(
+                        {
+                            "summary": f"Focus: {task_info['title']}",
+                            "start": slot_start.isoformat(),
+                            "end": slot_end.isoformat(),
+                            "description": task_info.get("notes", ""),
+                        }
+                    )
+                    calendar_intervals.append(Interval(slot_start, slot_end))
+                    current_schedule_date = check_date
+                    scheduled = True
+                else:
+                    attempts += 1
+
+            if not scheduled:
+                unscheduled_tasks.append(
                     {
                         "title": task_info["title"],
-                        "due": check_date.strftime("%Y-%m-%d"),
+                        "duration_hours": duration_hours,
                         "notes": task_info.get("notes", ""),
                     }
                 )
-                proposed_events.append(
-                    {
-                        "summary": f"Focus: {task_info['title']}",
-                        "start": slot_start.isoformat(),
-                        "end": slot_end.isoformat(),
-                        "description": task_info.get("notes", ""),
-                    }
-                )
-                calendar_intervals.append(Interval(slot_start, slot_end))
-                current_schedule_date = check_date
-                scheduled = True
-            else:
-                attempts += 1
-
-        if not scheduled:
-            unscheduled_tasks.append(
-                {
-                    "title": task_info["title"],
-                    "duration_hours": duration_hours,
-                    "notes": task_info.get("notes", ""),
-                }
-            )
 
     # Write Proposed Markdown (using atomic write)
     markdown_content = (
@@ -682,9 +802,20 @@ def handle_plan(args):
         "## Proposed Google Tasks\n"
     )
     for task in proposed_tasks:
-        markdown_content += f"- [ ] **{task['title']}**\n"
-        markdown_content += f"  - **Due**: {task['due']}\n"
-        markdown_content += f"  - **Notes**: {task['notes']}\n"
+        if "subtasks" in task:
+            markdown_content += f"- [ ] **{task['title']}**\n"
+            if task.get("notes"):
+                markdown_content += f"  - **Notes**: {task['notes']}\n"
+            for sub in task["subtasks"]:
+                markdown_content += f"  - [ ] **{sub['title']}**\n"
+                markdown_content += f"    - **Due**: {sub['due']}\n"
+                if sub.get("notes"):
+                    markdown_content += f"    - **Notes**: {sub['notes']}\n"
+        else:
+            markdown_content += f"- [ ] **{task['title']}**\n"
+            markdown_content += f"  - **Due**: {task['due']}\n"
+            if task.get("notes"):
+                markdown_content += f"  - **Notes**: {task['notes']}\n"
 
     markdown_content += "\n## Proposed Calendar Events\n"
     for event in proposed_events:
@@ -819,12 +950,26 @@ def handle_apply(args):
                         task_body["due"] = f"{task['due']}T12:00:00{tz_offset_str}"
 
                     try:
+                        parent_id = None
+                        if not task.get("is_parent") and task.get("parent_idx") is not None:
+                            parent_idx = task["parent_idx"]
+                            parent_task = plan_data["tasks"][parent_idx]
+                            parent_id = parent_task.get("id")
+
+                        kwargs = {
+                            "tasklist": tasklist_id,
+                            "body": task_body
+                        }
+                        if parent_id:
+                            kwargs["parent"] = parent_id
+
                         created_task = (
                             tasks_service.tasks()
-                            .insert(tasklist=tasklist_id, body=task_body)
+                            .insert(**kwargs)
                             .execute()
                         )
                         task_id = created_task["id"]
+                        task["id"] = task_id  # Update in memory for subtasks lookup
                     except Exception as e:
                         print(
                             f"Error creating task '{task['title']}': {e}",
