@@ -75,7 +75,10 @@ Slice 2: Integrate and test end-to-end
 ```
 
 > [!TIP]
-> **Parallel Slicing with Subagents**: For **Contract-First Slicing** or independent vertical slices, the main agent can define the contracts/interfaces (Slice 0), then invoke parallel subagents (using `self` in `branch` or `share` mode) to build separate slices (e.g. backend implementation and frontend component) concurrently. The main agent then merges, integrates, and tests them end-to-end in Slice 2.
+> **Subagent Delegation (Antigravity Only)**: For **Contract-First Slicing**, the main agent can define the contracts/interfaces (Slice 0) and invoke concurrent, built-in `self` subagents using `Workspace: branch` (isolated repository clones) to build the backend (Slice 1a) and frontend (Slice 1b) concurrently.
+> *   **Guardrail**: Never use `share` mode concurrently for writing subagents, as they will clobber each other's checkout states and files. Use `share` or `inherit` only for sequential or read-only tasks.
+> *   **Conflict & Merge Strategy**: After subagents complete their tasks, the main agent must reconcile the code (via git merge or manual file integration), resolve any conflicts, and execute end-to-end verification tests via `run_in_env.py`.
+> *   **Fallback**: In runtimes without subagent support (e.g. Gemini CLI), the main agent must execute all slices sequentially.
 
 ### Risk-First Slicing
 

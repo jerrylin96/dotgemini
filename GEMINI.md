@@ -131,3 +131,25 @@ When performing reviews, running tests, or inspecting code in this codebase:
 * **Storage Location**: Store any user-facing deliverables, planning timelines, code review specs, or roadmaps intended for user review or manual edits in the `artifacts/` folder at the root of the workspace (e.g., `artifacts/proposed_timeline.md`). Do NOT write these to deep system/cache directories.
 * **Ignored Folder**: Ensure `artifacts/` is in `.gitignore` to prevent session-specific planning state from polluting the Git tree.
 
+---
+
+## 10. Subagent Types & Delegation (Antigravity Only)
+
+Subagents are supported in the Antigravity runtime (via `invoke_subagent` and `define_subagent` tools). They are not available in primitive runtimes like Gemini CLI. When invoking subagents, adhere to the following definitions, modes, and heuristics:
+
+### Subagent Types (`TypeName`)
+*   **`self`**: Inherits the parent's full toolset, system prompt, and model configuration. Use for action-heavy tasks, setting up environments, executing tests, making file edits, or generating code.
+*   **`research`**: Read-only subagent equipped with read tools (grep search, web search, file reading, codebase navigation). Use for exploration, context gathering, and read-only diff analysis.
+
+### Workspace Modes (`Workspace`)
+*   **`inherit` (default)**: Operates in the parent's current filesystem directory. If the parent has already changed directories to an isolated worktree path (e.g. under `~/.gemini/tmp/worktrees/`), use `inherit` to keep the subagent inside that path.
+*   **`branch`**: Creates a completely separate, isolated repository clone. Essential for concurrent writing subagents (e.g. parallel vertical slicing) to guarantee no file or git conflicts.
+*   **`share`**: Shares the parent's underlying git storage. Useful for sequential or read-only access, but **never** use concurrently for multiple subagents that generate or modify files, to avoid clobbering filesystem state.
+
+### Heuristics & Guardrails
+*   **Tool selection**: Use `research` for log-diving, code exploration, and static analysis. Switch to `self` when command execution, virtual environment setups, or file writes are required.
+*   **Env Isolation**: Always instruct subagents operating on code changes to use the environment wrappers (`setup_review_env.py` and `run_in_env.py`) to keep validation clean and isolated.
+*   **Conflict Resolution**: When parallel slicing subagents finish, the main agent must manually reconcile and verify the integrated codebase via end-to-end tests before staging.
+
+
+

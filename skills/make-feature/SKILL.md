@@ -34,8 +34,10 @@ Use this skill when you need to make changes to a repository (such as adding a f
      git worktree add ~/.gemini/tmp/worktrees/gemini_<sanitized-feature-name> gemini/<feature-name>
      ```
 5. **Modify & Develop**: Perform all file edits, writes, and local commands inside the isolated worktree directory (`~/.gemini/tmp/worktrees/gemini_<sanitized-feature-name>`). Do not make changes in the primary workspace.
+
    > [!TIP]
-   > **Delegating to Subagent**: If the development task is complex or involves multiple steps, the main agent should define and invoke a `self` subagent pointing to the resolved worktree path as its workspace. This allows the subagent to perform the edits, runs, and tests in isolation, keeping the parent conversation context clean and responsive to the user.
+   > **Subagent Delegation (Antigravity Only)**: For complex changesets, instead of editing files directly, the main agent can change directories into the worktree path and invoke the built-in `self` subagent with `Workspace: inherit`. Tasks should explicitly instruct the subagent to use virtual environment wrappers (`setup_review_env.py` and `run_in_env.py`) for all runs/tests. In runtimes without subagent support (e.g. Gemini CLI), the main agent must perform these steps directly.
+
 6. **Stage & Commit**: Run git staging and commit commands from within the worktree directory:
    ```bash
    git add <modified_files>

@@ -132,6 +132,10 @@ The script returns JSON on stdout. The schema depends on the outcome:
    - Note: Git fetches are best-effort. If network resolution fails, the review may run against stale local tracking references.
 3. **Setup/Use Isolated Env**:
    - To run tests, execute linters, or run/view code:
+
+     > [!TIP]
+     > **Subagent Delegation (Antigravity Only)**: If the feature branch is large, has a massive diff, or has a complex test suite, the main agent can delegate this step. Invoke the built-in `research` subagent for read-only code exploration and static analysis, or the built-in `self` subagent (instructed to `cd` into `<worktree_path>` or using `Workspace: inherit` if the main agent is already in the worktree path) to set up the review environment and run tests. In runtimes without subagent support (e.g. Gemini CLI), the main agent performs these steps directly.
+
      1. Initialize the review environment for the worktree:
         ```bash
         python3 ~/.gemini/scripts/setup_review_env.py <worktree_path>
@@ -144,9 +148,6 @@ The script returns JSON on stdout. The schema depends on the outcome:
         ```bash
         python3 ~/.gemini/scripts/run_in_env.py <worktree_path> ruff check .
         ```
-
-   > [!TIP]
-   > **Offloading to Subagent**: If the feature branch is large, has a massive diff, or has a complex test suite, the main agent should define and invoke a `research` or `self` subagent pointing to the resolved `<worktree_path>`. The subagent can set up the environment, run tests/linters, investigate failures, and compile its findings for the main agent. This prevents terminal command/log noise from bloating the main conversation context.
 
 4. **Perform Adversarial Review**:
    - Analyze the diff and perform an adversarial review focusing on:
