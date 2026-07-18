@@ -10,6 +10,7 @@ import json
 import os
 import re
 import sys
+import subprocess
 from zoneinfo import ZoneInfo
 
 # Add current directory to path to allow importing workspace_client
@@ -345,7 +346,10 @@ def preflight_validate_timeline(plan_data):
 def atomic_write_file(file_path, content, is_json=False):
     """Writes content atomically to file_path using a temporary file and fsync."""
     parent_dir = os.path.dirname(os.path.abspath(file_path))
-    os.makedirs(parent_dir, exist_ok=True)
+    try:
+        os.makedirs(parent_dir, exist_ok=True)
+    except OSError as e:
+        raise RuntimeError(f"Failed to create directory '{parent_dir}': {e}")
 
     temp_path = file_path + ".tmp"
     try:
@@ -1018,27 +1022,68 @@ def handle_status(args):
     print(f"Status sync completed. Updated checklist in {args.proposed_file}")
 
 
+_git_root_cache = None
+_project_name_cache = None
+
+
+def get_project_info():
+    global _git_root_cache, _project_name_cache
+    if _git_root_cache is not None:
+        return _git_root_cache, _project_name_cache
+    
+    cwd = os.getcwd()
+    try:
+        git_root = subprocess.check_output(
+            ["git", "rev-parse", "--show-toplevel"], cwd=cwd, stderr=subprocess.DEVNULL
+        ).decode().strip()
+        _git_root_cache = os.path.abspath(git_root)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        _git_root_cache = os.path.abspath(cwd)
+        
+    base = os.path.basename(_git_root_cache)
+    if not base:
+        base = "root"
+    _project_name_cache = base
+    
+    return _git_root_cache, _project_name_cache
+
+
 def resolve_artifact_path(path):
     """Resolves artifact paths to an Obsidian Vault if configured."""
     if not path:
         return path
     
-    normalized_path = os.path.normpath(path)
-    parts = normalized_path.split(os.sep)
-    if parts[0] != "artifacts":
+    git_root, project_name = get_project_info()
+    local_artifacts_dir = os.path.join(git_root, "artifacts")
+    
+    abs_incoming = os.path.abspath(path)
+    is_artifact = False
+    if abs_incoming == local_artifacts_dir:
+        is_artifact = True
+    elif abs_incoming.startswith(local_artifacts_dir + os.sep):
+        is_artifact = True
+        
+    if not is_artifact:
         return path
 
     vault_path = os.environ.get("ANTIGRAVITY_OBSIDIAN_VAULT")
 
-    if not vault_path:
+    if vault_path is None:
         settings_path = os.path.expanduser("~/.gemini/antigravity-cli/settings.json")
         if os.path.exists(settings_path):
             try:
                 with open(settings_path, "r") as f:
                     settings = json.load(f)
-                    vault_path = settings.get("obsidian_vault_path")
-            except Exception:
-                pass
+                    if "obsidian_vault_path" in settings:
+                        vault_path = settings["obsidian_vault_path"]
+            except (json.JSONDecodeError, OSError) as e:
+                sys.stderr.write(
+                    f"Warning: Could not read obsidian_vault_path from settings.json: {e} - falling back.\n"
+                )
+
+    # Respect explicit opt-out
+    if vault_path == "" or vault_path is False:
+        return path
 
     if not vault_path:
         for fallback in ["~/Desktop/antigravity_vault", "~/Documents/antigravity_vault"]:
@@ -1050,20 +1095,25 @@ def resolve_artifact_path(path):
     if not vault_path:
         return path
 
-    project_name = os.path.basename(os.getcwd())
-    try:
-        import subprocess
-        git_root = subprocess.check_output(
-            ["git", "rev-parse", "--show-toplevel"], cwd=os.getcwd(), stderr=subprocess.DEVNULL
-        ).decode().strip()
-        project_name = os.path.basename(git_root)
-    except Exception:
-        pass
+    # Blocker 1: Validate vault path starts with user's HOME directory
+    real_vault = os.path.realpath(vault_path)
+    real_home = os.path.realpath(os.path.expanduser("~"))
+    if os.path.commonpath([real_home, real_vault]) != real_home:
+        sys.stderr.write(
+            f"Warning: Obsidian Vault path '{vault_path}' is outside user's HOME directory. "
+            "Falling back to local workspace artifacts.\n"
+        )
+        return path
 
-    relative_part = os.sep.join(parts[1:])
+    # Resolve project-based path
+    relative_part = os.path.relpath(abs_incoming, local_artifacts_dir)
     resolved = os.path.join(vault_path, "Projects", project_name, relative_part)
     
-    os.makedirs(os.path.dirname(resolved), exist_ok=True)
+    # If the resolved vault file does not exist, but the original local path does exist,
+    # fall back to the local path to prevent crashes on existing files.
+    if not os.path.exists(resolved) and os.path.exists(abs_incoming):
+        return abs_incoming
+        
     return resolved
 
 
@@ -1129,9 +1179,10 @@ def main():
     args = parser.parse_args()
     
     # Resolve artifacts paths dynamically to support Obsidian Vault
-    for attr in ["goals_file", "proposed_file", "state_file"]:
-        if hasattr(args, attr):
-            setattr(args, attr, resolve_artifact_path(getattr(args, attr)))
+    # Only resolve proposed_file (user-facing markdown timeline).
+    # Keep goals_file (input) and state_file (internal state) local to workspace.
+    if getattr(args, "proposed_file", None) is not None:
+        args.proposed_file = resolve_artifact_path(args.proposed_file)
 
     args.func(args)
 
