@@ -74,6 +74,9 @@ Slice 1b: Implement frontend against mock data matching the contract
 Slice 2: Integrate and test end-to-end
 ```
 
+> [!TIP]
+> **Parallel Slicing with Subagents**: For **Contract-First Slicing** or independent vertical slices, the main agent can define the contracts/interfaces (Slice 0), then invoke parallel subagents (using `self` in `branch` or `share` mode) to build separate slices (e.g. backend implementation and frontend component) concurrently. The main agent then merges, integrates, and tests them end-to-end in Slice 2.
+
 ### Risk-First Slicing
 
 Tackle the riskiest or most uncertain piece first:

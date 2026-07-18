@@ -41,6 +41,9 @@ Work through these steps in order. Do not skip steps.
 
 Make the failure happen reliably. If you can't reproduce it, you can't fix it with confidence.
 
+> [!TIP]
+> **Isolating Debugging via Subagents**: Steps 1 to 3 (Reproduce, Localize, and Reduce) often involve executing numerous shell commands, inspecting long stack traces, and writing throwaway repro scripts. To prevent context window bloat and maintain a clean conversation log, define and invoke a `research` or `self` subagent to isolate the bug, build a minimal failing case, and report back with structured findings.
+
 ### Step 2: Localize
 
 Narrow down WHERE the failure happens:

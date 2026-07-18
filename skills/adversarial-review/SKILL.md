@@ -145,6 +145,9 @@ The script returns JSON on stdout. The schema depends on the outcome:
         python3 ~/.gemini/scripts/run_in_env.py <worktree_path> ruff check .
         ```
 
+   > [!TIP]
+   > **Offloading to Subagent**: If the feature branch is large, has a massive diff, or has a complex test suite, the main agent should define and invoke a `research` or `self` subagent pointing to the resolved `<worktree_path>`. The subagent can set up the environment, run tests/linters, investigate failures, and compile its findings for the main agent. This prevents terminal command/log noise from bloating the main conversation context.
+
 4. **Perform Adversarial Review**:
    - Analyze the diff and perform an adversarial review focusing on:
      - **Technical Bugs** (Unconditional): Logical errors, performance issues, security vulnerabilities, regression risks, and code design.

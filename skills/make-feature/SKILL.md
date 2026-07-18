@@ -34,6 +34,8 @@ Use this skill when you need to make changes to a repository (such as adding a f
      git worktree add ~/.gemini/tmp/worktrees/gemini_<sanitized-feature-name> gemini/<feature-name>
      ```
 5. **Modify & Develop**: Perform all file edits, writes, and local commands inside the isolated worktree directory (`~/.gemini/tmp/worktrees/gemini_<sanitized-feature-name>`). Do not make changes in the primary workspace.
+   > [!TIP]
+   > **Delegating to Subagent**: If the development task is complex or involves multiple steps, the main agent should define and invoke a `self` subagent pointing to the resolved worktree path as its workspace. This allows the subagent to perform the edits, runs, and tests in isolation, keeping the parent conversation context clean and responsive to the user.
 6. **Stage & Commit**: Run git staging and commit commands from within the worktree directory:
    ```bash
    git add <modified_files>
