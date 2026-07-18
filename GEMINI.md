@@ -135,20 +135,28 @@ When performing reviews, running tests, or inspecting code in this codebase:
 
 ## 10. Subagent Types & Delegation (Antigravity Only)
 
-Subagents are supported in the Antigravity runtime (via `invoke_subagent` and `define_subagent` tools). They are not available in primitive runtimes like Gemini CLI. When invoking subagents, adhere to the following definitions, modes, and heuristics:
+This delegation contract (using `invoke_subagent`, `define_subagent`, built-in `self`/`research` types, and `Workspace` modes) is supported exclusively by the Antigravity CLI (`agy`) runtime. In runtimes with a different subagent contract or without these tools (e.g. Gemini CLI), the main agent performs all steps directly.
+
+> [!NOTE]
+> This config repository provides integration and behavioral guidance for agents; the subagent mechanisms themselves are native to the Antigravity runtime.
 
 ### Subagent Types (`TypeName`)
-*   **`self`**: Inherits the parent's full toolset, system prompt, and model configuration. Use for action-heavy tasks, setting up environments, executing tests, making file edits, or generating code.
-*   **`research`**: Read-only subagent equipped with read tools (grep search, web search, file reading, codebase navigation). Use for exploration, context gathering, and read-only diff analysis.
+*   **`self`**: Inherits the parent's full toolset, system prompt, and model. Use for action-heavy tasks, virtual environment setup, executing tests, making file edits, or generating code.
+*   **`research`**: Read-only subagent optimized for read-only exploration and codebase research (grep, file viewing, codebase navigation).
 
 ### Workspace Modes (`Workspace`)
-*   **`inherit` (default)**: Operates in the parent's current filesystem directory. If the parent has already changed directories to an isolated worktree path (e.g. under `~/.gemini/tmp/worktrees/`), use `inherit` to keep the subagent inside that path.
-*   **`branch`**: Creates a completely separate, isolated repository clone. Essential for concurrent writing subagents (e.g. parallel vertical slicing) to guarantee no file or git conflicts.
-*   **`share`**: Shares the parent's underlying git storage. Useful for sequential or read-only access, but **never** use concurrently for multiple subagents that generate or modify files, to avoid clobbering filesystem state.
+*   **`inherit` (default)**: Operates in the parent's current directory. If the parent is already working inside an isolated worktree path, use `inherit` to keep the subagent in that directory.
+*   **`branch`**: Creates a completely separate, isolated workspace directory (cloned or branched from the parent). Use for concurrent writing subagents to guarantee environment isolation.
+*   **`share`**: Creates a new workspace sharing the parent's underlying repository directory (via Git worktree), allowing independent branching without duplicating storage. Useful for sequential or read-only access.
 
 ### Heuristics & Guardrails
-*   **Tool selection**: Use `research` for log-diving, code exploration, and static analysis. Switch to `self` when command execution, virtual environment setups, or file writes are required.
-*   **Env Isolation**: Always instruct subagents operating on code changes to use the environment wrappers (`setup_review_env.py` and `run_in_env.py`) to keep validation clean and isolated.
+*   **Context Isolation**: Subagents run using the same model as their parent but start with a clean slate, meaning they do not inherit the parent's existing conversation history (context window).
+*   **Nesting Limit**: Maximum nesting depth: 10 levels. Design delegation hierarchies accordingly to avoid recursion limits.
+*   **Scope & Permission Inheritance**: Subagents automatically inherit the parent's allowed terminal command prefixes and file read/write directory scopes. They cannot exceed the parent's allowed permissions.
+*   **Lifecycle & Cleanup**: Subagents execute asynchronously and communicate via messages. When a subagent is killed or finishes, its branched workspaces are automatically cleaned up, and its context is discarded (except for logs/artifacts).
+*   **Tool Selection**: Prefer `research` for log-diving, code exploration, and static analysis. Use `self` when command execution, virtual environment setups, or file writes are required.
+*   **Concurrency Guardrail**: Never use `share` mode concurrently for multiple writing subagents, to avoid clobbering workspaces. Use `branch` mode for concurrent writes.
+*   **Env Isolation**: Always instruct subagents operating on code changes to use the environment wrappers (`setup_review_env.py` and `run_in_env.py`) to keep validation clean.
 *   **Conflict Resolution**: When parallel slicing subagents finish, the main agent must manually reconcile and verify the integrated codebase via end-to-end tests before staging.
 
 

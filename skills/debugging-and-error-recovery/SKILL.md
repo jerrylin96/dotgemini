@@ -38,7 +38,7 @@ When anything unexpected happens:
 Work through these steps in order. Do not skip steps.
 
 > [!TIP]
-> **Subagent Delegation (Antigravity Only)**: Steps 1 to 3 (reproducing, localizing, and reducing bugs) often involve executing numerous diagnostic shell commands, reading long logs, and writing repro scripts. To prevent context window bloat, invoke the built-in `self` subagent (or `research` for read-only static analysis) to perform these steps. Instruct the subagent to use virtual environment wrappers (`setup_review_env.py` and `run_in_env.py`) for all runs/tests. In runtimes without subagent support (e.g. Gemini CLI), the main agent performs these steps directly.
+> **Subagent Delegation (Antigravity Only)**: Steps 1 to 3 (reproducing, localizing, and reducing bugs) often involve executing numerous diagnostic shell commands, reading long logs, and writing repro scripts. To prevent context window bloat, invoke the built-in `self` subagent (or `research` for read-only static analysis) to perform these steps. Instruct the subagent to use virtual environment wrappers (`setup_review_env.py` and `run_in_env.py`) for all runs/tests. This delegation contract is Antigravity-only; in other runtimes (e.g. Gemini CLI), the main agent performs these steps directly.
 
 ### Step 1: Reproduce
 
