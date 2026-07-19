@@ -1,7 +1,6 @@
 import glob
 import os
 import re
-import pytest
 
 def parse_frontmatter_name(skill_md_path):
     """Parse name from YAML frontmatter without external YAML parser dependency."""

@@ -25,6 +25,6 @@ This guide details best practices and compatibility standards for safely extract
 - Do not rely on receiving a short chunk as an EOF signal. Instead, calculate the total line count beforehand (e.g. check if the file lacks a trailing newline character and increment by 1). Read iteratively until `StartLine` exceeds this logical line count.
 
 ## 6. Cleanup
-- **Prohibited Deletions**: Do not delete repository-tracked files, worktree files, unknown paths, or perform broad recursive deletion (`rm -rf`). Never run deletions inside the repository or worktree.
-- **Allowed Deletions**: Cleanly delete only the exact, agent-created temporary files and directories under the known conversation scratch directory (e.g., `<appDataDir>/brain/<conversation-id>/scratch/`).
-- **Safe Commands**: Use `rm -- "<file_path>"` for files and `rmdir -- "<empty_dir_path>"` for directories. Never use `rm -rf` for cleanup. If an OS temporary directory was created via `TEMP_DIR=$(mktemp -d)`, delete only the specific temporary files inside it, then remove the empty directory with `rmdir -- "$TEMP_DIR"`.
+- **Prohibited Deletions**: Never delete repository-tracked files, worktree-tracked files, unknown paths, or perform broad recursive paths/deletions. Never run deletions inside the repository or worktree.
+- **Allowed Deletions (Exception)**: Exact, agent-created temporary files and directories under the verified conversation scratch directory (e.g. `<appDataDir>/brain/<conversation-id>/scratch/`) are an explicit exception and can be safely deleted, even when `<appDataDir>` resides beneath the cloned configuration repository path.
+- **Safe Commands**: Use `rm -- <known-file>` and `rmdir <known-empty-directory>` for cleanup. Never use `rm -rf`. If an OS temporary directory was created via `TEMP_DIR=$(mktemp -d)`, delete only the specific temporary files inside it, then remove the empty directory with `rmdir -- "$TEMP_DIR"`.
