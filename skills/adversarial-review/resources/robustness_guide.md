@@ -25,5 +25,6 @@ This guide details best practices and compatibility standards for safely extract
 - Do not rely on receiving a short chunk as an EOF signal. Instead, calculate the total line count beforehand (e.g. check if the file lacks a trailing newline character and increment by 1). Read iteratively until `StartLine` exceeds this logical line count.
 
 ## 6. Cleanup
-- Cleanly delete only the generated temporary files and directories when the review ends using `rm -- "<file_path>"`.
-- Do not use recursive deletion (`rm -rf`) on workspace or repository directories.
+- **No Repo Deletions**: Never run deletion commands (e.g. `rm`) inside the repository, index, or worktree.
+- **Avoid `rm -rf`**: If a temporary directory was created via `TEMP_DIR=$(mktemp -d)`, do not use recursive deletion (`rm -rf`). Instead, delete the specific temporary files created (`rm -- "$TEMP_DIR/file.txt"`) and then safely remove the empty directory using `rmdir -- "$TEMP_DIR"`.
+- Cleanly delete only the generated temporary files and directories under the scratch directory when the review ends using `rm -- "<file_path>"`.

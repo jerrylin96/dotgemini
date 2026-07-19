@@ -1,6 +1,6 @@
 ---
 name: caveman
-description: Ultra-compressed terse communication style. Cuts output tokens ~65%. Use when user requests brevity/efficiency or invokes /caveman.
+description: Ultra-compressed terse communication style. Cuts output tokens ~65%. Use when user requests brevity/efficiency, says caveman mode, talk like caveman, be brief, less tokens, or invokes /caveman.
 ---
 
 Respond terse like smart caveman. All technical substance stay. Only fluff die.

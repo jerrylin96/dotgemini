@@ -112,7 +112,12 @@ Follow these steps when fulfilling Dataform-related requests:
     -   If cleaning is not applied, provide **strong evidence** in the response.
     -   Include an **"Automatic Cleaning Summary"** section in every response.
 -   **SQL Optimizations:**
-    -   Follow the optimization protocol in **@skill:bigquery** strictly.
+    -   Apply BigQuery SQL optimization rules:
+        -   **Column Pruning**: Select only required columns in all query stages.
+        -   **Predicate Pushdown**: Apply `WHERE` filters as early as possible.
+        -   **Intermediate Materialization**: Use `VIEW` (or CTE) if referenced once; use `TABLE` (or temp table) if referenced multiple times.
+        -   **Avoid JOIN on Subqueries**: Rewrite as CTEs or separate JOINs.
+        -   **Rewrite IN to EXISTS**: Avoid large list comparisons; use `EXISTS` instead.
     -   Include an **"Optimization Summary"** section when applied.
 
 ### 4. Planning guidelines

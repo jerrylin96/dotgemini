@@ -1,6 +1,6 @@
 ---
 name: ponytail
-description: Minimizes codebase bloat using Ponytail (YAGNI, reuse, standard library first). Active on code writing, refactoring, and fixing. Use when user requests lazy/minimal solutions.
+description: Always-active code minimization (YAGNI, reuse, stdlib-first). Forces simplest working solution on any code writing/refactoring/fixing. Also use when user says ponytail, be lazy, yagni, or minimal.
 argument-hint: "[lite|full|ultra]"
 license: MIT
 ---

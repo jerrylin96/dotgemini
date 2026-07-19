@@ -16,6 +16,7 @@ This guide details best practices and compatibility standards for safely extract
 - `temp_diff_all.txt`: Stores complete diff hunks and context.
 - `temp_diff.txt`: Stores the per-file walkthrough diff. Dynamically extract each file's diff to a single stable location, overwriting it for each selected file.
 - `temp_diff_paths.txt`: Stores null-delimited name-status list.
+- **Git Log Truncation**: Retrieve commit subjects via `git log --oneline <reference_commit_hash>..<commit_hash>`. If the history is extremely long and risks stdout truncation, redirect it to a temp file (`temp_diff_log.txt`) and read it via `view_file`.
 
 ## 4. Special Git Cases
 - **Renames & Modes**: Explicitly check diff headers for renames (`rename from ...`), mode changes (`old mode ... new mode`), and binary files (`Binary files ... differ`).
@@ -26,5 +27,6 @@ This guide details best practices and compatibility standards for safely extract
 - Do not rely on receiving a short chunk as an EOF signal. Instead, calculate the total line count beforehand (e.g. check if the file lacks a trailing newline character and increment by 1). Read iteratively until `StartLine` exceeds this logical line count.
 
 ## 6. Cleanup
-- Cleanly delete only the generated temporary files and directories when the review ends using `rm -- "<file_path>"`.
-- Do not use recursive deletion (`rm -rf`) on workspace or repository directories.
+- **No Repo Deletions**: Never run deletion commands (e.g. `rm`) inside the repository, index, or worktree.
+- **Avoid `rm -rf`**: If a temporary directory was created via `TEMP_DIR=$(mktemp -d)`, do not use recursive deletion (`rm -rf`). Instead, delete the specific temporary files created (`rm -- "$TEMP_DIR/file.txt"`) and then safely remove the empty directory using `rmdir -- "$TEMP_DIR"`.
+- Cleanly delete only the generated temporary files and directories under the scratch directory when the review ends using `rm -- "<file_path>"`.

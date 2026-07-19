@@ -1,6 +1,6 @@
 ---
 name: make-feature
-description: Creates a feature branch and isolated git worktree. Use when developing features or editing files without modifying the primary workspace.
+description: Creates a feature branch (always prefixed with gemini/) and isolated git worktree. Use when developing features or editing files without modifying the primary workspace.
 ---
 
 # Isolated Feature Branch Development via Git Worktree
