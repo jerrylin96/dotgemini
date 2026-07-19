@@ -1,6 +1,6 @@
 ---
 name: make-feature
-description: Creates a new feature branch and isolated git worktree in a temporary location, allowing safe development and commits without modifying the primary workspace.
+description: Creates a feature branch and isolated git worktree. Use when developing features or editing files without modifying the primary workspace.
 ---
 
 # Isolated Feature Branch Development via Git Worktree
