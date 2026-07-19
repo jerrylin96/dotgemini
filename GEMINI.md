@@ -56,6 +56,9 @@ Use the following commands to navigate the development lifecycle:
 | **Review** | `/review` | Improve code health | Run linters (`ruff`, `mypy`) & inspect code |
 | **Simplify** | `/code-simplify` | Clarity over cleverness | Remove bloated abstractions |
 
+> [!NOTE]
+> **Slash Commands Portability:** Slash commands (e.g., `/spec`, `/plan`, `/build`, `/test`, `/review`, `/code-simplify`) are native to the Antigravity runtime. For external/multi-agent clients (like Claude Code or Codex), execute equivalent local commands directly (e.g. running testing frameworks, linters, or creating manual planning markdown files).
+
 ### Core Operating Behaviors
 * **Surface Assumptions:** Before writing any non-trivial code, explicitly list assumptions:
   ```markdown
@@ -71,18 +74,18 @@ Use the following commands to navigate the development lifecycle:
 
 ## 4. Discoverable Global Skills
 
-The global settings contain dedicated skills under `~/.gemini/skills/` which can be loaded on demand:
+The global settings contain dedicated skills under `~/.gemini/skills/` which can be loaded on demand. Note that some are specific to the Antigravity runtime, while others are portable rules:
 
-* [adversarial-review/SKILL.md](skills/adversarial-review/SKILL.md) — Git worktree-based adversarial code review helper
-* [explain-diff/SKILL.md](skills/explain-diff/SKILL.md) — Interactive, read-only diff explanation walkthrough (overall summary, per-hunk explanations, drill-down Q&A)
-* [google-workspace/SKILL.md](skills/google-workspace/SKILL.md) — Manage Google Calendar events and Google Tasks (list, create, update, delete)
-* [ponytail/SKILL.md](skills/ponytail/SKILL.md) — Detailed minimal-code YAGNI guidelines
-* [caveman/SKILL.md](skills/caveman/SKILL.md) — Concise style and compression levels
-* [incremental-implementation/SKILL.md](skills/incremental-implementation/SKILL.md) — Thin-slice execution cycles
-* [test-driven-development/SKILL.md](skills/test-driven-development/SKILL.md) — Red-Green-Refactor and Prove-It patterns
-* [debugging-and-error-recovery/SKILL.md](skills/debugging-and-error-recovery/SKILL.md) — Root-cause triage checklists
-* [make-feature/SKILL.md](skills/make-feature/SKILL.md) — Isolated feature branch development via git worktree
-* [session-sync/SKILL.md](skills/session-sync/SKILL.md) — Sync/restore an Antigravity CLI conversation session across machines via a shared Git remote
+* [adversarial-review/SKILL.md](skills/adversarial-review/SKILL.md) — **(Antigravity Only)** Git worktree-based adversarial code review helper
+* [explain-diff/SKILL.md](skills/explain-diff/SKILL.md) — **(Antigravity Only)** Interactive, read-only diff explanation walkthrough (overall summary, per-hunk explanations, drill-down Q&A)
+* [google-workspace/SKILL.md](skills/google-workspace/SKILL.md) — **(Portable)** Manage Google Calendar events and Google Tasks (list, create, update, delete)
+* [ponytail/SKILL.md](skills/ponytail/SKILL.md) — **(Portable)** Detailed minimal-code YAGNI guidelines
+* [caveman/SKILL.md](skills/caveman/SKILL.md) — **(Portable)** Concise style and compression levels
+* [incremental-implementation/SKILL.md](skills/incremental-implementation/SKILL.md) — **(Portable)** Thin-slice execution cycles
+* [test-driven-development/SKILL.md](skills/test-driven-development/SKILL.md) — **(Portable)** Red-Green-Refactor and Prove-It patterns
+* [debugging-and-error-recovery/SKILL.md](skills/debugging-and-error-recovery/SKILL.md) — **(Portable)** Root-cause triage checklists
+* [make-feature/SKILL.md](skills/make-feature/SKILL.md) — **(Antigravity Only)** Isolated feature branch development via git worktree
+* [session-sync/SKILL.md](skills/session-sync/SKILL.md) — **(Antigravity Only)** Sync/restore an Antigravity CLI conversation session across machines via a shared Git remote
 
 ---
 
@@ -114,11 +117,11 @@ When performing reviews, running tests, or inspecting code in this codebase:
 
 ## 7. Isolated Development Constraint
 
-* **Isolated Development**: Never modify code directly in the primary workspace. Always invoke `/make-feature` to isolate the changes on a clean worktree feature branch first.
+* **Isolated Development (Antigravity Only)**: Never modify code directly in the primary workspace. Always invoke `/make-feature` to isolate the changes on a clean worktree feature branch first. For non-Antigravity agents, follow equivalent manual branch isolation practices.
 
 ## 8. Command Execution Explanations
 
-* **Explanation for Permission Prompts**: Before proposing any command or tool execution that will prompt the user for permission (i.e. falls under a `command(*): ask` or `write_file(/): ask` rule), the agent MUST output a text explanation in a separate turn *before* calling the tool. The agent must wait for the user to explicitly reply before triggering the tool call.
+* **Explanation for Permission Prompts (Antigravity Only)**: Before proposing any command or tool execution that will prompt the user for permission (i.e. falls under a `command(*): ask` or `write_file(/): ask` rule), the agent MUST output a text explanation in a separate turn *before* calling the tool. The agent must wait for the user to explicitly reply before triggering the tool call. For other agents, comply with their native permission prompt systems.
 * **Explanation Requirements**: The explanation must specify:
   1. The purpose and expected outcome of the command/action.
   2. Any potential downsides or risks (e.g., data loss, CPU load, external network access).

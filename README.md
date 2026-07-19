@@ -8,27 +8,28 @@ This configuration is developed and tested on macOS and Linux (validated in CI).
 
 ## Setup on a New Machine
 
-1. **Install Antigravity CLI or Gemini CLI (Required):**
-   - **Antigravity CLI (Recommended):** Download and install the [Antigravity CLI](https://antigravity.google/product/antigravity-cli). This is required for custom skills (`skills/`), subagent delegation, and test automation.
-   - **Gemini CLI:** If you are only using the Gemini CLI, the global rules (`GEMINI.md`) will still load automatically, but advanced custom skills will be unavailable.
-
-   Verify installation by running:
+1. **Install Antigravity CLI (Required for full configuration):**
+   Download and install the [Antigravity CLI](https://antigravity.google/product/antigravity-cli). This is required for executing custom skills (`skills/`), subagent delegation, and automated testing.
+   
+   Verify your installation:
    ```bash
-   agy --version  # For Antigravity CLI
-   # or
-   gemini --version  # For Gemini CLI
+   agy --version
    ```
+
+   > [!NOTE]
+   > **External/Multi-Agent CLIs:** If you are using Claude Code, Codex, or Cursor, the Antigravity CLI is not required to load the global rules. See [Cross-Agent Integration](#cross-agent-integration-claude-code-codex-cursor-etc) below.
 
    > [!NOTE]
    > **Installation Order:** If you clone the repository before installing the CLI, the CLI will safely initialize its state inside the existing `~/.gemini` folder without conflicts when you install it.
 
 2. **Backup existing config (if any):**
-   > [!WARNING]
-   > Ensure `~/.gemini.bak` does not already exist before running the backup command to avoid nesting or losing pre-existing backups.
-   
+   Ensure `$HOME/.gemini.bak` does not already exist before running the backup command to avoid nesting or losing pre-existing backups.
+
    ```bash
-   if [ -d ~/.gemini ] && [ ! -d ~/.gemini.bak ]; then
-     mv ~/.gemini ~/.gemini.bak
+   if { [ -e "$HOME/.gemini" ] || [ -L "$HOME/.gemini" ]; } && { [ ! -e "$HOME/.gemini.bak" ] && [ ! -L "$HOME/.gemini.bak" ]; }; then
+     mv "$HOME/.gemini" "$HOME/.gemini.bak"
+   elif [ -e "$HOME/.gemini.bak" ] || [ -L "$HOME/.gemini.bak" ]; then
+     echo "Warning: $HOME/.gemini.bak already exists. Please inspect, rename, or delete it before proceeding."
    fi
    ```
 
@@ -41,20 +42,47 @@ This configuration is developed and tested on macOS and Linux (validated in CI).
 4. **Restore local settings and credentials (if applicable):**
    ```bash
    # Restore settings, credentials, and machine state safely if backup exists
-   if [ -d ~/.gemini.bak ]; then
-     mkdir -p ~/.gemini/antigravity-cli
-     [ -f ~/.gemini.bak/antigravity-cli/settings.json ] && cp ~/.gemini.bak/antigravity-cli/settings.json ~/.gemini/antigravity-cli/settings.json
+   if [ -d "$HOME/.gemini.bak" ]; then
+     mkdir -p "$HOME/.gemini/antigravity-cli"
+     [ -f "$HOME/.gemini.bak/antigravity-cli/settings.json" ] && cp "$HOME/.gemini.bak/antigravity-cli/settings.json" "$HOME/.gemini/antigravity-cli/settings.json"
      
      # Restore credentials and machine IDs
-     [ -f ~/.gemini.bak/google_accounts.json ] && cp ~/.gemini.bak/google_accounts.json ~/.gemini/google_accounts.json
-     [ -f ~/.gemini.bak/oauth_creds.json ] && cp ~/.gemini.bak/oauth_creds.json ~/.gemini/oauth_creds.json
-     [ -f ~/.gemini.bak/antigravity-cli/installation_id ] && cp ~/.gemini.bak/antigravity-cli/installation_id ~/.gemini/antigravity-cli/installation_id
+     [ -f "$HOME/.gemini.bak/google_accounts.json" ] && cp "$HOME/.gemini.bak/google_accounts.json" "$HOME/.gemini/google_accounts.json"
+     [ -f "$HOME/.gemini.bak/oauth_creds.json" ] && cp "$HOME/.gemini.bak/oauth_creds.json" "$HOME/.gemini/oauth_creds.json"
+     [ -f "$HOME/.gemini.bak/antigravity-cli/installation_id" ] && cp "$HOME/.gemini.bak/antigravity-cli/installation_id" "$HOME/.gemini/antigravity-cli/installation_id"
    else
      echo "No backup directory found to restore settings."
    fi
    ```
 
 *Note: Credentials, local settings (`antigravity-cli/settings.json`), terminal logs (`*.log`), subagent run data (`brain/`), and conversation logs (`conversations/`) are automatically excluded via `.gitignore` to prevent leaking secrets or tracking local session state.*
+
+## Cross-Agent Integration (Claude Code, Codex, Cursor, etc.)
+
+Since cloning this repository to `~/.gemini` only configures Google Antigravity CLI globally, you must link or copy the portable rules and skills for other AI coding assistants.
+
+### 1. Project-Level Rules (`AGENTS.md` / `CLAUDE.md`)
+To configure rules in a project repository:
+- **Claude Code**: Copy or symlink `GEMINI.md` to `CLAUDE.md` at the project root:
+  ```bash
+  ln -s ~/.gemini/GEMINI.md CLAUDE.md
+  ```
+- **Codex CLI / Cursor / Other compliant agents**: Copy or symlink `GEMINI.md` to `AGENTS.md` at the project root:
+  ```bash
+  ln -s ~/.gemini/GEMINI.md AGENTS.md
+  ```
+
+### 2. Global Rules (Alternative)
+- **Codex / Global agents.md**: Codex reads global rules from `~/.config/agents/AGENTS.md`. You can symlink it:
+  ```bash
+  mkdir -p ~/.config/agents
+  ln -s ~/.gemini/GEMINI.md ~/.config/agents/AGENTS.md
+  ```
+
+### 3. Portable Skills
+To reuse portable skills (e.g., `ponytail`, `caveman`, `test-driven-development`) with other agents:
+- Place or symlink the specific skill folders into the configuration directory expected by your agent (e.g., Claude Code reads project-level instructions from `CLAUDE.md` and doesn't use the `.gemini/skills/` directory structure, but you can instruct Claude to read standard markdown files from `~/.gemini/skills/` in your `CLAUDE.md`).
+- Note that Antigravity-specific skills (e.g., `adversarial-review`, `explain-diff`, `make-feature`, `session-sync`) require the Antigravity execution environment and will not run on external agents.
 
 ---
 
@@ -64,7 +92,7 @@ This configuration is developed and tested on macOS and Linux (validated in CI).
 * Defines the **Ponytail (Lazy Senior Dev Mode)** YAGNI ladder.
 * Enforces the **Caveman (Terse Style)** communication formatting to save ~65% output tokens.
 * Enforces structured software development lifecycle gates.
-* Also exposed as `AGENTS.md` (a symlink to `GEMINI.md`, so there's a single source of truth) so non-Gemini agents that follow the [AGENTS.md](https://agents.md) convention — Claude Code, Cursor, etc. — load the same rules. Gemini CLI and Antigravity keep reading `GEMINI.md` by default.
+* Also exposed as `AGENTS.md` (a symlink to `GEMINI.md`, so there's a single source of truth) so other agents that follow the [AGENTS.md](https://agents.md) convention — Claude Code, Codex, Cursor, etc. — load the same rules. Antigravity keeps reading `GEMINI.md` by default.
 
 ### 2. Isolated Execution Environments
 * Integrates with `setup_review_env.py` to automatically bootstrap CPU-compatible testing and linting virtual environments under `~/.gemini/tmp/<workspace-hash>` using `uv`.
@@ -114,7 +142,7 @@ If `uv` is available but the environment setup fails, `run_tests.py` will exit w
 
 > [!WARNING]
 > While this repository commits **no** credentials, local settings, or session history (they are automatically gitignored), replacing a collaborator's local `~/.gemini` directory with this repository will replace their own global rules, custom skills, and preferences with yours.
-> 
+>
 > Furthermore, collaborators will lose their local configurations and credentials unless they back up and restore:
 > - `google_accounts.json`
 > - `oauth_creds.json`
