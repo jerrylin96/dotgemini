@@ -8,6 +8,10 @@ antigravity/
 config/
 history/
 projects.json
+settings.json
+*.log
+brain/
+conversations/
 
 # Ignore sensitive credentials
 google_accounts.json

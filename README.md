@@ -8,15 +8,28 @@ This configuration is developed and tested on macOS and Linux (validated in CI).
 
 ## Setup on a New Machine
 
-1. **Install Antigravity CLI (Required):**
-   Before setting up the configuration, download and install the [Antigravity CLI](https://antigravity.google/product/antigravity-cli). The custom skills, global rules, and execution settings in this repository require the CLI to function.
+1. **Install Antigravity CLI or Gemini CLI (Required):**
+   - **Antigravity CLI (Recommended):** Download and install the [Antigravity CLI](https://antigravity.google/product/antigravity-cli). This is required for custom skills (`skills/`), subagent delegation, and test automation.
+   - **Gemini CLI:** If you are only using the Gemini CLI, the global rules (`GEMINI.md`) will still load automatically, but advanced custom skills will be unavailable.
+
+   Verify installation by running:
+   ```bash
+   agy --version  # For Antigravity CLI
+   # or
+   gemini --version  # For Gemini CLI
+   ```
+
+   > [!NOTE]
+   > **Installation Order:** If you clone the repository before installing the CLI, the CLI will safely initialize its state inside the existing `~/.gemini` folder without conflicts when you install it.
 
 2. **Backup existing config (if any):**
    > [!WARNING]
-   > Running `mv ~/.gemini ~/.gemini.bak` will overwrite any pre-existing backup at `~/.gemini.bak`. Make sure to check or rename any existing backup directory first.
+   > Ensure `~/.gemini.bak` does not already exist before running the backup command to avoid nesting or losing pre-existing backups.
    
    ```bash
-   mv ~/.gemini ~/.gemini.bak
+   if [ -d ~/.gemini ] && [ ! -d ~/.gemini.bak ]; then
+     mv ~/.gemini ~/.gemini.bak
+   fi
    ```
 
 3. **Clone this repository:**
@@ -27,20 +40,21 @@ This configuration is developed and tested on macOS and Linux (validated in CI).
 
 4. **Restore local settings and credentials (if applicable):**
    ```bash
-   # Restore settings and credentials safely if backup exists
+   # Restore settings, credentials, and machine state safely if backup exists
    if [ -d ~/.gemini.bak ]; then
      mkdir -p ~/.gemini/antigravity-cli
      [ -f ~/.gemini.bak/antigravity-cli/settings.json ] && cp ~/.gemini.bak/antigravity-cli/settings.json ~/.gemini/antigravity-cli/settings.json
      
-     # Restore credentials (to avoid re-authenticating)
+     # Restore credentials and machine IDs
      [ -f ~/.gemini.bak/google_accounts.json ] && cp ~/.gemini.bak/google_accounts.json ~/.gemini/google_accounts.json
      [ -f ~/.gemini.bak/oauth_creds.json ] && cp ~/.gemini.bak/oauth_creds.json ~/.gemini/oauth_creds.json
+     [ -f ~/.gemini.bak/antigravity-cli/installation_id ] && cp ~/.gemini.bak/antigravity-cli/installation_id ~/.gemini/antigravity-cli/installation_id
    else
      echo "No backup directory found to restore settings."
    fi
    ```
 
-*Note: Credentials, local settings (`settings.json`), terminal logs (`*.log`), subagent run data (`brain/`), and conversation logs (`conversations/`) are automatically excluded via `.gitignore` to prevent leaking secrets or tracking local session state.*
+*Note: Credentials, local settings (`antigravity-cli/settings.json`), terminal logs (`*.log`), subagent run data (`brain/`), and conversation logs (`conversations/`) are automatically excluded via `.gitignore` to prevent leaking secrets or tracking local session state.*
 
 ---
 
@@ -99,7 +113,13 @@ If `uv` is available but the environment setup fails, `run_tests.py` will exit w
 ## Sharing and Collaborator Onboarding
 
 > [!WARNING]
-> While this repository commits **no** credentials, local settings (`settings.json`), or session history (they are automatically gitignored), replacing a collaborator's local `~/.gemini` directory with this repository will replace their own global rules, custom skills, and preferences with yours. Furthermore, if they do not back up and restore their own `google_accounts.json`, `oauth_creds.json`, and `settings.json` (as described in the Setup instructions), they will lose their local credentials and configurations.
+> While this repository commits **no** credentials, local settings, or session history (they are automatically gitignored), replacing a collaborator's local `~/.gemini` directory with this repository will replace their own global rules, custom skills, and preferences with yours.
+> 
+> Furthermore, collaborators will lose their local configurations and credentials unless they back up and restore:
+> - `google_accounts.json`
+> - `oauth_creds.json`
+> - `antigravity-cli/settings.json`
+> - `antigravity-cli/installation_id` (optional machine state ID)
 > 
 > Collaborators should only clone this as a reference or keep it isolated. For sharing rules/skills across team projects, **prefer Project-Level Integration** below to build a shared, repository-specific review workflow, or copy only the specific skill subset needed.
 
