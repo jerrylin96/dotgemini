@@ -5,7 +5,7 @@ description: Creates specs before coding. Maps to `/spec`. Use when starting a n
 
 ## Overview
 
-Write the spec before the code. No exceptions.
+Write the spec before the code. For trivial/small changes, the [lifecycle guide](make-feature/resources/lifecycle-guide.md) permits skipping this gate — but for medium and large changes, a spec is required.
 
 ## When to Use
 
@@ -62,4 +62,4 @@ Break the approved spec into small, verifiable tasks.
 - [ ] Human has reviewed and approved
 - [ ] Success criteria are specific, measurable, testable
 - [ ] Constraints explicitly defined
-- [ ] Spec persisted (artifact or vault)
+- [ ] Spec persisted (artifact, vault, or repo document such as `SPEC.md`)

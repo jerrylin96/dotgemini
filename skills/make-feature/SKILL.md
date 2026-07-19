@@ -10,13 +10,13 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
 ## When to Use
 
 - **Always (Antigravity).** This is the mandatory entry point for any file modification in a repository.
-- **Other runtimes:** Follow equivalent manual branch isolation practices (e.g., `git checkout -b`).
+- **Other runtimes:** Use `git checkout -b` for branch isolation. Git worktrees are preferred when available, but a feature branch is the minimum requirement.
 - The only exception: changes to Antigravity artifacts, scratch files, or non-repo files.
 
 ## Core Rules
 > [!IMPORTANT]
 > - **Branch Naming**: Always prefix the feature branch with `gemini/` (e.g., `gemini/feature-name`).
-> - **No Primary Branch Pollution**: Never run `git checkout -b` or modify files directly in the user's primary repository working directory when developing a new feature. Always check out a worktree.
+> - **No Primary Branch Pollution (Antigravity)**: Never run `git checkout -b` or modify files directly in the user's primary repository working directory. Always use a worktree. Other runtimes: use a feature branch at minimum.
 > - **Worktree Cleanup**: Once the branch has been successfully pushed to the remote repository, prune/delete the worktree to save disk space and keep the workspace clean.
 
 ## Execution Steps

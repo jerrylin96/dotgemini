@@ -71,11 +71,11 @@ Operate in **read-only** mode:
 
 ## Verification
 
-- [ ] Plan exists as artifact and covers full scope
+- [ ] Plan exists (artifact, or repo document such as `tasks/plan.md`) and covers full scope
 - [ ] Tasks are clear, atomic, and ordered
 - [ ] Acceptance criteria defined for every task
 - [ ] Every task has verification step
 - [ ] Dependencies identified and ordered
 - [ ] No task touches >5 files
 - [ ] Checkpoints between major phases
-- [ ] Plan reviewed via `RequestFeedback` gate
+- [ ] Plan reviewed and approved (via `RequestFeedback` gate in Antigravity, or explicit human sign-off)

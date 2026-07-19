@@ -87,7 +87,7 @@ The global settings contain dedicated skills under `~/.gemini/skills/` which can
 * [test-driven-development/SKILL.md](skills/test-driven-development/SKILL.md) — **(Portable)** Red-Green-Refactor and Prove-It patterns
 * [code-review-and-quality/SKILL.md](skills/code-review-and-quality/SKILL.md) — **(Portable)** Five-axis code review; maps to `/review`
 * [debugging-and-error-recovery/SKILL.md](skills/debugging-and-error-recovery/SKILL.md) — **(Portable)** Root-cause triage checklists
-* [make-feature/SKILL.md](skills/make-feature/SKILL.md) — **(Antigravity Only)** Isolated feature branch development via git worktree; mandatory entry point for all codebase changes
+* [make-feature/SKILL.md](skills/make-feature/SKILL.md) — **(Antigravity Only)** Isolated feature branch development via git worktree; mandatory entry point for Antigravity agents, branch-isolation required for all runtimes
 * [session-sync/SKILL.md](skills/session-sync/SKILL.md) — **(Antigravity Only)** Sync/restore an Antigravity CLI conversation session across machines via a shared Git remote
 
 ---
