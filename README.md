@@ -1,6 +1,9 @@
-# Antigravity & Gemini CLI Config (`dotgemini`)
+# Antigravity & Cross-Agent Config (`dotagent`)
 
-Personal global configuration and custom skills for Google Antigravity and Gemini CLI.
+Personal global configuration and custom skills for Google Antigravity and other AI coding assistants (Claude Code, Codex CLI, Cursor, etc.).
+
+> [!NOTE]
+> **Repository Naming vs. Installation Paths:** The repository is named `dotagent` to reflect its cross-agent portability. However, Google Antigravity CLI expects its global settings to reside at `~/.gemini/` on disk. Setup cloning instructions therefore target `~/.gemini` for Antigravity-compatibility, while other agents can copy or symlink files to their respective target paths.
 
 ## Platform Support
 
@@ -9,7 +12,7 @@ This configuration is developed and tested on macOS and Linux (validated in CI).
 ## Setup on a New Machine
 
 1. **Install Antigravity CLI (Required for full configuration):**
-   Download and install the [Antigravity CLI](https://antigravity.google/product/antigravity-cli). This is required for executing custom skills (`skills/`), subagent delegation, and automated testing.
+   Download and install the [Antigravity CLI](https://antigravity.google/product/antigravity-cli). This is required for executing Antigravity-native skills (`adversarial-review`, `explain-diff`, `make-feature`, `session-sync`) and subagent delegation.
    
    Verify your installation:
    ```bash
@@ -17,26 +20,31 @@ This configuration is developed and tested on macOS and Linux (validated in CI).
    ```
 
    > [!NOTE]
-   > **External/Multi-Agent CLIs:** If you are using Claude Code, Codex, or Cursor, the Antigravity CLI is not required to load the global rules. See [Cross-Agent Integration](#cross-agent-integration-claude-code-codex-cursor-etc) below.
+   > **External/Multi-Agent CLIs:** If you are using Claude Code, Codex, or Cursor, the Antigravity CLI is not required to load global rules. See [Cross-Agent Integration](#cross-agent-integration-claude-code-codex-cursor-etc) below.
 
    > [!NOTE]
    > **Installation Order:** If you clone the repository before installing the CLI, the CLI will safely initialize its state inside the existing `~/.gemini` folder without conflicts when you install it.
 
 2. **Backup existing config (if any):**
-   Ensure `$HOME/.gemini.bak` does not already exist before running the backup command to avoid nesting or losing pre-existing backups.
+   Ensure `$HOME/.gemini.bak` does not already exist before running the backup command. If both directories exist, the backup step will fail with an error to prevent overwriting or nesting:
 
    ```bash
-   if { [ -e "$HOME/.gemini" ] || [ -L "$HOME/.gemini" ]; } && { [ ! -e "$HOME/.gemini.bak" ] && [ ! -L "$HOME/.gemini.bak" ]; }; then
-     mv "$HOME/.gemini" "$HOME/.gemini.bak"
-   elif [ -e "$HOME/.gemini.bak" ] || [ -L "$HOME/.gemini.bak" ]; then
-     echo "Warning: $HOME/.gemini.bak already exists. Please inspect, rename, or delete it before proceeding."
+   if [ -e "$HOME/.gemini" ] || [ -L "$HOME/.gemini" ]; then
+     if [ -e "$HOME/.gemini.bak" ] || [ -L "$HOME/.gemini.bak" ]; then
+       echo "Error: Both $HOME/.gemini and $HOME/.gemini.bak exist." >&2
+       echo "Please manually rename or remove $HOME/.gemini.bak before proceeding." >&2
+       exit 1
+     else
+       mv "$HOME/.gemini" "$HOME/.gemini.bak"
+     fi
    fi
    ```
 
 3. **Clone this repository:**
+   Clone the repository to `~/.gemini` so that the Antigravity CLI can locate it:
    ```bash
-   git clone https://github.com/jerrylin96/dotgemini.git ~/.gemini
-   # Or via SSH: git clone git@github.com:jerrylin96/dotgemini.git ~/.gemini
+   git clone https://github.com/jerrylin96/dotagent.git ~/.gemini
+   # Or via SSH: git clone git@github.com:jerrylin96/dotagent.git ~/.gemini
    ```
 
 4. **Restore local settings and credentials (if applicable):**
@@ -63,36 +71,53 @@ Since cloning this repository to `~/.gemini` only configures Google Antigravity 
 
 ### 1. Project-Level Rules (`AGENTS.md` / `CLAUDE.md`)
 To configure rules in a project repository:
-- **Claude Code**: Copy or symlink `GEMINI.md` to `CLAUDE.md` at the project root:
+- **Claude Code**: Copy portable rules to `CLAUDE.md` at the project root to share with the team, or create a personal untracked local symlink:
   ```bash
-  ln -s ~/.gemini/GEMINI.md CLAUDE.md
+  cp ~/.gemini/AGENTS.md CLAUDE.md
   ```
-- **Codex CLI / Cursor / Other compliant agents**: Copy or symlink `GEMINI.md` to `AGENTS.md` at the project root:
+- **Codex CLI / Cursor / Other compliant agents**: Copy portable rules to `AGENTS.md` at the project root, or create a personal untracked local symlink:
   ```bash
-  ln -s ~/.gemini/GEMINI.md AGENTS.md
+  cp ~/.gemini/AGENTS.md AGENTS.md
   ```
 
 ### 2. Global Rules (Alternative)
-- **Codex / Global agents.md**: Codex reads global rules from `~/.config/agents/AGENTS.md`. You can symlink it:
+- **Claude Code**: Claude Code does not support a global rule file; configure rules via project-level `CLAUDE.md` files as shown above.
+- **Codex CLI**: Codex reads global rules from `$CODEX_HOME/AGENTS.md`, which defaults to `~/.codex/AGENTS.md`. You can symlink it:
   ```bash
-  mkdir -p ~/.config/agents
-  ln -s ~/.gemini/GEMINI.md ~/.config/agents/AGENTS.md
+  mkdir -p ~/.codex
+  ln -s ~/.gemini/AGENTS.md ~/.codex/AGENTS.md
   ```
 
-### 3. Portable Skills
-To reuse portable skills (e.g., `ponytail`, `caveman`, `test-driven-development`) with other agents:
-- Place or symlink the specific skill folders into the configuration directory expected by your agent (e.g., Claude Code reads project-level instructions from `CLAUDE.md` and doesn't use the `.gemini/skills/` directory structure, but you can instruct Claude to read standard markdown files from `~/.gemini/skills/` in your `CLAUDE.md`).
-- Note that Antigravity-specific skills (e.g., `adversarial-review`, `explain-diff`, `make-feature`, `session-sync`) require the Antigravity execution environment and will not run on external agents.
+### 3. Portable Skill Installation
+To install and expose portable skills (e.g., `ponytail`, `caveman`, `test-driven-development`) to external agents, copy or link their respective skill folders to their client-specific paths:
+- **Claude Code**:
+  * Project-Level: `.claude/skills/<name>/SKILL.md`
+  * Global: `~/.claude/skills/<name>/SKILL.md`
+  ```bash
+  # Example project skill setup
+  mkdir -p .claude/skills/caveman
+  cp ~/.gemini/skills/caveman/SKILL.md .claude/skills/caveman/SKILL.md
+  ```
+- **Codex CLI**:
+  * Project-Level: `.agents/skills/<name>/SKILL.md`
+  * Global: `~/.agents/skills/<name>/SKILL.md`
+  ```bash
+  # Example global skill setup
+  mkdir -p ~/.agents/skills/caveman
+  cp ~/.gemini/skills/caveman/SKILL.md ~/.agents/skills/caveman/SKILL.md
+  ```
+
+Note that Antigravity-specific skills (e.g., `adversarial-review`, `explain-diff`, `make-feature`, `session-sync`) require the Antigravity execution environment and will not run on external agents.
 
 ---
 
 ## What's Included
 
-### 1. Global Rules (`GEMINI.md`, aliased as `AGENTS.md`)
+### 1. Global Rules (`AGENTS.md`, aliased as `GEMINI.md`)
 * Defines the **Ponytail (Lazy Senior Dev Mode)** YAGNI ladder.
 * Enforces the **Caveman (Terse Style)** communication formatting to save ~65% output tokens.
 * Enforces structured software development lifecycle gates.
-* Also exposed as `AGENTS.md` (a symlink to `GEMINI.md`, so there's a single source of truth) so other agents that follow the [AGENTS.md](https://agents.md) convention — Claude Code, Codex, Cursor, etc. — load the same rules. Antigravity keeps reading `GEMINI.md` by default.
+* Also exposed as `GEMINI.md` (a symlink to `AGENTS.md` for backward compatibility) so other agents that follow the [AGENTS.md](https://agents.md) convention — Claude Code, Codex, Cursor, etc. — load the same rules. Antigravity CLI seamlessly reads the symlink by default.
 
 ### 2. Isolated Execution Environments
 * Integrates with `setup_review_env.py` to automatically bootstrap CPU-compatible testing and linting virtual environments under `~/.gemini/tmp/<workspace-hash>` using `uv`.
