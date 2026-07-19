@@ -14,7 +14,7 @@ Guidelines for generating valid code with the BigFrames (BigQuery DataFrame) lib
     *   Prefer built-in accessors (e.g., `df.col.str.*`, `df.col.dt.*`) over remote UDFs.
     *   **Do not use lambdas** with `Series.map()` or `DataFrame.apply()`.
 *   **Schema Verification**: Do not assume schema of intermediate outputs. Check `.dtypes` after loading, and use `display()` with `.head()` or `.peek()`.
-*   **Visualization**: BigFrames Dataframe mostly works directly with Matplotlib, Seaborn, and other ploting libraries. If your attempt didn't work, try using the "plot" accessor. If that didn't work either, you MUST sample or aggregate your data to make it small enough before calling "to_pandas()".
+*   **Visualization**: BigFrames Dataframe mostly works directly with Matplotlib, Seaborn, and other plotting libraries. If your attempt didn't work, try using the "plot" accessor. If that didn't work either, you MUST sample or aggregate your data to make it small enough before calling "to_pandas()".
 
 ## Model Development
 

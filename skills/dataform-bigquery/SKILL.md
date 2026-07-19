@@ -112,8 +112,8 @@ Follow these steps when fulfilling Dataform-related requests:
     -   If cleaning is not applied, provide **strong evidence** in the response.
     -   Include an **"Automatic Cleaning Summary"** section in every response.
 -   **SQL Optimizations:**
-    -   Follow the optimization protocol in **@skill:developing-with-bigquery**
-        strictly.
+    -   Follow the optimization protocol in **@skill:bigquery** (specifically [OPTIMIZATION.md](../bigquery/resources/sql/OPTIMIZATION.md)) strictly.
+    -   Apply safe optimizations like column pruning and early predicate filtering, and qualify materialization changes against project conventions.
     -   Include an **"Optimization Summary"** section when applied.
 
 ### 4. Planning guidelines

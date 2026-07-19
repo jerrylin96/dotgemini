@@ -11,13 +11,13 @@ Rules and syntax standards for BigQuery AI and Machine Learning functions.
 
 Function/Use Case         | Required Reference File
 ------------------------- | ----------------------------------------------
-**AI.FORECAST**           | [ai-forecast.md](ai-forecast.md)
-**AI.EVALUATE**           | [ai-evaluate.md](ai-evaluate.md)
-**AI.GENERATE_TABLE**     | [ai-generate-table.md](ai-generate-table.md)
-**AI.GENERATE_EMBEDDING** | [ai-generate-embedding.md](ai-generate-embedding.md)
-**Remote Models**         | [remote-models.md](remote-models.md)
-**CONTRIBUTION_ANALYSIS** | [ml-contribution-analysis.md](ml-contribution-analysis.md)
-**VECTOR_SEARCH**         | [vector-search.md](vector-search.md)
+**AI.FORECAST**           | [ai_forecast.md](ai_forecast.md)
+**AI.EVALUATE**           | [ai_evaluate.md](ai_evaluate.md)
+**AI.GENERATE_TABLE**     | [ai_generate_table.md](ai_generate_table.md)
+**AI.GENERATE_EMBEDDING** | [ai_generate_embedding.md](ai_generate_embedding.md)
+**Remote Models**         | [remote_models.md](remote_models.md)
+**CONTRIBUTION_ANALYSIS** | [ml_contribution_analysis.md](ml_contribution_analysis.md)
+**VECTOR_SEARCH**         | [vector_search.md](vector_search.md)
 
 ## 3. Mandatory Syntax Checks
 

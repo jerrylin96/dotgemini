@@ -1,6 +1,6 @@
 ---
 name: incremental-implementation
-description: Delivers changes incrementally. Use when implementing any feature or change that touches more than one file. Use when you're about to write a large amount of code at once, or when a task feels too big to land in one step.
+description: Guidelines to deliver code changes incrementally. Use when implementing changes spanning multiple files to avoid large commits.
 ---
 
 # Incremental Implementation

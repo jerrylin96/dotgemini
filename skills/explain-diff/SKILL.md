@@ -1,6 +1,6 @@
 ---
 name: explain-diff
-description: Interactive, neutral explanation of what changed between a feature branch, pull request, or specific commit/range and a reference branch. Use when the user wants to understand a diff - an overall summary of the changes followed by a navigable per-file, hunk-by-hunk walkthrough with follow-up Q&A. Do NOT use if the user wants bugs or code quality issues found (use adversarial-review), wants code explained outside of a diff context, or only wants a raw git diff without explanation.
+description: Interactive, neutral diff explanation walkthrough (overall summary, per-hunk walkthroughs, Q&A). Do not use to find bugs/quality issues.
 ---
 
 # Diff Explanation Walkthrough
@@ -35,24 +35,26 @@ Two modes, chosen by what the user provides:
 > **Subagent Delegation (Antigravity Only)**: If the changeset is exceptionally large (many files or large diffs), the main agent should delegate the task. Invoke the built-in `research` subagent (optimized for read-only exploration) to analyze the diff chunks in the background and draft the overall summary and file-by-file gists; wait for its report before presenting the summary/menu. This delegation contract is Antigravity-only; in other runtimes (e.g. Gemini CLI), the main agent performs these steps directly.
 
 1. **Get the Diff Safely**: To prevent terminal command output truncation (which silently trims long diff outputs or lines), do NOT read the raw output of `git diff` directly from the terminal tool. Instead:
-   a. Run `git diff "<reference_commit_hash>...<commit_hash>" --stat > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_stat.txt"` to see all changed files.
-   b. Save the target diff to a temporary file under the conversation's scratch directory:
+   a. **Create Scratch Directory**: Run `mkdir -p "<appDataDir>/brain/<conversation-id>/scratch"` to ensure the path exists.
+   b. **Write Statistics**: Save the changed-file statistics:
+      `git diff "<reference_commit_hash>...<commit_hash>" --stat > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_stat.txt"`
+   c. **Write Complete Diff**: Save the full diff output for overall analysis:
+      `git diff "<reference_commit_hash>...<commit_hash>" > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_all.txt"`
+   d. **Enumerate Paths**: For unusually large changesets, run null-delimited path/status enumeration (not stats):
+      `git diff "<reference_commit_hash>...<commit_hash>" --name-status -z > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_paths.txt"`
+   e. **Dynamic Per-File Walkthrough**: Only after the user selects a specific file, write/overwrite its target diff:
       `git diff "<reference_commit_hash>...<commit_hash>" -- "<file>" > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff.txt"`
-   c. Read the diff file using the `view_file` tool. This guarantees paginated, untruncated access to every hunk.
+   f. **Read via File Viewer**: Read the respective files (`temp_diff_stat.txt`, `temp_diff_all.txt`, or `temp_diff.txt`) using the `view_file` tool to guarantee paginated, untruncated access to every hunk.
 
-   *Execution and Robustness Guidelines:*
-   - **Prerequisites & Tooling Contract**: The `view_file` tool is a guaranteed capability of the Antigravity CLI runtime, supporting 1-indexed, inclusive `StartLine` and `EndLine` parameters to read up to 800 lines of a file per invocation. In primitive runtimes (like Gemini CLI) where `view_file` is unavailable, fall back to using `read_file` (if available, noting that its pagination parameters are environment-dependent and best-effort) or a deterministic shell-based range reading procedure like `sed -n '<start_line>,<end_line>p' "<file_path>"` or `head`/`tail` after redirecting output to an OS temporary path (e.g. `$(mktemp -d)/temp_diff.txt`). Do not use `cat` or interactive pagers (such as `less`).
-   - **Directory Creation & Quoting**: Always ensure the target scratch directory exists by running `mkdir -p "<appDataDir>/brain/<conversation-id>/scratch"` before executing any redirections. Quote all shell paths and parameters in commands to handle paths containing spaces or special characters.
-   - **Canonical Workflow & Naming Reconciliation (File Roles)**:
-     - **temp_diff_stat.txt**: Stores changed-file statistics. Save via `git diff "<reference_commit_hash>...<commit_hash>" --stat > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_stat.txt"` once at the start. Use this to read stats and generate the menu.
-     - **temp_diff_all.txt**: Stores complete diff hunks and context. Save via `git diff "<reference_commit_hash>...<commit_hash>" > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_all.txt"` once at the start. Use this to read full context.
-     - **temp_diff.txt**: Stores the per-file walkthrough diff. Dynamically extract each file's diff to a single stable location: `git diff "<reference_commit_hash>...<commit_hash>" -- "<path>" > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff.txt"`, overwriting it for each selected file. This eliminates name clobbering risks.
-     - **temp_diff_paths.txt**: Stores null-delimited name-status list. Save via `git diff "<reference_commit_hash>...<commit_hash>" --name-status -z > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_paths.txt"` once at the start if the branch history or changeset is exceptionally large.
-   - **Machine-Readable Path Enumeration**: To safely handle renames, whitespace, special characters, and newlines in filenames, run `git diff "<reference_commit_hash>...<commit_hash>" --name-status -z`. If the changeset is exceptionally large and risks stdout truncation, redirect it to a temp file: `git diff "<reference_commit_hash>...<commit_hash>" --name-status -z > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_paths.txt"` and parse it.
-   - **Git Log Truncation**: Retrieve commit subjects via `git log --oneline <reference_commit_hash>..<commit_hash>`. If the history is extremely long and risks stdout truncation, redirect it to a temp file and read it via the file viewer tool.
-   - **Pagination & EOF Detection (Unterminated Final Lines)**: To prevent terminal output truncation on extremely large files, read files in successive, deterministic chunks. Do not rely on receiving a short chunk (fewer lines than requested) as an EOF signal. Instead, get the total logical line count of the file beforehand. Because `wc -l` counts newline characters rather than logical lines, verify if the file is non-empty and lacks a trailing newline character (e.g. check if the last byte of the file is not `\n`), and if so, increment the expected line count by 1 (or rely on file viewer metadata if it reports the exact logical line count). Read iteratively until the `StartLine` exceeds this logical line count.
-   - **Special Git Cases & Binary Changes**: Explicitly check the diff headers for file renames, mode-only modifications (`old mode ... new mode`), and binary files (`Binary files ... differ`). Report binary changes in the overall summary and navigation menu, but omit detailed text hunks.
-   - **Interactive Phase & Cleanup**: Preserve the temp files (`temp_diff_stat.txt`, `temp_diff_all.txt`, `temp_diff.txt`, and `temp_diff_paths.txt`) during the interactive follow-up phase to allow revisiting files. Once the walkthrough and follow-up Q&A end, cleanly delete only the temporary files and directories: run `rm -- "<file_path>"` for scratch files. If an OS temporary directory was created via `TEMP_DIR=$(mktemp -d)`, avoid recursive deletion (`rm -rf`); instead, delete the specific temporary files created inside the temp directory (`rm -- "$TEMP_DIR/temp_diff_stat.txt" "$TEMP_DIR/temp_diff_all.txt" "$TEMP_DIR/temp_diff.txt" "$TEMP_DIR/temp_diff_paths.txt"` etc.) and then safely remove the empty directory using `rmdir -- "$TEMP_DIR"`. Never run deletion commands inside the repository or worktree.
+   *Execution & Robustness Directives:*
+   - **Use `view_file`**: Read files in chunks of 800 lines max. *Reason: Prevents terminal truncation.*
+   - **Create and Quote Paths**: Run `mkdir -p` first; quote all paths in commands. *Reason: Handles directories with special characters/spaces safely.*
+   - **Manage Scratch Files**: Keep naming distinct (e.g. `temp_diff_stat.txt`, `temp_diff_all.txt`, `temp_diff.txt`, `temp_diff_paths.txt`). *Reason: Avoids concurrency name collisions.*
+   - **Parse Large Diff Stats**: Run `git diff ... --name-status -z` strictly for path and status enumeration. *Reason: Handles renames and non-standard characters safely.*
+   - **Sequential Reading & EOF**: Read until file viewer lines exceed calculated count. *Reason: Avoids terminal cutoff.*
+   - **Omit Binary Files**: Skip text diffs for binary files; report their changes in the summary. *Reason: Prevents binary content corruption.*
+   - **Clean Up Safely**: Delete only temporary files when done. *Reason: Leaves repository and worktree untouched.*
+   - **Reference Guide**: For full detail on tools compatibility, EOF edge cases, and path safety, see [robustness_guide.md](resources/robustness_guide.md).
 
 2. **Overall Summary**: Open with a short summary of the whole changeset: what it does, why (inferred), and the changes grouped into logical themes (a theme may span files). Include scale (files touched, insertions/deletions).
 3. **Navigation Menu**: Present a numbered menu of changed files — path, `+/-` stats, hunk count, one-line gist — plus:

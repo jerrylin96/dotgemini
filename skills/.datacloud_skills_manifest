@@ -33,6 +33,10 @@
       "status": "installed",
       "checksum": "276efcab0cdeb25cb412644bcf0fd5fb827f4873b44a6ba24f4e49e035d25c3e"
     },
+    "bigquery": {
+      "status": "installed",
+      "checksum": "aaff497af8bf88220caaa5ebe7052a5d38bb4d50d5eb884a7b7ca7ba68e7370c"
+    },
     "bigquery-data-transfer-service": {
       "status": "installed",
       "checksum": "d2b0bdd977e8dc50c06c82deb80b742eacb8eadd5a0c27a34cfacd94fc1d1723"
@@ -48,10 +52,6 @@
     "dbt-bigquery": {
       "status": "installed",
       "checksum": "510a275253e8704551fbdceaea4632af6053f5cf7ad07e7f058c667a369076d2"
-    },
-    "developing-with-bigquery": {
-      "status": "installed",
-      "checksum": "ff9d9c0186e6f916172bf276cb4a8b5a73b9adccaf98abed8d42d606991e9d3e"
     },
     "discovering-gcp-data-assets": {
       "status": "installed",

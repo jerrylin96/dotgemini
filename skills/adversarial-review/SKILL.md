@@ -1,6 +1,6 @@
 ---
 name: adversarial-review
-description: Adversarial review of two git worktrees. Use when the user requests an adversarial review of a branch or pull request, wants to find bugs or code quality issues in a feature branch before merging, or wants to compare the current branch with the main/reference branch. Do NOT use if the user only wants to list branches, run simple git diffs without review, wants a neutral explanation/walkthrough of changes (use explain-diff), or perform non-code reviews.
+description: Adversarial review of two git worktrees to find bugs/quality issues before merge. Do not use for simple diffs or neutral walkthroughs.
 ---
 
 # Adversarial Review
@@ -113,18 +113,15 @@ The script returns JSON on stdout. The schema depends on the outcome:
       `git diff "<reference_commit_hash>...<commit_hash>" > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_all.txt"`
    c. Read the diff file using the `view_file` tool. This guarantees paginated, untruncated access to the diff.
 
-   *Execution and Robustness Guidelines:*
-   - **Prerequisites & Tooling Contract**: The `view_file` tool is a guaranteed capability of the Antigravity CLI runtime, supporting 1-indexed, inclusive `StartLine` and `EndLine` parameters to read up to 800 lines of a file per invocation. In primitive runtimes (like Gemini CLI) where `view_file` is unavailable, fall back to using `read_file` (if available, noting that its pagination parameters are environment-dependent and best-effort) or a deterministic shell-based range reading procedure like `sed -n '<start_line>,<end_line>p' "<file_path>"` or `head`/`tail` after redirecting output to an OS temporary path (e.g. `$(mktemp -d)/temp_diff.txt`). Do not use `cat` or interactive pagers (such as `less`).
-   - **Directory Creation & Quoting**: Always ensure the target scratch directory exists by running `mkdir -p "<appDataDir>/brain/<conversation-id>/scratch"` before executing any redirections. Quote all shell paths and parameters in commands to handle paths containing spaces or special characters.
-   - **File Roles & Workflow**:
-     - **temp_diff_stat.txt**: Stores changed-file statistics. Save via `git diff "<reference_commit_hash>...<commit_hash>" --stat > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_stat.txt"` once at the start. Use this to read stats.
-     - **temp_diff_all.txt**: Stores complete diff hunks and context. Save via `git diff "<reference_commit_hash>...<commit_hash>" > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_all.txt"` once at the start. Use this to read full context.
-     - **temp_diff_paths.txt**: Stores null-delimited name-status list. Save via `git diff "<reference_commit_hash>...<commit_hash>" --name-status -z > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_paths.txt"` once at the start if the branch history or changeset is exceptionally large.
-     - For large files, use sequential chunked reading to consume the entire diff safely.
-   - **Machine-Readable Path Enumeration**: To safely handle renames, whitespace, special characters, and newlines in filenames, run `git diff "<reference_commit_hash>...<commit_hash>" --name-status -z`. If the changeset is exceptionally large and risks stdout truncation, redirect it to a temp file: `git diff "<reference_commit_hash>...<commit_hash>" --name-status -z > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_paths.txt"` and parse it.
-   - **Pagination & EOF Detection (Unterminated Final Lines)**: To prevent terminal output truncation on extremely large files, read files in successive, deterministic chunks. Do not rely on receiving a short chunk (fewer lines than requested) as an EOF signal. Instead, get the total logical line count of the file beforehand. Because `wc -l` counts newline characters rather than logical lines, verify if the file is non-empty and lacks a trailing newline character (e.g. check if the last byte of the file is not `\n`), and if so, increment the expected line count by 1 (or rely on file viewer metadata if it reports the exact logical line count). Read iteratively until the `StartLine` exceeds this logical line count.
-   - **Special Git Cases & Binary Changes**: Explicitly check the diff headers for file renames, mode-only modifications (`old mode ... new mode`), and binary files (`Binary files ... differ`). Report binary changes in the overall summary, but omit detailed text hunks.
-   - **Cleanup**: Once the review ends, cleanly delete only the temporary files and directories: run `rm -- "<file_path>"` for scratch files. If an OS temporary directory was created via `TEMP_DIR=$(mktemp -d)`, avoid recursive deletion (`rm -rf`); instead, delete the specific temporary files created inside the temp directory (`rm -- "$TEMP_DIR/temp_diff_stat.txt" "$TEMP_DIR/temp_diff_all.txt" "$TEMP_DIR/temp_diff_paths.txt"` etc.) and then safely remove the empty directory using `rmdir -- "$TEMP_DIR"`. Never run deletion commands inside the repository or worktree.
+   *Execution & Robustness Directives:*
+   - **Use `view_file`**: Read files in chunks of 800 lines max. *Reason: Prevents terminal truncation.*
+   - **Create and Quote Paths**: Run `mkdir -p` first; quote all paths in commands. *Reason: Handles directories with special characters/spaces safely.*
+   - **Manage Scratch Files**: Keep naming distinct (e.g. `temp_diff_stat.txt`, `temp_diff_all.txt`, `temp_diff_paths.txt`). *Reason: Avoids concurrency name collisions.*
+   - **Parse Large Diff Stats**: Run `git diff ... --name-status -z`. *Reason: Handles renames and non-standard characters safely.*
+   - **Sequential Reading & EOF**: Read until file viewer lines exceed calculated count. *Reason: Avoids terminal cutoff.*
+   - **Omit Binary Files**: Skip text diffs for binary files; report their changes in the summary. *Reason: Prevents binary content corruption.*
+   - **Clean Up Safely**: Delete only temporary files when done. *Reason: Leaves repository and worktree untouched.*
+   - **Reference Guide**: For full detail on tools compatibility, EOF edge cases, and path safety, see [robustness_guide.md](resources/robustness_guide.md).
 2. **Note on Worktree**:
    - The review worktree is created at `worktree_path` to allow running tests or inspecting files without disrupting the user's active working tree. Note that the worktree at `worktree_path` is checked out to the feature branch (the target being reviewed), while the active workspace's current branch is treated as the reference branch (baseline). If you need to run tests, execute linters, or view/run code, `cd` into `worktree_path` first.
    - Paths under `~/.gemini/tmp/worktrees/` are disposable cache and may be force-removed or recreated at any time; do not use them for long-lived uncommitted work.
