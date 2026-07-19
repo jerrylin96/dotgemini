@@ -42,10 +42,14 @@ This configuration is developed and tested on macOS and Linux (validated in CI).
 
 3. **Clone this repository:**
    Clone the repository to `~/.gemini` so that the Antigravity CLI can locate it:
+
    ```bash
    git clone https://github.com/jerrylin96/dotagent.git ~/.gemini
    # Or via SSH: git clone git@github.com:jerrylin96/dotagent.git ~/.gemini
    ```
+
+   > [!IMPORTANT]
+   > **Temporary URL Redirect:** If the repository has not yet been renamed from `dotgemini` to `dotagent` on GitHub, use `dotgemini` instead of `dotagent` in the clone command above. GitHub automatically configures redirects, so the new `dotagent.git` URL will work seamlessly once the rename is complete.
 
 4. **Restore local settings and credentials (if applicable):**
    ```bash
@@ -71,17 +75,29 @@ Since cloning this repository to `~/.gemini` only configures Google Antigravity 
 
 ### 1. Project-Level Rules (`AGENTS.md` / `CLAUDE.md`)
 To configure rules in a project repository:
-- **Claude Code**: Copy portable rules to `CLAUDE.md` at the project root to share with the team, or create a personal untracked local symlink:
+- **Claude Code**: Copy portable rules directly to `CLAUDE.md` at the project root to share with the team:
   ```bash
   cp ~/.gemini/AGENTS.md CLAUDE.md
   ```
-- **Codex CLI / Cursor / Other compliant agents**: Copy portable rules to `AGENTS.md` at the project root, or create a personal untracked local symlink:
+  Or create a personal, untracked local symlink (and add it to `.git/info/exclude` to keep it local):
+  ```bash
+  ln -s ~/.gemini/AGENTS.md CLAUDE.md
+  ```
+- **Codex CLI / Cursor / Other compliant agents**: Copy portable rules directly to `AGENTS.md` at the project root to share with the team:
   ```bash
   cp ~/.gemini/AGENTS.md AGENTS.md
   ```
+  Or create a personal, untracked local symlink:
+  ```bash
+  ln -s ~/.gemini/AGENTS.md AGENTS.md
+  ```
 
 ### 2. Global Rules (Alternative)
-- **Claude Code**: Claude Code does not support a global rule file; configure rules via project-level `CLAUDE.md` files as shown above.
+- **Claude Code**: Claude Code reads global instructions from `~/.claude/CLAUDE.md`. You can copy or symlink it:
+  ```bash
+  mkdir -p ~/.claude
+  ln -s ~/.gemini/AGENTS.md ~/.claude/CLAUDE.md
+  ```
 - **Codex CLI**: Codex reads global rules from `$CODEX_HOME/AGENTS.md`, which defaults to `~/.codex/AGENTS.md`. You can symlink it:
   ```bash
   mkdir -p ~/.codex
@@ -91,7 +107,7 @@ To configure rules in a project repository:
 ### 3. Portable Skill Installation
 To install and expose portable skills (e.g., `ponytail`, `caveman`, `test-driven-development`) to external agents, copy or link their respective skill folders to their client-specific paths:
 - **Claude Code**:
-  * Project-Level: `.claude/skills/<name>/SKILL.md`
+  * Project-Level: `.claude/skills/<name>/SKILL.md` (add `.claude/` to `.gitignore` if personal)
   * Global: `~/.claude/skills/<name>/SKILL.md`
   ```bash
   # Example project skill setup
@@ -179,11 +195,17 @@ If `uv` is available but the environment setup fails, `run_tests.py` will exit w
 ### Project-Level Integration (Recommended for Sharing)
 If you want to bake this isolated environment setup directly into a specific project repository so that *any* agent working on it automatically uses it:
 1. **Copy the Env Manager**: Place the [setup_review_env.py](scripts/setup_review_env.py) script in the project repository (e.g., `scripts/setup_review_env.py`).
-2. **Add a Project-Level Guide**: Add a `GEMINI.md` (or `AGENTS.md` for cross-tool portability) to the project's root containing:
+2. **Add a Project-Level Guide**: Add an `AGENTS.md` (or `CLAUDE.md` / `GEMINI.md`) to the project's root containing:
    ```markdown
    ## Isolated Testing & Execution Environment
    All testing and validation commands must run inside the CPU-isolated virtual environment:
    1. Initialize: `python3 scripts/setup_review_env.py`
-   2. Run Tests: `python3 ~/.gemini/scripts/run_in_env.py <workspace_path> pytest`
+   2. Run Tests: Execute using the resolved virtual environment python path (printed by `setup_review_env.py` initialization) or via:
+      ```bash
+      # If using the global Antigravity environment wrapper:
+      python3 ~/.gemini/scripts/run_in_env.py <workspace_path> pytest
+      # Or client-neutral local alternative:
+      source .venv/bin/activate && pytest
+      ```
    *(Note: The setup_review_env.py script automatically manages and prints details of the isolated environment.)*
    ```

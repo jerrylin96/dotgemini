@@ -1,6 +1,6 @@
 # Global Agent Guide
 
-This guide establishes the primary engineering workflows, quality gates, and styles for AI agents globally across all project sessions. It is loaded by Antigravity and Gemini CLI as `GEMINI.md`, and by AGENTS.md-compatible agents (Claude Code, Cursor, etc.) via the `AGENTS.md` symlink.
+This guide establishes the primary engineering workflows, quality gates, and styles for AI agents globally across all project sessions. It is loaded by Antigravity CLI as `AGENTS.md` (aliased as `GEMINI.md` via a backward-compatibility symlink), and is consumed by other agent clients (Claude Code, Codex CLI, Cursor, etc.).
 
 ## Core Philosophical Principles
 
@@ -138,7 +138,7 @@ When performing reviews, running tests, or inspecting code in this codebase:
 
 ## 10. Subagent Types & Delegation (Antigravity Only)
 
-This delegation contract (using `invoke_subagent`, `define_subagent`, built-in `self`/`research` types, and `Workspace` modes) is supported exclusively by the Antigravity CLI (`agy`) runtime. In runtimes with a different subagent contract or without these tools (e.g. Gemini CLI), the main agent performs all steps directly.
+This delegation contract (using `invoke_subagent`, `define_subagent`, built-in `self`/`research` types, and `Workspace` modes) is supported exclusively by the Antigravity CLI (`agy`) runtime. In runtimes with a different subagent contract or without these tools (e.g. Claude Code or Codex CLI), the main agent performs all steps directly.
 
 > [!NOTE]
 > This config repository provides integration and behavioral guidance for agents; the subagent mechanisms themselves are native to the Antigravity runtime.

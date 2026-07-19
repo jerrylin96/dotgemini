@@ -259,7 +259,11 @@ test = [
     @patch("subprocess.run")
     @patch("os.path.exists")
     def test_setup_review_env_locked_sync_failures(self, mock_exists, mock_run):
-        mock_exists.side_effect = lambda path: True
+        def exists_side_effect(path):
+            if path.endswith(".gemini/tmp") or path.endswith(".gemini/tmp/"):
+                return os.path.exists(path)
+            return True
+        mock_exists.side_effect = exists_side_effect
         
         with patch("setup_review_env.load_pyproject") as mock_load:
             mock_load.return_value = {
