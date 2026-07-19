@@ -82,7 +82,7 @@ Follow these steps when fulfilling dbt-related requests:
     -   If cleaning is not applied, provide **strong evidence** in the response.
     -   Include an **"Automatic Cleaning Summary"** section in every response.
 -   **SQL Optimizations:**
-    -   Follow the optimization protocol in **@skill:bigquery** (specifically [OPTIMIZATION.md](file:///Users/jerrylin/.gemini/tmp/worktrees/gemini_remove-bq-bloat/skills/bigquery/resources/sql/OPTIMIZATION.md)) strictly.
+    -   Follow the optimization protocol in **@skill:bigquery** (specifically [OPTIMIZATION.md](../bigquery/resources/sql/OPTIMIZATION.md)) strictly.
     -   Apply safe optimizations like column pruning and early predicate filtering, and qualify materialization changes against project conventions.
     -   Include an **"Optimization Summary"** section when applied.
 

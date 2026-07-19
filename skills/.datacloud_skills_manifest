@@ -35,7 +35,7 @@
     },
     "bigquery": {
       "status": "installed",
-      "checksum": "c79e97f710b12472f57c82e693f671f0f265b5457aecb829de3b80c61427e075"
+      "checksum": "aaff497af8bf88220caaa5ebe7052a5d38bb4d50d5eb884a7b7ca7ba68e7370c"
     },
     "bigquery-data-transfer-service": {
       "status": "installed",
