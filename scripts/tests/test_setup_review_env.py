@@ -12,6 +12,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 import setup_review_env
 from scripts.file_lock import HAS_FCNTL  # noqa: E402
 
+_real_exists = os.path.exists
+
 class TestSetupReviewEnv(unittest.TestCase):
 
     def setUp(self):
@@ -259,7 +261,12 @@ test = [
     @patch("subprocess.run")
     @patch("os.path.exists")
     def test_setup_review_env_locked_sync_failures(self, mock_exists, mock_run):
-        mock_exists.side_effect = lambda path: True
+        def exists_side_effect(path):
+            norm_path = path.replace("\\", "/").rstrip("/")
+            if norm_path.endswith(".gemini/tmp") or norm_path.endswith(".gemini"):
+                return _real_exists(path)
+            return True
+        mock_exists.side_effect = exists_side_effect
         
         with patch("setup_review_env.load_pyproject") as mock_load:
             mock_load.return_value = {
