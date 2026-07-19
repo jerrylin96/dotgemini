@@ -1,6 +1,6 @@
 ---
 name: explain-diff
-description: Interactive, neutral explanation of what changed between a feature branch, pull request, or specific commit/range and a reference branch. Use when the user wants to understand a diff - an overall summary of the changes followed by a navigable per-file, hunk-by-hunk walkthrough with follow-up Q&A. Do NOT use if the user wants bugs or code quality issues found (use adversarial-review), wants code explained outside of a diff context, or only wants a raw git diff without explanation.
+description: Interactive, neutral diff explanation walkthrough (overall summary, per-hunk walkthroughs, Q&A). Do not use to find bugs/quality issues.
 ---
 
 # Diff Explanation Walkthrough

@@ -1,6 +1,6 @@
 ---
 name: adversarial-review
-description: Adversarial review of two git worktrees. Use when the user requests an adversarial review of a branch or pull request, wants to find bugs or code quality issues in a feature branch before merging, or wants to compare the current branch with the main/reference branch. Do NOT use if the user only wants to list branches, run simple git diffs without review, wants a neutral explanation/walkthrough of changes (use explain-diff), or perform non-code reviews.
+description: Adversarial review of two git worktrees to find bugs/quality issues before merge. Do not use for simple diffs or neutral walkthroughs.
 ---
 
 # Adversarial Review

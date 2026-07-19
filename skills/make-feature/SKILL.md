@@ -1,6 +1,6 @@
 ---
 name: make-feature
-description: Creates a new feature branch and checked-out git worktree in a temporary location, allowing the agent to safely edit files, test, and commit/push without touching or switching the user's primary checked-out branch. Always prefixes feature branches with `gemini/`.
+description: Creates a new feature branch and isolated git worktree in a temporary location, allowing safe development and commits without modifying the primary workspace.
 ---
 
 # Isolated Feature Branch Development via Git Worktree

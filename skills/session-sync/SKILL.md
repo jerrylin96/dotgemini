@@ -1,6 +1,6 @@
 ---
 name: session-sync
-description: Synchronize active Antigravity CLI conversation sessions across machines using a shared Git remote.
+description: Synchronizes active Antigravity CLI conversation sessions across machines using a shared Git remote.
 ---
 
 # Session Synchronization
