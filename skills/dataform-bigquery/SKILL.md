@@ -112,12 +112,8 @@ Follow these steps when fulfilling Dataform-related requests:
     -   If cleaning is not applied, provide **strong evidence** in the response.
     -   Include an **"Automatic Cleaning Summary"** section in every response.
 -   **SQL Optimizations:**
-    -   Apply BigQuery SQL optimization rules:
-        -   **Column Pruning**: Select only required columns in all query stages.
-        -   **Predicate Pushdown**: Apply `WHERE` filters as early as possible.
-        -   **Intermediate Materialization**: Use `VIEW` (or CTE) if referenced once; use `TABLE` (or temp table) if referenced multiple times.
-        -   **Avoid JOIN on Subqueries**: Rewrite as CTEs or separate JOINs.
-        -   **Rewrite IN to EXISTS**: Avoid large list comparisons; use `EXISTS` instead.
+    -   Follow the optimization protocol in **@skill:bigquery** (specifically [OPTIMIZATION.md](file:///Users/jerrylin/.gemini/tmp/worktrees/gemini_remove-bq-bloat/skills/bigquery/resources/sql/OPTIMIZATION.md)) strictly.
+    -   Apply safe optimizations like column pruning and early predicate filtering, and qualify materialization changes against project conventions.
     -   Include an **"Optimization Summary"** section when applied.
 
 ### 4. Planning guidelines

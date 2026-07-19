@@ -27,6 +27,6 @@ This guide details best practices and compatibility standards for safely extract
 - Do not rely on receiving a short chunk as an EOF signal. Instead, calculate the total line count beforehand (e.g. check if the file lacks a trailing newline character and increment by 1). Read iteratively until `StartLine` exceeds this logical line count.
 
 ## 6. Cleanup
-- **No Repo Deletions**: Never run deletion commands (e.g. `rm`) inside the repository, index, or worktree.
-- **Avoid `rm -rf`**: If a temporary directory was created via `TEMP_DIR=$(mktemp -d)`, do not use recursive deletion (`rm -rf`). Instead, delete the specific temporary files created (`rm -- "$TEMP_DIR/file.txt"`) and then safely remove the empty directory using `rmdir -- "$TEMP_DIR"`.
-- Cleanly delete only the generated temporary files and directories under the scratch directory when the review ends using `rm -- "<file_path>"`.
+- **Prohibited Deletions**: Do not delete repository-tracked files, worktree files, unknown paths, or perform broad recursive deletion (`rm -rf`). Never run deletions inside the repository or worktree.
+- **Allowed Deletions**: Cleanly delete only the exact, agent-created temporary files and directories under the known conversation scratch directory (e.g., `<appDataDir>/brain/<conversation-id>/scratch/`).
+- **Safe Commands**: Use `rm -- "<file_path>"` for files and `rmdir -- "<empty_dir_path>"` for directories. Never use `rm -rf` for cleanup. If an OS temporary directory was created via `TEMP_DIR=$(mktemp -d)`, delete only the specific temporary files inside it, then remove the empty directory with `rmdir -- "$TEMP_DIR"`.

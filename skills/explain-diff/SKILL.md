@@ -35,16 +35,22 @@ Two modes, chosen by what the user provides:
 > **Subagent Delegation (Antigravity Only)**: If the changeset is exceptionally large (many files or large diffs), the main agent should delegate the task. Invoke the built-in `research` subagent (optimized for read-only exploration) to analyze the diff chunks in the background and draft the overall summary and file-by-file gists; wait for its report before presenting the summary/menu. This delegation contract is Antigravity-only; in other runtimes (e.g. Gemini CLI), the main agent performs these steps directly.
 
 1. **Get the Diff Safely**: To prevent terminal command output truncation (which silently trims long diff outputs or lines), do NOT read the raw output of `git diff` directly from the terminal tool. Instead:
-   a. Run `git diff "<reference_commit_hash>...<commit_hash>" --stat > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_stat.txt"` to see all changed files.
-   b. Save the target diff to a temporary file under the conversation's scratch directory:
+   a. **Create Scratch Directory**: Run `mkdir -p "<appDataDir>/brain/<conversation-id>/scratch"` to ensure the path exists.
+   b. **Write Statistics**: Save the changed-file statistics:
+      `git diff "<reference_commit_hash>...<commit_hash>" --stat > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_stat.txt"`
+   c. **Write Complete Diff**: Save the full diff output for overall analysis:
+      `git diff "<reference_commit_hash>...<commit_hash>" > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_all.txt"`
+   d. **Enumerate Paths**: For unusually large changesets, run null-delimited path/status enumeration (not stats):
+      `git diff "<reference_commit_hash>...<commit_hash>" --name-status -z > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_paths.txt"`
+   e. **Dynamic Per-File Walkthrough**: Only after the user selects a specific file, write/overwrite its target diff:
       `git diff "<reference_commit_hash>...<commit_hash>" -- "<file>" > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff.txt"`
-   c. Read the diff file using the `view_file` tool. This guarantees paginated, untruncated access to every hunk.
+   f. **Read via File Viewer**: Read the respective files (`temp_diff_stat.txt`, `temp_diff_all.txt`, or `temp_diff.txt`) using the `view_file` tool to guarantee paginated, untruncated access to every hunk.
 
    *Execution & Robustness Directives:*
    - **Use `view_file`**: Read files in chunks of 800 lines max. *Reason: Prevents terminal truncation.*
    - **Create and Quote Paths**: Run `mkdir -p` first; quote all paths in commands. *Reason: Handles directories with special characters/spaces safely.*
    - **Manage Scratch Files**: Keep naming distinct (e.g. `temp_diff_stat.txt`, `temp_diff_all.txt`, `temp_diff.txt`, `temp_diff_paths.txt`). *Reason: Avoids concurrency name collisions.*
-   - **Parse Large Diff Stats**: Run `git diff ... --name-status -z`. *Reason: Handles renames and non-standard characters safely.*
+   - **Parse Large Diff Stats**: Run `git diff ... --name-status -z` strictly for path and status enumeration. *Reason: Handles renames and non-standard characters safely.*
    - **Sequential Reading & EOF**: Read until file viewer lines exceed calculated count. *Reason: Avoids terminal cutoff.*
    - **Omit Binary Files**: Skip text diffs for binary files; report their changes in the summary. *Reason: Prevents binary content corruption.*
    - **Clean Up Safely**: Delete only temporary files when done. *Reason: Leaves repository and worktree untouched.*
