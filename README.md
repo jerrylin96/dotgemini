@@ -8,7 +8,10 @@ This configuration is developed and tested on macOS and Linux (validated in CI).
 
 ## Setup on a New Machine
 
-1. **Backup existing config (if any):**
+1. **Install Antigravity CLI (Required):**
+   Before setting up the configuration, download and install the [Antigravity CLI](https://antigravity.google/product/antigravity-cli). The custom skills, global rules, and execution settings in this repository require the CLI to function.
+
+2. **Backup existing config (if any):**
    > [!WARNING]
    > Running `mv ~/.gemini ~/.gemini.bak` will overwrite any pre-existing backup at `~/.gemini.bak`. Make sure to check or rename any existing backup directory first.
    
@@ -16,13 +19,13 @@ This configuration is developed and tested on macOS and Linux (validated in CI).
    mv ~/.gemini ~/.gemini.bak
    ```
 
-2. **Clone this repository:**
+3. **Clone this repository:**
    ```bash
    git clone https://github.com/jerrylin96/dotgemini.git ~/.gemini
    # Or via SSH: git clone git@github.com:jerrylin96/dotgemini.git ~/.gemini
    ```
 
-3. **Restore local settings and credentials (if applicable):**
+4. **Restore local settings and credentials (if applicable):**
    ```bash
    # Restore settings and credentials safely if backup exists
    if [ -d ~/.gemini.bak ]; then
@@ -96,7 +99,7 @@ If `uv` is available but the environment setup fails, `run_tests.py` will exit w
 ## Sharing and Collaborator Onboarding
 
 > [!WARNING]
-> This configuration repository (`dotgemini`) contains personal global settings, credentials, and custom preferences. Cloning it directly onto another collaborator's system using `git clone … ~/.gemini` will overwrite their own settings and force your personal styles/preferences.
+> While this repository commits **no** credentials, local settings (`settings.json`), or session history (they are automatically gitignored), replacing a collaborator's local `~/.gemini` directory with this repository will replace their own global rules, custom skills, and preferences with yours. Furthermore, if they do not back up and restore their own `google_accounts.json`, `oauth_creds.json`, and `settings.json` (as described in the Setup instructions), they will lose their local credentials and configurations.
 > 
 > Collaborators should only clone this as a reference or keep it isolated. For sharing rules/skills across team projects, **prefer Project-Level Integration** below to build a shared, repository-specific review workflow, or copy only the specific skill subset needed.
 
