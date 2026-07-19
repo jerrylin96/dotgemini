@@ -31,7 +31,7 @@ Operate in **read-only** mode:
 - Do NOT write code during planning
 
 > [!TIP]
-> Use a `research` subagent for codebase exploration. This keeps the main agent's context clean for planning decisions rather than filling it with grep results.
+> **(Antigravity Only)** Use a `research` subagent for codebase exploration. This keeps the main agent's context clean for planning decisions. In other runtimes, do this exploration directly.
 
 ### Step 2: Decomposition
 
@@ -41,16 +41,16 @@ Operate in **read-only** mode:
 - Identify and sequence dependencies
 
 > [!TIP]
-> For parallelizable slices, use `self` subagents with `Workspace: branch`. Each subagent gets its own git branch to implement a slice concurrently without conflicts.
+> **(Antigravity Only)** For parallelizable slices, use `self` subagents with `Workspace: branch`. Each subagent gets its own git branch to implement a slice concurrently.
 
 ### Step 3: Output
 
-- Create the plan as an **Antigravity artifact** with `RequestFeedback: true` so the human can review and approve before implementation begins
-- Include a checklist section for tracking progress
+- Create the plan as a reviewable document with a checklist for tracking progress
 - Every task must include acceptance criteria and a verify step
 
-> [!IMPORTANT]
-> Store the plan as an artifact in `<appDataDir>/brain/<conversation-id>/`, not as `tasks/plan.md` in the repo. Artifacts persist across the conversation and support human review gates.
+> [!TIP]
+> **(Antigravity Only)** Store the plan as an artifact with `RequestFeedback: true` in `<appDataDir>/brain/<conversation-id>/`. In other runtimes, write `tasks/plan.md` in the repo.
+
 
 ## Common Rationalizations
 

@@ -2,6 +2,8 @@
 
 Reference for determining which lifecycle gates to apply based on change complexity.
 
+*Skills adapted from [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills).*
+
 ## Complexity Heuristic
 
 Assess before starting work. Pick the first tier that fits:
@@ -20,13 +22,13 @@ Assess before starting work. Pick the first tier that fits:
 
 | Gate | Slash Command | Skill | What It Produces |
 |---|---|---|---|
-| **Spec** | `/spec` | [spec-driven-development](../spec-driven-development/SKILL.md) | Requirements artifact with acceptance criteria |
-| **Plan** | `/plan` | [planning-and-task-breakdown](../planning-and-task-breakdown/SKILL.md) | Ordered task list with verification steps |
-| **Build** | `/build` | [incremental-implementation](../incremental-implementation/SKILL.md) | Working code in thin vertical slices |
-| **Test** | `/test` | [test-driven-development](../test-driven-development/SKILL.md) | Passing tests that prove correctness |
-| **Review** | `/review` | [code-review-and-quality](../code-review-and-quality/SKILL.md) | Five-axis review verdict |
-| **Debug** | — | [debugging-and-error-recovery](../debugging-and-error-recovery/SKILL.md) | Root-cause fix (invoke when tests fail) |
-| **Simplify** | `/code-simplify` | [ponytail](../ponytail/SKILL.md) | Reduced complexity (Ponytail philosophy) |
+| **Spec** | `/spec` | [spec-driven-development](../../spec-driven-development/SKILL.md) | Requirements artifact with acceptance criteria |
+| **Plan** | `/plan` | [planning-and-task-breakdown](../../planning-and-task-breakdown/SKILL.md) | Ordered task list with verification steps |
+| **Build** | `/build` | [incremental-implementation](../../incremental-implementation/SKILL.md) | Working code in thin vertical slices |
+| **Test** | `/test` | [test-driven-development](../../test-driven-development/SKILL.md) | Passing tests that prove correctness |
+| **Review** | `/review` | [code-review-and-quality](../../code-review-and-quality/SKILL.md) | Five-axis review verdict |
+| **Debug** | — | [debugging-and-error-recovery](../../debugging-and-error-recovery/SKILL.md) | Root-cause fix (invoke when tests fail) |
+| **Simplify** | `/code-simplify` | [ponytail](../../ponytail/SKILL.md) | Reduced complexity (Ponytail philosophy) |
 
 ## Anti-Rationalization Guardrail
 
