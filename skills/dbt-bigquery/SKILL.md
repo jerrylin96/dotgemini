@@ -82,8 +82,7 @@ Follow these steps when fulfilling dbt-related requests:
     -   If cleaning is not applied, provide **strong evidence** in the response.
     -   Include an **"Automatic Cleaning Summary"** section in every response.
 -   **SQL Optimizations:**
-    -   Follow the optimization protocol in **@skill:developing-with-bigquery**
-        strictly.
+    -   Follow the optimization protocol in **@skill:bigquery** strictly.
     -   Include an **"Optimization Summary"** section when applied.
 
 ### 4. Implement Changes

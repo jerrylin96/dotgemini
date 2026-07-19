@@ -49,10 +49,6 @@
       "status": "installed",
       "checksum": "510a275253e8704551fbdceaea4632af6053f5cf7ad07e7f058c667a369076d2"
     },
-    "developing-with-bigquery": {
-      "status": "installed",
-      "checksum": "ff9d9c0186e6f916172bf276cb4a8b5a73b9adccaf98abed8d42d606991e9d3e"
-    },
     "discovering-gcp-data-assets": {
       "status": "installed",
       "checksum": "553a6cd984882b1a63782885c54c0120f40de214c11fdbf46ec05e6acbf88840"
