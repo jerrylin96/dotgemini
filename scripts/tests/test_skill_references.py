@@ -8,13 +8,48 @@ def parse_frontmatter_name(skill_md_path):
         return None
     with open(skill_md_path, "r", encoding="utf-8") as f:
         content = f.read()
-    # Find YAML block
-    parts = content.split("---", 2)
-    if len(parts) < 3:
+    
+    # Requirement 1: must start with --- at byte zero
+    if not content.startswith("---"):
         return None
-    frontmatter = parts[1]
-    match = re.search(r"^name:\s*([a-zA-Z0-9_-]+)", frontmatter, re.MULTILINE)
-    return match.group(1) if match else None
+        
+    # Requirement 2: locate closing delimiter on its own line
+    lines = content.splitlines()
+    if not lines or lines[0] != "---":
+        return None
+        
+    closing_idx = -1
+    for i in range(1, len(lines)):
+        if lines[i] == "---":
+            closing_idx = i
+            break
+            
+    if closing_idx == -1:
+        return None
+        
+    # Requirement 3: parse only the frontmatter block
+    frontmatter_lines = lines[1:closing_idx]
+    
+    # Locate name line
+    name_value = None
+    for line in frontmatter_lines:
+        match = re.match(r"^name:\s*(.+)$", line)
+        if match:
+            name_value = match.group(1).strip()
+            break
+            
+    if not name_value:
+        return None
+        
+    # Requirement 5: handle surrounding single or double quotes
+    if (name_value.startswith('"') and name_value.endswith('"')) or (name_value.startswith("'") and name_value.endswith("'")):
+        name_value = name_value[1:-1].strip()
+        
+    # Requirement 4: require the entire name to match the expected skill-name grammar
+    if not re.match(r"^[a-zA-Z0-9_-]+$", name_value):
+        return None
+        
+    return name_value
 
 def validate_skill_resolution(skills_dir, skill_name):
     """Validate skill folder structure and frontmatter name."""
@@ -68,16 +103,11 @@ def test_all_skills_have_correct_frontmatter_name():
             assert err is None, f"Skill '{skill_name}' failed validation: {err}"
 
 def test_no_non_portable_file_links():
-    """Verify that no markdown file contains absolute developer-specific file:// URLs (e.g. referencing home or worktree)."""
+    """Verify that no markdown file contains file:// URLs (all file:// links are prohibited to ensure portability)."""
     skills_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../skills"))
     
     # Matches markdown link target starting with file://
     file_link_pattern = re.compile(r"\]\((file://[^\)]+)\)")
-    
-    non_portable_patterns = [
-        re.compile(r"file:///(Users|home|tmp|private|var|worktrees)/"),
-        re.compile(r"gemini_remove-bq-bloat"),
-    ]
     
     errors = []
     markdown_files = glob.glob(os.path.join(skills_dir, "**/*.md"), recursive=True)
@@ -87,11 +117,8 @@ def test_no_non_portable_file_links():
             
         links = file_link_pattern.findall(content)
         for link in links:
-            for pattern in non_portable_patterns:
-                if pattern.search(link):
-                    rel_path = os.path.relpath(filepath, skills_dir)
-                    errors.append(f"In {rel_path}: non-portable file:// link found: '{link}'")
-                    break
+            rel_path = os.path.relpath(filepath, skills_dir)
+            errors.append(f"In {rel_path}: file:// link found: '{link}' (file:// links are prohibited)")
                     
     assert not errors, "\n".join(errors)
 
@@ -113,3 +140,35 @@ def test_validation_mismatched_frontmatter_name(tmp_path):
     skill_md.write_text("---\nname: different-name\n---\nbody")
     err = validate_skill_resolution(str(tmp_path), "mismatch-name")
     assert "mismatched frontmatter name" in err
+
+def test_validation_leading_non_frontmatter(tmp_path):
+    skill_dir = tmp_path / "leading-content"
+    skill_dir.mkdir()
+    skill_md = skill_dir / "SKILL.md"
+    skill_md.write_text("invalid leading content\n---\nname: leading-content\n---\nbody")
+    err = validate_skill_resolution(str(tmp_path), "leading-content")
+    assert "missing name in frontmatter" in err
+
+def test_validation_missing_closing_delimiter(tmp_path):
+    skill_dir = tmp_path / "no-closing"
+    skill_dir.mkdir()
+    skill_md = skill_dir / "SKILL.md"
+    skill_md.write_text("---\nname: no-closing\nbody")
+    err = validate_skill_resolution(str(tmp_path), "no-closing")
+    assert "missing name in frontmatter" in err
+
+def test_validation_name_extra_text(tmp_path):
+    skill_dir = tmp_path / "extra-text"
+    skill_dir.mkdir()
+    skill_md = skill_dir / "SKILL.md"
+    skill_md.write_text("---\nname: extra-text extra\n---\nbody")
+    err = validate_skill_resolution(str(tmp_path), "extra-text")
+    assert "missing name in frontmatter" in err
+
+def test_validation_quoted_valid_name(tmp_path):
+    skill_dir = tmp_path / "quoted-name"
+    skill_dir.mkdir()
+    skill_md = skill_dir / "SKILL.md"
+    skill_md.write_text("---\nname: \"quoted-name\"\n---\nbody")
+    err = validate_skill_resolution(str(tmp_path), "quoted-name")
+    assert err is None
