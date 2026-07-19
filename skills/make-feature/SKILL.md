@@ -1,16 +1,22 @@
 ---
 name: make-feature
-description: Creates a feature branch (always prefixed with gemini/) and isolated git worktree. Use when developing features or editing files without modifying the primary workspace.
+description: Creates a feature branch (always prefixed with gemini/) and isolated git worktree. Mandatory entry point for ALL codebase changes — use whenever developing features, fixing bugs, or editing files.
 ---
 
 # Isolated Feature Branch Development via Git Worktree
 
-Use this skill when you need to make changes to a repository (such as adding a feature, modifying code, or editing configuration files like skills themselves) and push those changes to a remote feature branch, without mutating the user's active branch checkout in their working directory.
+Use this skill for **all codebase changes** — features, bug fixes, config edits, skill modifications. Changes are pushed to a remote feature branch without mutating the user's active branch checkout.
+
+## When to Use
+
+- **Always (Antigravity).** This is the mandatory entry point for any file modification in a repository.
+- **Other runtimes:** Use `git checkout -b` for branch isolation. Git worktrees are preferred when available, but a feature branch is the minimum requirement.
+- The only exception: changes to Antigravity artifacts, scratch files, or non-repo files.
 
 ## Core Rules
 > [!IMPORTANT]
 > - **Branch Naming**: Always prefix the feature branch with `gemini/` (e.g., `gemini/feature-name`).
-> - **No Primary Branch Pollution**: Never run `git checkout -b` or modify files directly in the user's primary repository working directory when developing a new feature. Always check out a worktree.
+> - **No Primary Branch Pollution (Antigravity)**: Never run `git checkout -b` or modify files directly in the user's primary repository working directory. Always use a worktree. Other runtimes: use a feature branch at minimum.
 > - **Worktree Cleanup**: Once the branch has been successfully pushed to the remote repository, prune/delete the worktree to save disk space and keep the workspace clean.
 
 ## Execution Steps
@@ -35,19 +41,22 @@ Use this skill when you need to make changes to a repository (such as adding a f
      ```
 5. **Modify & Develop**: Perform all file edits, writes, and local commands inside the isolated worktree directory (`~/.gemini/tmp/worktrees/gemini_<sanitized-feature-name>`). Do not make changes in the primary workspace.
 
+   Before writing code, consult [resources/lifecycle-guide.md](resources/lifecycle-guide.md) to determine the appropriate lifecycle gates for your change's complexity (trivial → large). Follow the gates in order — each must pass before advancing to the next.
+
    > [!TIP]
    > **Subagent Delegation (Antigravity Only)**: For complex changesets, instead of editing files directly, the main agent can change directories into the worktree path and invoke the built-in `self` subagent with `Workspace: inherit`. Tasks should explicitly instruct the subagent to use virtual environment wrappers (`setup_review_env.py` and `run_in_env.py`) for all runs/tests. This delegation contract is Antigravity-only; in other runtimes (e.g. Gemini CLI), the main agent performs these steps directly.
 
-6. **Stage & Commit**: Run git staging and commit commands from within the worktree directory:
+6. **Pre-Commit Verification**: Before staging, verify that all lifecycle gates for the selected complexity tier have been satisfied (e.g., trivial tier requires only passing tests; higher tiers require review verdict with no CRITICAL findings open).
+7. **Stage & Commit**: Run git staging and commit commands from within the worktree directory:
    ```bash
    git add <modified_files>
    git commit -m "<descriptive commit message>"
    ```
-7. **Push Branch**: Push the feature branch to the remote origin:
+8. **Push Branch**: Push the feature branch to the remote origin:
    ```bash
    git push origin gemini/<feature-name>
    ```
-8. **Clean Up**: Remove the worktree:
+9. **Clean Up**: Remove the worktree:
    ```bash
    git worktree remove ~/.gemini/tmp/worktrees/gemini_<sanitized-feature-name>
    ```

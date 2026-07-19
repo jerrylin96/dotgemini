@@ -49,12 +49,12 @@ Use the following commands to navigate the development lifecycle:
 
 | Action | Command | Principle | Workspace Helper / Rule |
 |---|---|---|---|
-| **Define** | `/spec` | Spec before code | Write spec to markdown or check `.gemini/` rules |
-| **Plan** | `/plan` | Small, atomic tasks | Break implementation down in an artifact first |
-| **Build** | `/build` | One slice at a time | Build in thin vertical increments |
-| **Test** | `/test` | Tests are proof | Run `tox` or `pytest` via the local commands |
-| **Review** | `/review` | Improve code health | Run linters (`ruff`, `mypy`) & inspect code |
-| **Simplify** | `/code-simplify` | Clarity over cleverness | Remove bloated abstractions |
+| **Define** | `/spec` | Spec before code | [spec-driven-development](skills/spec-driven-development/SKILL.md) |
+| **Plan** | `/plan` | Small, atomic tasks | [planning-and-task-breakdown](skills/planning-and-task-breakdown/SKILL.md) |
+| **Build** | `/build` | One slice at a time | [incremental-implementation](skills/incremental-implementation/SKILL.md) |
+| **Test** | `/test` | Tests are proof | [test-driven-development](skills/test-driven-development/SKILL.md) |
+| **Review** | `/review` | Improve code health | [code-review-and-quality](skills/code-review-and-quality/SKILL.md) |
+| **Simplify** | `/code-simplify` | Clarity over cleverness | [ponytail](skills/ponytail/SKILL.md) |
 
 > [!NOTE]
 > **Slash Commands Portability:** Slash commands (e.g., `/spec`, `/plan`, `/build`, `/test`, `/review`, `/code-simplify`) are native to the Antigravity runtime. For external/multi-agent clients (like Claude Code or Codex), execute equivalent local commands directly (e.g. running testing frameworks, linters, or creating manual planning markdown files).
@@ -81,10 +81,13 @@ The global settings contain dedicated skills under `~/.gemini/skills/` which can
 * [google-workspace/SKILL.md](skills/google-workspace/SKILL.md) — **(Antigravity Only)** Manage Google Calendar events and Google Tasks (list, create, update, delete)
 * [ponytail/SKILL.md](skills/ponytail/SKILL.md) — **(Portable)** Detailed minimal-code YAGNI guidelines
 * [caveman/SKILL.md](skills/caveman/SKILL.md) — **(Portable)** Concise style and compression levels
+* [spec-driven-development/SKILL.md](skills/spec-driven-development/SKILL.md) — **(Portable)** Spec before code; maps to `/spec`
+* [planning-and-task-breakdown/SKILL.md](skills/planning-and-task-breakdown/SKILL.md) — **(Portable)** Atomic task decomposition; maps to `/plan`
 * [incremental-implementation/SKILL.md](skills/incremental-implementation/SKILL.md) — **(Portable)** Thin-slice execution cycles
 * [test-driven-development/SKILL.md](skills/test-driven-development/SKILL.md) — **(Portable)** Red-Green-Refactor and Prove-It patterns
+* [code-review-and-quality/SKILL.md](skills/code-review-and-quality/SKILL.md) — **(Portable)** Five-axis code review; maps to `/review`
 * [debugging-and-error-recovery/SKILL.md](skills/debugging-and-error-recovery/SKILL.md) — **(Portable)** Root-cause triage checklists
-* [make-feature/SKILL.md](skills/make-feature/SKILL.md) — **(Antigravity Only)** Isolated feature branch development via git worktree
+* [make-feature/SKILL.md](skills/make-feature/SKILL.md) — **(Antigravity Only)** Isolated feature branch development via git worktree; mandatory entry point for Antigravity agents, branch-isolation required for all runtimes
 * [session-sync/SKILL.md](skills/session-sync/SKILL.md) — **(Antigravity Only)** Sync/restore an Antigravity CLI conversation session across machines via a shared Git remote
 
 ---
