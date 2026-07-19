@@ -89,20 +89,22 @@ The global settings contain dedicated skills under `~/.gemini/skills/` which can
 
 ---
 
-## 5. Isolated Testing & Execution Environment
+## 5. Isolated Testing & Execution Environment (Antigravity Only)
 
 To prevent test/execution collisions and avoid polluting the workspace or running compute scripts in unconfigured global environments:
 > [!WARNING]
 > This provides dependency/test isolation, NOT a security sandbox. Running setup scripts or installing dependencies (via uv/pip) on untrusted repositories can execute arbitrary build hooks or code under your user credentials.
-* **Dynamic Isolated Env:** The agent will automatically initialize/resolve a CPU-compatible virtual environment located under `~/.gemini/tmp/<your-workspace-hash>` by running:
+* **Dynamic Isolated Env (Antigravity Only):** The agent will automatically initialize/resolve a CPU-compatible virtual environment located under `~/.gemini/tmp/<your-workspace-hash>` by running:
   ```bash
   python3 ~/.gemini/scripts/setup_review_env.py <workspace_path>
   ```
   Since dynamic branch workspaces (created via `invoke_subagent` in `branch` mode or local worktrees) have distinct file paths, their hashes will differ, ensuring perfect environment isolation for concurrent runs.
-* **Execution**: All testing and validation commands (`pytest`, `ruff`, etc.) inside the workspace (or dynamic branched workspaces) must be run using the virtual environment command runner helper:
+  *(Note: For external agents, use standard local virtual environments like `.venv` at the project root.)*
+* **Execution (Antigravity Only)**: All testing and validation commands (`pytest`, `ruff`, etc.) inside the workspace (or dynamic branched workspaces) must be run using the virtual environment command runner helper:
   * Running tests: `python3 ~/.gemini/scripts/run_in_env.py <workspace_path> pytest`
   * Running linter: `python3 ~/.gemini/scripts/run_in_env.py <workspace_path> ruff check .`
   * Running formatter: `python3 ~/.gemini/scripts/run_in_env.py <workspace_path> black .`
+  *(Note: For external agents, execute commands directly inside the active environment, e.g. `source .venv/bin/activate && pytest`.)*
 
 ---
 
@@ -131,7 +133,7 @@ When performing reviews, running tests, or inspecting code in this codebase:
 
 ## 9. User-Facing Artifacts
 
-* **Storage Location**: Prefer storing any user-facing deliverables, planning timelines, code review specs, or roadmaps in a centralized Obsidian Vault if configured/found (resolved in order: `ANTIGRAVITY_OBSIDIAN_VAULT` env var, `"obsidian_vault_path"` in `~/.gemini/antigravity-cli/settings.json`, or local fallbacks `~/Desktop/antigravity_vault` and `~/Documents/antigravity_vault`). Organize them under `Projects/<project-name>/<relative-path>` inside the vault. Note that `<project-name>` is resolved dynamically from the root directory of the active git repository; for git worktrees, this resolves to the checked-out worktree directory name (e.g., `<vault>/Projects/gemini_obsidian-artifacts/proposed_timeline.md`). If no Obsidian Vault is configured or detected, fall back to writing them in the `artifacts/` folder at the root of the workspace (e.g., `artifacts/proposed_timeline.md`). Do NOT write these to deep system/cache directories.
+* **Storage Location**: Prefer storing any user-facing deliverables, planning timelines, code review specs, or roadmaps in a centralized Obsidian Vault if configured/found (resolved in order: `ANTIGRAVITY_OBSIDIAN_VAULT` env var, `"obsidian_vault_path"` in `~/.gemini/antigravity-cli/settings.json` (Antigravity Only), or local fallbacks `~/Desktop/antigravity_vault` and `~/Documents/antigravity_vault`). Organize them under `Projects/<project-name>/<relative-path>` inside the vault. Note that `<project-name>` is resolved dynamically from the root directory of the active git repository; for git worktrees, this resolves to the checked-out worktree directory name (e.g., `<vault>/Projects/gemini_obsidian-artifacts/proposed_timeline.md`). If no Obsidian Vault is configured or detected, fall back to writing them in the `artifacts/` folder at the root of the workspace (e.g., `artifacts/proposed_timeline.md`). Do NOT write these to deep system/cache directories.
 * **Ignored Folder**: If falling back to the workspace root, ensure `artifacts/` is in `.gitignore` to prevent session-specific planning state from polluting the Git tree.
 
 ---

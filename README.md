@@ -48,8 +48,7 @@ This configuration is developed and tested on macOS and Linux (validated in CI).
    # Or via SSH: git clone git@github.com:jerrylin96/dotagent.git ~/.gemini
    ```
 
-   > [!IMPORTANT]
-   > **Temporary URL Redirect:** If the repository has not yet been renamed from `dotgemini` to `dotagent` on GitHub, use `dotgemini` instead of `dotagent` in the clone command above. GitHub automatically configures redirects, so the new `dotagent.git` URL will work seamlessly once the rename is complete.
+   *Note: The repository was previously named `dotgemini`; GitHub automatically redirects old URLs and clones to `dotagent`.*
 
 4. **Restore local settings and credentials (if applicable):**
    ```bash
@@ -133,7 +132,7 @@ Note that Antigravity-specific skills (e.g., `adversarial-review`, `explain-diff
 * Defines the **Ponytail (Lazy Senior Dev Mode)** YAGNI ladder.
 * Enforces the **Caveman (Terse Style)** communication formatting to save ~65% output tokens.
 * Enforces structured software development lifecycle gates.
-* Also exposed as `GEMINI.md` (a symlink to `AGENTS.md` for backward compatibility) so other agents that follow the [AGENTS.md](https://agents.md) convention — Claude Code, Codex, Cursor, etc. — load the same rules. Antigravity CLI seamlessly reads the symlink by default.
+* Also exposed as `GEMINI.md` (a symlink to `AGENTS.md` for backward compatibility). Other agents can load the rules via the [AGENTS.md](https://agents.md) convention (Codex, Cursor, etc.) or via `CLAUDE.md` (Claude Code) by copying or symlinking. Antigravity CLI seamlessly reads the symlink by default.
 
 ### 2. Isolated Execution Environments
 * Integrates with `setup_review_env.py` to automatically bootstrap CPU-compatible testing and linting virtual environments under `~/.gemini/tmp/<workspace-hash>` using `uv`.
@@ -196,7 +195,7 @@ If `uv` is available but the environment setup fails, `run_tests.py` will exit w
 If you want to bake this isolated environment setup directly into a specific project repository so that *any* agent working on it automatically uses it:
 1. **Copy the Env Manager**: Place the [setup_review_env.py](scripts/setup_review_env.py) script in the project repository (e.g., `scripts/setup_review_env.py`).
 2. **Add a Project-Level Guide**: Add an `AGENTS.md` (or `CLAUDE.md` / `GEMINI.md`) to the project's root containing:
-   ```markdown
+   ````markdown
    ## Isolated Testing & Execution Environment
    All testing and validation commands must run inside the CPU-isolated virtual environment:
    1. Initialize: `python3 scripts/setup_review_env.py`
@@ -208,4 +207,4 @@ If you want to bake this isolated environment setup directly into a specific pro
       source .venv/bin/activate && pytest
       ```
    *(Note: The setup_review_env.py script automatically manages and prints details of the isolated environment.)*
-   ```
+   ````
