@@ -5,7 +5,7 @@ description: Creates specs before coding. Maps to `/spec`. Use when starting a n
 
 ## Overview
 
-Write the spec before the code. For trivial/small changes, the [lifecycle guide](make-feature/resources/lifecycle-guide.md) permits skipping this gate — but for medium and large changes, a spec is required.
+Write the spec before the code. For trivial/small changes, the [lifecycle guide](../make-feature/resources/lifecycle-guide.md) permits skipping this gate — but for medium and large changes, a spec is required.
 
 ## When to Use
 
