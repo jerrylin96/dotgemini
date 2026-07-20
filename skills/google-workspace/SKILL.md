@@ -16,10 +16,38 @@ If the user encounters authentication errors, ask them to run:
 gcloud auth application-default login --scopes="https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/calendar,https://www.googleapis.com/auth/tasks"
 ```
 
-To verify authentication:
-```bash
-python3 ~/.gemini/skills/google-workspace/scripts/workspace_client.py auth-check
-```
+---
+
+## Execution & Environment Setup
+
+To avoid polluting the base Python environment on a desktop, execute this skill's scripts within an isolated virtual environment containing `google-api-python-client` and `google-auth`.
+
+### Option A: Run inside Workspace Dynamic Virtual Environment (Recommended for Agent/CLI Usage)
+Antigravity CLI provides a built-in virtual environment runner that resolves dependencies from `requirements.txt` into a dynamic environment under `~/.gemini/tmp/`:
+1. Ensure the workspace environment is resolved:
+   ```bash
+   python3 ~/.gemini/scripts/setup_review_env.py ~/.gemini
+   ```
+2. Execute any workspace integration command using `run_in_env.py`:
+   ```bash
+   python3 ~/.gemini/scripts/run_in_env.py ~/.gemini python3 ~/.gemini/skills/google-workspace/scripts/workspace_client.py auth-check
+   ```
+
+### Option B: Standalone Manual Setup
+If executing commands manually in a standalone `uv` environment:
+1. Create and activate a virtual environment:
+   ```bash
+   uv venv ~/.gemini/tmp/workspace_skill_env
+   source ~/.gemini/tmp/workspace_skill_env/bin/activate
+   ```
+2. Install dependencies:
+   ```bash
+   uv pip install -r ~/.gemini/requirements.txt
+   ```
+3. Run the scripts directly:
+   ```bash
+   python3 ~/.gemini/skills/google-workspace/scripts/workspace_client.py auth-check
+   ```
 
 ---
 
@@ -28,8 +56,7 @@ python3 ~/.gemini/skills/google-workspace/scripts/workspace_client.py auth-check
 > [!IMPORTANT]
 > **Safety Rule**: You MUST explicitly confirm with the user before performing any delete operations or bulk changes to calendar events or tasks.
 
-All actions are executed by running the Python client:
-`python3 ~/.gemini/skills/google-workspace/scripts/workspace_client.py`
+All actions are executed by running the Python client within the workspace environment (e.g. prefixing with the dynamic environment runner `python3 ~/.gemini/scripts/run_in_env.py ~/.gemini python3` as shown below).
 
 ### 1. Google Calendar
 
