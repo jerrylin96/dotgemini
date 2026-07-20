@@ -28,9 +28,7 @@ class TestRunTests(unittest.TestCase):
     @patch("sys.exit", side_effect=SystemExit)
     def test_uv_present_setup_failure_no_fallback(self, mock_exit, mock_run, mock_exists, mock_which):
         def exists_side_effect(path):
-            if "uv" in path:
-                return True
-            return False
+            return os.path.basename(path) == "uv" or path.endswith("/uv")
         mock_exists.side_effect = exists_side_effect
         
         import subprocess
@@ -48,9 +46,7 @@ class TestRunTests(unittest.TestCase):
     @patch("sys.exit")
     def test_uv_present_setup_failure_with_fallback(self, mock_exit, mock_run, mock_exists, mock_which):
         def exists_side_effect(path):
-            if "uv" in path:
-                return True
-            return False
+            return os.path.basename(path) == "uv" or path.endswith("/uv")
         mock_exists.side_effect = exists_side_effect
         
         import subprocess
@@ -71,7 +67,8 @@ class TestRunTests(unittest.TestCase):
     @patch("sys.exit")
     def test_unittest_fallback(self, mock_exit, mock_run, mock_exists, mock_which):
         def exists_side_effect(path):
-            if "uv" in path or "pytest" in path:
+            filename = os.path.basename(path)
+            if filename in ("uv", "pytest") or path.endswith("/uv") or path.endswith("/pytest"):
                 return False
             return True
         mock_exists.side_effect = exists_side_effect

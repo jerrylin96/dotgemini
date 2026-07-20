@@ -16,38 +16,52 @@ If the user encounters authentication errors, ask them to run:
 gcloud auth application-default login --scopes="https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/calendar,https://www.googleapis.com/auth/tasks"
 ```
 
+To verify authentication (after setting up the environment using Option A or Option B below):
+```bash
+# Option A: Run via dynamic venv runner
+python3 ~/.gemini/scripts/run_in_env.py ~/.gemini python3 ~/.gemini/skills/google-workspace/scripts/workspace_client.py auth-check
+
+# Option B: Run directly inside standalone activated venv
+python3 ~/.gemini/skills/google-workspace/scripts/workspace_client.py auth-check
+```
+
 ---
 
 ## Execution & Environment Setup
 
-To avoid polluting the base Python environment on a desktop, execute this skill's scripts within an isolated virtual environment containing `google-api-python-client` and `google-auth`.
+To avoid polluting the base Python environment on a desktop, execute this skill's scripts within an isolated virtual environment containing `google-api-python-client` and `google-auth`. 
+
+These dependencies are managed via helper scripts supplied in this configuration repository: [setup_review_env.py](../../scripts/setup_review_env.py) and [run_in_env.py](../../scripts/run_in_env.py).
 
 ### Option A: Run inside Workspace Dynamic Virtual Environment (Recommended for Agent/CLI Usage)
-Antigravity CLI provides a built-in virtual environment runner that resolves dependencies from `requirements.txt` into a dynamic environment under `~/.gemini/tmp/`:
+The repository config provides a virtual environment runner that resolves dependencies from `requirements.txt` into a dynamic environment under `~/.gemini/tmp/`:
 1. Ensure the workspace environment is resolved:
    ```bash
    python3 ~/.gemini/scripts/setup_review_env.py ~/.gemini
    ```
-2. Execute any workspace integration command using `run_in_env.py`:
+2. Execute any workspace integration command using `run_in_env.py` (format: `run_in_env.py <workspace-root> <command...>`):
    ```bash
    python3 ~/.gemini/scripts/run_in_env.py ~/.gemini python3 ~/.gemini/skills/google-workspace/scripts/workspace_client.py auth-check
    ```
 
 ### Option B: Standalone Manual Setup
-If executing commands manually in a standalone `uv` environment:
-1. Create and activate a virtual environment:
+If executing commands manually in a standalone environment, you must have `uv` installed (prerequisite: verify with `uv --version`, or install via [astral.sh/uv](https://astral.sh/uv)):
+1. Create and activate a standalone virtual environment (note: this venv is completely independent of Option A's workspace-hashed dynamic venvs and is not managed by `run_in_env.py`):
    ```bash
-   uv venv ~/.gemini/tmp/workspace_skill_env
-   source ~/.gemini/tmp/workspace_skill_env/bin/activate
+   uv venv ~/.gemini/.venvs/workspace_skill_env
+   source ~/.gemini/.venvs/workspace_skill_env/bin/activate   # Windows: .\Scripts\activate
    ```
 2. Install dependencies:
    ```bash
    uv pip install -r ~/.gemini/requirements.txt
    ```
-3. Run the scripts directly:
+3. Run the verification script directly:
    ```bash
    python3 ~/.gemini/skills/google-workspace/scripts/workspace_client.py auth-check
    ```
+
+> [!NOTE]
+> Run the `auth-check` verification step inside whichever environment option you choose to verify the setup works properly.
 
 ---
 
@@ -56,7 +70,11 @@ If executing commands manually in a standalone `uv` environment:
 > [!IMPORTANT]
 > **Safety Rule**: You MUST explicitly confirm with the user before performing any delete operations or bulk changes to calendar events or tasks.
 
-All actions are executed by running the Python client within the workspace environment (e.g. prefixing with the dynamic environment runner `python3 ~/.gemini/scripts/run_in_env.py ~/.gemini python3` as shown below).
+For all command examples below, prefix the command according to your environment choice:
+- **Option A (Dynamic Env)**: Prefix commands with the runner: `python3 ~/.gemini/scripts/run_in_env.py ~/.gemini python3` (or set up a shell alias).
+- **Option B (Standalone Venv)**: Run commands directly with the venv activated.
+
+To maintain readability, the command examples below are written using the bare script execution format (e.g. `python3 ~/.gemini/skills/google-workspace/scripts/...`).
 
 ### 1. Google Calendar
 
