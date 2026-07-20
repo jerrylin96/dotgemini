@@ -1,5 +1,6 @@
 # Ignore all local caches, logs, and installation binaries
 tmp/
+.venvs/
 antigravity-backup/
 antigravity-browser-profile/
 antigravity-cli/
