@@ -49,7 +49,7 @@ If executing commands manually in a standalone environment, you must have `uv` i
 1. Create and activate a standalone virtual environment (note: this venv is completely independent of Option A's workspace-hashed dynamic venvs and is not managed by `run_in_env.py`):
    ```bash
    uv venv ~/.gemini/.venvs/workspace_skill_env
-   source ~/.gemini/.venvs/workspace_skill_env/bin/activate   # Windows: .\Scripts\activate
+   source ~/.gemini/.venvs/workspace_skill_env/bin/activate
    ```
 2. Install dependencies:
    ```bash
