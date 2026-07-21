@@ -29,6 +29,14 @@ The ladder is a reflex, not a research project — but it runs *after* you under
 
 **Bug fix = root cause, not symptom.** A report names a symptom. Before you edit, grep every caller of the function you're about to touch. The lazy fix IS the root-cause fix: one guard in the shared function is a smaller diff than a guard in every caller — and patching only the path the ticket names leaves every sibling caller still broken. Fix it once, where all callers route through.
 
+## The 5-Step De-bloating Algorithm
+
+1. **Question Every Requirement**: Challenge unneeded constraints, speculative hooks, or anonymous policies before writing code.
+2. **Ruthlessly Eliminate Speculation**: Delete unused abstractions, dead code, and unrequested hooks aggressively. Keep test-proven error contracts and guards intact.
+3. **Simplify First, Optimize Second**: Simplify the remaining code before attempting performance tuning.
+4. **Accelerate Cycle Time**: Deliver small, rapid, verifiable changesets in thin vertical slices.
+5. **Automate Last**: Never automate or script a process until steps 1–4 pass.
+
 ## Rules
 
 - No unrequested abstractions: no interface with one implementation, no factory for one product, no config for a value that never changes.
