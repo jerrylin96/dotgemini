@@ -132,7 +132,6 @@ The script returns JSON on stdout. The schema depends on the outcome:
    - The main agent should delegate the review execution to a background subagent (`invoke_subagent`) to keep its context clean and eliminate author bias.
      - **Subagent Selection**: Use `TypeName: self` with `Workspace: inherit` inside `<worktree_path>` (since `self` possesses the necessary write/execution tools to run environment setup and tests). Use `research` subagent ONLY for read-only static analysis.
      - **Recursion Prevention**: If you are already running as the invoked review subagent, execute the steps below directly without spawning further subagents.
-
    - **Sequential Execution Procedure**:
      1. Initialize the review environment for the worktree:
         ```bash
