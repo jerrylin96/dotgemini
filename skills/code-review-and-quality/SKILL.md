@@ -14,7 +14,7 @@ Every change gets reviewed before merge — no exceptions. Review covers five ax
 - After any bug fix
 
 > [!TIP]
-> **(Antigravity Only)** For adversarial / deep-dive merge reviews, see the [adversarial-review](../adversarial-review/SKILL.md) skill.
+> For adversarial / deep-dive merge reviews, see the [adversarial-review](../adversarial-review/SKILL.md) skill.
 
 ## The Five-Axis Review
 
@@ -53,7 +53,7 @@ Every change gets reviewed before merge — no exceptions. Review covers five ax
 
 ## Process
 1. **Scope**: Review changed lines + context. If >100 lines, request split into smaller commits.
-2. **Verify**: Run linters and tests as part of the review — don't trust "it works" claims without evidence. **(Antigravity)** Use `run_in_env.py`; **(Other runtimes)** run directly in your environment.
+2. **Verify**: Run linters and tests as part of the review — don't trust "it works" claims without evidence. Use `run_in_env.py` to run verification.
 3. **Label findings**: `[CRITICAL]`, `[IMPORTANT]`, `[SUGGESTION]`, `[FYI]`
 4. **Synthesize**: Clear verdict — Approve or Request Changes.
 5. **Re-review**: After fixes, verify again before merge.

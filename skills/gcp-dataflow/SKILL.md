@@ -334,13 +334,13 @@ Use this section to monitor the progress of a running Dataflow job.
 
     *   For Streaming Jobs
         *   Overall Job Health: YOU MUST refer to
-            [streaming_job_health](references/streaming_job_health.md) to analyze
+            [dataflow_diagnostics_reference](resources/dataflow_diagnostics_reference.md) to analyze
             overall streaming job health.
         *   Analyze Bottlenecks and Parallelism. YOU MUST refer to
-            [bottlenecks_and_parallelism_context][bottlenecks-context] and
+            [dataflow_metrics_core_job][bottlenecks-context] and
             interpret the bottlenecks and parallelism metrics in that context.
         *   Analyze Autoscaling Behavior. YOU MUST refer to
-            [streaming_horizontal_autoscaling_analysis.md][autoscaling-analysis-link]
+            [dataflow_metrics_streaming_engine][autoscaling-analysis-link]
     *   For Batch Jobs
         *   Correlate metrics spikes/drops with log errors.
         *   Identify Issues.
@@ -353,7 +353,7 @@ Use this section to monitor the progress of a running Dataflow job.
 
     1.  **Overall Job State**: State categorization (Healthy, Mostly Healthy,
         Not Healthy) per
-        [streaming_job_health](references/streaming_job_health.md).
+        [dataflow_diagnostics_reference](resources/dataflow_diagnostics_reference.md).
     2.  **High-level Job Events**: Notable control plane events, errors, or
         stage failures parsed from job messages.
     3.  **Data Freshness**: Current data delay utilizing
@@ -365,14 +365,14 @@ Use this section to monitor the progress of a running Dataflow job.
         using `job/estimated_backlog_processing_time` / `job/backlog_bytes`.
     6.  **Bottlenecks & Parallelism**: Queue delay diagnostics using
         `job/is_bottleneck` (interpreting `likely_cause` / `bottleneck_kind`)
-        and key metrics `job/backlogged_keys` /
+        and key `job/backlogged_keys` /
         `job/processing_parallelism_keys` interpreted in the context of
-        [bottlenecks_and_parallelism_context][bottlenecks-context].
+        [dataflow_metrics_core_job][bottlenecks-context].
     7.  **Autoscaling Analysis**: Scaling trends using
         `job/horizontal_worker_scaling` (and label `rationale`), clamp limits
         (`job/max_worker_instances_limit` / `job/min_worker_instances_limit`),
         and utilization hints in the context of
-        [streaming_horizontal_autoscaling_analysis][autoscaling-analysis-link].
+        [dataflow_metrics_streaming_engine][autoscaling-analysis-link].
     8.  **Recommendations**: Direct remediation plans (in-flight updates,
         client-side configurations, or code corrections linked via absolute
         `file:///` URIs).
@@ -387,7 +387,7 @@ Use this section to monitor the progress of a running Dataflow job.
         (client-side configurations, or code corrections linked via absolute
         `file:///` URIs).
 
-[py-flex-ref]: references/python_flex_template_reference.md
+[py-flex-ref]: resources/python_flex_template_reference.md
 [udf-guide]: https://docs.cloud.google.com/dataflow/docs/guides/templates/create-template-udf
 [ssl-cert-guide]: https://docs.cloud.google.com/dataflow/docs/guides/templates/ssl-certificates
 [dest-prereqs]: #destination-specific-prerequisites
@@ -395,6 +395,6 @@ Use this section to monitor the progress of a running Dataflow job.
 [df-templates-repo]: https://github.com/GoogleCloudPlatform/DataflowTemplates
 [deadletter-schema]: https://github.com/GoogleCloudPlatform/DataflowTemplates/blob/main/v2/common/src/main/resources/schema/streaming_source_deadletter_table_schema.json
 [csv-bq-doc]: https://cloud.google.com/dataflow/docs/guides/templates/provided/cloud-storage-csv-to-bigquery#GcsCSVToBigQueryBadRecordsSchema
-[diag-ref]: references/dataflow_diagnostics_reference.md
-[bottlenecks-context]: references/bottlenecks_and_parallelism_context.md
-[autoscaling-analysis-link]: references/streaming_horizontal_autoscaling_analysis.md
+[diag-ref]: resources/dataflow_diagnostics_reference.md
+[bottlenecks-context]: resources/dataflow_metrics_core_job.md
+[autoscaling-analysis-link]: resources/dataflow_metrics_streaming_engine.md

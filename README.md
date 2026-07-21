@@ -1,9 +1,9 @@
-# Antigravity & Cross-Agent Config (`dotagent`)
+# Antigravity Global Agent Config (`dotagent`)
 
-Personal global configuration and custom skills for Google Antigravity and other AI coding assistants (Claude Code, Codex CLI, Cursor, etc.).
+Personal global configuration and custom skills for Google Antigravity CLI.
 
 > [!NOTE]
-> **Repository Naming vs. Installation Paths:** The repository is named `dotagent` to reflect its cross-agent portability. However, Google Antigravity CLI expects its global settings to reside at `~/.gemini/` on disk. Setup cloning instructions therefore target `~/.gemini` for Antigravity-compatibility, while other agents can copy or symlink files to their respective target paths.
+> **Repository Naming vs. Installation Paths:** The repository is named `dotagent` to reflect dotfile configuration for AI agents. Google Antigravity CLI expects its global settings to reside at `~/.gemini/` on disk. Setup cloning instructions target `~/.gemini` for Antigravity-compatibility.
 
 ## Platform Support
 
@@ -11,16 +11,13 @@ This configuration is developed and tested on macOS and Linux (validated in CI).
 
 ## Setup on a New Machine
 
-1. **Install Antigravity CLI (Required for full configuration):**
-   Download and install the [Antigravity CLI](https://antigravity.google/product/antigravity-cli). This is required for executing Antigravity-native skills (`adversarial-review`, `explain-diff`, `make-feature`, `session-sync`) and subagent delegation.
+1. **Install Antigravity CLI:**
+   Download and install the [Antigravity CLI](https://antigravity.google/product/antigravity-cli). This is required for executing Antigravity skills (`adversarial-review`, `explain-diff`, `make-feature`, `session-sync`), environment runner wrappers, and subagent delegation.
    
    Verify your installation:
    ```bash
    agy --version
    ```
-
-   > [!NOTE]
-   > **External/Multi-Agent CLIs:** If you are using Claude Code, Codex, or Cursor, the Antigravity CLI is not required to load global rules. See [Cross-Agent Integration](#cross-agent-integration-claude-code-codex-cursor-etc) below.
 
    > [!NOTE]
    > **Installation Order:** If you clone the repository before installing the CLI, the CLI will safely initialize its state inside the existing `~/.gemini` folder without conflicts when you install it.
@@ -68,62 +65,6 @@ This configuration is developed and tested on macOS and Linux (validated in CI).
 
 *Note: Credentials, local settings (`antigravity-cli/settings.json`), terminal logs (`*.log`), subagent run data (`brain/`), and conversation logs (`conversations/`) are automatically excluded via `.gitignore` to prevent leaking secrets or tracking local session state.*
 
-## Cross-Agent Integration (Claude Code, Codex, Cursor, etc.)
-
-Since cloning this repository to `~/.gemini` only configures Google Antigravity CLI globally, you must link or copy the portable rules and skills for other AI coding assistants.
-
-### 1. Project-Level Rules (`AGENTS.md` / `CLAUDE.md`)
-To configure rules in a project repository:
-- **Claude Code**: Copy portable rules directly to `CLAUDE.md` at the project root to share with the team:
-  ```bash
-  cp ~/.gemini/AGENTS.md CLAUDE.md
-  ```
-  Or create a personal, untracked local symlink (and add it to `.git/info/exclude` to keep it local):
-  ```bash
-  ln -s ~/.gemini/AGENTS.md CLAUDE.md
-  ```
-- **Codex CLI / Cursor / Other compliant agents**: Copy portable rules directly to `AGENTS.md` at the project root to share with the team:
-  ```bash
-  cp ~/.gemini/AGENTS.md AGENTS.md
-  ```
-  Or create a personal, untracked local symlink:
-  ```bash
-  ln -s ~/.gemini/AGENTS.md AGENTS.md
-  ```
-
-### 2. Global Rules (Alternative)
-- **Claude Code**: Claude Code reads global instructions from `~/.claude/CLAUDE.md`. You can copy or symlink it:
-  ```bash
-  mkdir -p ~/.claude
-  ln -s ~/.gemini/AGENTS.md ~/.claude/CLAUDE.md
-  ```
-- **Codex CLI**: Codex reads global rules from `$CODEX_HOME/AGENTS.md`, which defaults to `~/.codex/AGENTS.md`. You can symlink it:
-  ```bash
-  mkdir -p ~/.codex
-  ln -s ~/.gemini/AGENTS.md ~/.codex/AGENTS.md
-  ```
-
-### 3. Portable Skill Installation
-To install and expose portable skills (e.g., `ponytail`, `caveman`, `test-driven-development`) to external agents, copy or link their respective skill folders to their client-specific paths:
-- **Claude Code**:
-  * Project-Level: `.claude/skills/<name>/SKILL.md` (add `.claude/` to `.gitignore` if personal)
-  * Global: `~/.claude/skills/<name>/SKILL.md`
-  ```bash
-  # Example project skill setup
-  mkdir -p .claude/skills/caveman
-  cp ~/.gemini/skills/caveman/SKILL.md .claude/skills/caveman/SKILL.md
-  ```
-- **Codex CLI**:
-  * Project-Level: `.agents/skills/<name>/SKILL.md`
-  * Global: `~/.agents/skills/<name>/SKILL.md`
-  ```bash
-  # Example global skill setup
-  mkdir -p ~/.agents/skills/caveman
-  cp ~/.gemini/skills/caveman/SKILL.md ~/.agents/skills/caveman/SKILL.md
-  ```
-
-Note that Antigravity-specific skills (e.g., `adversarial-review`, `explain-diff`, `make-feature`, `session-sync`) require the Antigravity execution environment and will not run on external agents.
-
 ---
 
 ## What's Included
@@ -132,7 +73,7 @@ Note that Antigravity-specific skills (e.g., `adversarial-review`, `explain-diff
 * Defines the **Ponytail (Lazy Senior Dev Mode)** YAGNI ladder.
 * Enforces the **Caveman (Terse Style)** communication formatting to save ~65% output tokens.
 * Enforces structured software development lifecycle gates.
-* Also exposed as `GEMINI.md` (a symlink to `AGENTS.md` for backward compatibility). Other agents can load the rules via the [AGENTS.md](https://agents.md) convention (Codex, Cursor, etc.) or via `CLAUDE.md` (Claude Code) by copying or symlinking. Antigravity CLI seamlessly reads the symlink by default.
+* Also exposed as `GEMINI.md` (a symlink to `AGENTS.md` for backward compatibility). Antigravity CLI seamlessly reads the rules by default.
 
 ### 2. Isolated Execution Environments
 * Integrates with `setup_review_env.py` to automatically bootstrap CPU-compatible testing and linting virtual environments under `~/.gemini/tmp/<workspace-hash>` using `uv`.
@@ -194,17 +135,11 @@ If `uv` is available but the environment setup fails, `run_tests.py` will exit w
 ### Project-Level Integration (Recommended for Sharing)
 If you want to bake this isolated environment setup directly into a specific project repository so that *any* agent working on it automatically uses it:
 1. **Copy the Env Manager**: Place the [setup_review_env.py](scripts/setup_review_env.py) script in the project repository (e.g., `scripts/setup_review_env.py`).
-2. **Add a Project-Level Guide**: Add an `AGENTS.md` (or `CLAUDE.md` / `GEMINI.md`) to the project's root containing:
+2. **Add a Project-Level Guide**: Add an `AGENTS.md` to the project's root containing:
    ````markdown
    ## Isolated Testing & Execution Environment
    All testing and validation commands must run inside the CPU-isolated virtual environment:
-   1. Initialize: `python3 scripts/setup_review_env.py`
-   2. Run Tests: Execute using the resolved virtual environment python path (printed by `setup_review_env.py` initialization) or via:
-      ```bash
-      # If using the global Antigravity environment wrapper:
-      python3 ~/.gemini/scripts/run_in_env.py <workspace_path> pytest
-      # Or client-neutral local alternative:
-      source .venv/bin/activate && pytest
-      ```
+   1. Initialize: `python3 scripts/setup_review_env.py <workspace_path>`
+   2. Run Tests: `python3 ~/.gemini/scripts/run_in_env.py <workspace_path> pytest`
    *(Note: The setup_review_env.py script automatically manages and prints details of the isolated environment.)*
    ````

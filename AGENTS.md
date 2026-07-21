@@ -1,6 +1,6 @@
 # Global Agent Guide
 
-This guide establishes the primary engineering workflows, quality gates, and styles for AI agents globally across all project sessions. It is loaded by Antigravity CLI as `AGENTS.md` (aliased as `GEMINI.md` via a backward-compatibility symlink), and is consumed by other agent clients (Claude Code, Codex CLI, Cursor, etc.).
+This guide establishes the primary engineering workflows, quality gates, and styles for AI agents globally across all project sessions. It is loaded by Antigravity CLI as `AGENTS.md` (aliased as `GEMINI.md` via a backward-compatibility symlink).
 
 ## Core Philosophical Principles
 
@@ -56,9 +56,6 @@ Use the following commands to navigate the development lifecycle:
 | **Review** | `/review` | Improve code health | [code-review-and-quality](skills/code-review-and-quality/SKILL.md) |
 | **Simplify** | `/code-simplify` | Clarity over cleverness | [ponytail](skills/ponytail/SKILL.md) |
 
-> [!NOTE]
-> **Slash Commands Portability:** Slash commands (e.g., `/spec`, `/plan`, `/build`, `/test`, `/review`, `/code-simplify`) are native to the Antigravity runtime. For external/multi-agent clients (like Claude Code or Codex), execute equivalent local commands directly (e.g. running testing frameworks, linters, or creating manual planning markdown files).
-
 ### Core Operating Behaviors
 * **Surface Assumptions:** Before writing any non-trivial code, explicitly list assumptions:
   ```markdown
@@ -74,40 +71,39 @@ Use the following commands to navigate the development lifecycle:
 
 ## 4. Discoverable Global Skills
 
-The global settings contain dedicated skills under `~/.gemini/skills/` which can be loaded on demand. Note that some are specific to the Antigravity runtime, while others are portable rules:
+The global settings contain dedicated skills under `~/.gemini/skills/` which can be loaded on demand:
 
-* [adversarial-review/SKILL.md](skills/adversarial-review/SKILL.md) — **(Antigravity Only)** Git worktree-based adversarial code review helper
-* [explain-diff/SKILL.md](skills/explain-diff/SKILL.md) — **(Antigravity Only)** Interactive, read-only diff explanation walkthrough (overall summary, per-hunk explanations, drill-down Q&A)
-* [google-workspace/SKILL.md](skills/google-workspace/SKILL.md) — **(Antigravity Only)** Manage Google Calendar events and Google Tasks (list, create, update, delete)
-* [ponytail/SKILL.md](skills/ponytail/SKILL.md) — **(Portable)** Detailed minimal-code YAGNI guidelines
-* [caveman/SKILL.md](skills/caveman/SKILL.md) — **(Portable)** Concise style and compression levels
-* [spec-driven-development/SKILL.md](skills/spec-driven-development/SKILL.md) — **(Portable)** Spec before code; maps to `/spec`
-* [planning-and-task-breakdown/SKILL.md](skills/planning-and-task-breakdown/SKILL.md) — **(Portable)** Atomic task decomposition; maps to `/plan`
-* [incremental-implementation/SKILL.md](skills/incremental-implementation/SKILL.md) — **(Portable)** Thin-slice execution cycles
-* [test-driven-development/SKILL.md](skills/test-driven-development/SKILL.md) — **(Portable)** Red-Green-Refactor and Prove-It patterns
-* [code-review-and-quality/SKILL.md](skills/code-review-and-quality/SKILL.md) — **(Portable)** Five-axis code review; maps to `/review`
-* [debugging-and-error-recovery/SKILL.md](skills/debugging-and-error-recovery/SKILL.md) — **(Portable)** Root-cause triage checklists
-* [make-feature/SKILL.md](skills/make-feature/SKILL.md) — **(Antigravity Only)** Isolated feature branch development via git worktree; mandatory entry point for Antigravity agents, branch-isolation required for all runtimes
-* [session-sync/SKILL.md](skills/session-sync/SKILL.md) — **(Antigravity Only)** Sync/restore an Antigravity CLI conversation session across machines via a shared Git remote
+* [adversarial-review/SKILL.md](skills/adversarial-review/SKILL.md) — Git worktree-based adversarial code review helper
+* [explain-diff/SKILL.md](skills/explain-diff/SKILL.md) — Interactive, read-only diff explanation walkthrough (overall summary, per-hunk explanations, drill-down Q&A)
+* [google-workspace/SKILL.md](skills/google-workspace/SKILL.md) — Manage Google Calendar events and Google Tasks (list, create, update, delete)
+* [ponytail/SKILL.md](skills/ponytail/SKILL.md) — Detailed minimal-code YAGNI guidelines
+* [caveman/SKILL.md](skills/caveman/SKILL.md) — Concise style and compression levels
+* [spec-driven-development/SKILL.md](skills/spec-driven-development/SKILL.md) — Spec before code; maps to `/spec`
+* [planning-and-task-breakdown/SKILL.md](skills/planning-and-task-breakdown/SKILL.md) — Atomic task decomposition; maps to `/plan`
+* [incremental-implementation/SKILL.md](skills/incremental-implementation/SKILL.md) — Thin-slice execution cycles
+* [test-driven-development/SKILL.md](skills/test-driven-development/SKILL.md) — Red-Green-Refactor and Prove-It patterns
+* [code-review-and-quality/SKILL.md](skills/code-review-and-quality/SKILL.md) — Five-axis code review; maps to `/review`
+* [debugging-and-error-recovery/SKILL.md](skills/debugging-and-error-recovery/SKILL.md) — Root-cause triage checklists
+* [make-feature/SKILL.md](skills/make-feature/SKILL.md) — Isolated feature branch development via git worktree; mandatory entry point for codebase changes
+* [session-sync/SKILL.md](skills/session-sync/SKILL.md) — Sync/restore an Antigravity CLI conversation session across machines via a shared Git remote
+* [gcp-dataflow/SKILL.md](skills/gcp-dataflow/SKILL.md) — Apache Beam Dataflow pipeline development and diagnostics
 
 ---
 
-## 5. Isolated Testing & Execution Environment (Antigravity Only)
+## 5. Isolated Testing & Execution Environment
 
 To prevent test/execution collisions and avoid polluting the workspace or running compute scripts in unconfigured global environments:
 > [!WARNING]
 > This provides dependency/test isolation, NOT a security sandbox. Running setup scripts or installing dependencies (via uv/pip) on untrusted repositories can execute arbitrary build hooks or code under your user credentials.
-* **Dynamic Isolated Env (Antigravity Only):** The agent will automatically initialize/resolve a CPU-compatible virtual environment located under `~/.gemini/tmp/<your-workspace-hash>` by running:
+* **Dynamic Isolated Env:** The agent will automatically initialize/resolve a CPU-compatible virtual environment located under `~/.gemini/tmp/<your-workspace-hash>` by running:
   ```bash
   python3 ~/.gemini/scripts/setup_review_env.py <workspace_path>
   ```
   Since dynamic branch workspaces (created via `invoke_subagent` in `branch` mode or local worktrees) have distinct file paths, their hashes will differ, ensuring perfect environment isolation for concurrent runs.
-  *(Note: For external agents, use standard local virtual environments like `.venv` at the project root.)*
-* **Execution (Antigravity Only)**: All testing and validation commands (`pytest`, `ruff`, etc.) inside the workspace (or dynamic branched workspaces) must be run using the virtual environment command runner helper:
+* **Execution**: All testing and validation commands (`pytest`, `ruff`, etc.) inside the workspace (or dynamic branched workspaces) must be run using the virtual environment command runner helper:
   * Running tests: `python3 ~/.gemini/scripts/run_in_env.py <workspace_path> pytest`
   * Running linter: `python3 ~/.gemini/scripts/run_in_env.py <workspace_path> ruff check .`
   * Running formatter: `python3 ~/.gemini/scripts/run_in_env.py <workspace_path> black .`
-  *(Note: For external agents, execute commands directly inside the active environment, e.g. `source .venv/bin/activate && pytest`.)*
 
 ---
 
@@ -122,11 +118,11 @@ When performing reviews, running tests, or inspecting code in this codebase:
 
 ## 7. Isolated Development Constraint
 
-* **Isolated Development (Antigravity Only)**: Never modify code directly in the primary workspace. Always invoke `/make-feature` to isolate the changes on a clean worktree feature branch first. For non-Antigravity agents, follow equivalent manual branch isolation practices.
+* **Isolated Development**: Never modify code directly in the primary workspace. Always invoke `/make-feature` to isolate the changes on a clean worktree feature branch first.
 
 ## 8. Command Execution Explanations
 
-* **Explanation for Permission Prompts (Antigravity Only)**: Before proposing any command or tool execution that will prompt the user for permission (i.e. falls under a `command(*): ask` or `write_file(/): ask` rule), the agent MUST output a text explanation in a separate turn *before* calling the tool. The agent must wait for the user to explicitly reply before triggering the tool call. For other agents, comply with their native permission prompt systems.
+* **Explanation for Permission Prompts**: Before proposing any command or tool execution that will prompt the user for permission (i.e. falls under a `command(*): ask` or `write_file(/): ask` rule), the agent MUST output a text explanation in a separate turn *before* calling the tool. The agent must wait for the user to explicitly reply before triggering the tool call.
 * **Explanation Requirements**: The explanation must specify:
   1. The purpose and expected outcome of the command/action.
   2. Any potential downsides or risks (e.g., data loss, CPU load, external network access).
@@ -136,17 +132,14 @@ When performing reviews, running tests, or inspecting code in this codebase:
 
 ## 9. User-Facing Artifacts
 
-* **Storage Location**: Prefer storing any user-facing deliverables, planning timelines, code review specs, or roadmaps in a centralized Obsidian Vault if configured/found (resolved in order: `ANTIGRAVITY_OBSIDIAN_VAULT` env var, `"obsidian_vault_path"` in `~/.gemini/antigravity-cli/settings.json` (Antigravity Only), or local fallbacks `~/Desktop/antigravity_vault` and `~/Documents/antigravity_vault`). Organize them under `Projects/<project-name>/<relative-path>` inside the vault. Note that `<project-name>` is resolved dynamically from the root directory of the active git repository; for git worktrees, this resolves to the checked-out worktree directory name (e.g., `<vault>/Projects/gemini_obsidian-artifacts/proposed_timeline.md`). If no Obsidian Vault is configured or detected, fall back to writing them in the `artifacts/` folder at the root of the workspace (e.g., `artifacts/proposed_timeline.md`). Do NOT write these to deep system/cache directories.
+* **Storage Location**: Prefer storing any user-facing deliverables, planning timelines, code review specs, or roadmaps in a centralized Obsidian Vault if configured/found (resolved in order: `ANTIGRAVITY_OBSIDIAN_VAULT` env var, `"obsidian_vault_path"` in `~/.gemini/antigravity-cli/settings.json`, or local fallbacks `~/Desktop/antigravity_vault` and `~/Documents/antigravity_vault`). Organize them under `Projects/<project-name>/<relative-path>` inside the vault. Note that `<project-name>` is resolved dynamically from the root directory of the active git repository; for git worktrees, this resolves to the checked-out worktree directory name (e.g., `<vault>/Projects/gemini_obsidian-artifacts/proposed_timeline.md`). If no Obsidian Vault is configured or detected, fall back to writing them in the `artifacts/` folder at the root of the workspace (e.g., `artifacts/proposed_timeline.md`). Do NOT write these to deep system/cache directories.
 * **Ignored Folder**: If falling back to the workspace root, ensure `artifacts/` is in `.gitignore` to prevent session-specific planning state from polluting the Git tree.
 
 ---
 
-## 10. Subagent Types & Delegation (Antigravity Only)
+## 10. Subagent Types & Delegation
 
-This delegation contract (using `invoke_subagent`, `define_subagent`, built-in `self`/`research` types, and `Workspace` modes) is supported exclusively by the Antigravity CLI (`agy`) runtime. In runtimes with a different subagent contract or without these tools (e.g. Claude Code or Codex CLI), the main agent performs all steps directly.
-
-> [!NOTE]
-> This config repository provides integration and behavioral guidance for agents; the subagent mechanisms themselves are native to the Antigravity runtime.
+Use `invoke_subagent`, `define_subagent`, built-in `self`/`research` types, and `Workspace` modes for subagent delegation.
 
 ### Subagent Types (`TypeName`)
 *   **`self`**: Inherits the parent's full toolset, system prompt, and model. Use for action-heavy tasks, virtual environment setup, executing tests, making file edits, or generating code.

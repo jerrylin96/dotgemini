@@ -3,8 +3,8 @@
 This guide details best practices and compatibility standards for safely extracting, paging, and parsing git diffs.
 
 ## 1. Tooling Contract
-- **Antigravity CLI**: The `view_file` tool is the primary, guaranteed file viewer. It supports 1-indexed, inclusive `StartLine` and `EndLine` parameters to read up to 800 lines of a file per turn.
-- **Gemini CLI (or other runtimes)**: If `view_file` is unavailable, fall back to `read_file` (if available, noting it is best-effort) or shell commands like `sed -n '<start>,<end>p' "<file_path>"` or `head`/`tail`.
+- **Primary Viewer**: The `view_file` tool is the primary file viewer. It supports 1-indexed, inclusive `StartLine` and `EndLine` parameters to read up to 800 lines of a file per turn.
+- **Fallback**: If `view_file` is unavailable, fall back to `read_file` (if available, noting it is best-effort) or shell commands like `sed -n '<start>,<end>p' "<file_path>"` or `head`/`tail`.
 - Do not use `cat` or interactive pagers (e.g. `less`).
 
 ## 2. Directory Creation & Quoting

@@ -31,7 +31,7 @@ Operate in **read-only** mode:
 - Do NOT write code during planning
 
 > [!TIP]
-> **(Antigravity Only)** Use a `research` subagent for codebase exploration. This keeps the main agent's context clean for planning decisions. In other runtimes, do this exploration directly.
+> Use a `research` subagent for codebase exploration. This keeps the main agent's context clean for planning decisions.
 
 ### Step 2: Decomposition
 
@@ -41,7 +41,7 @@ Operate in **read-only** mode:
 - Identify and sequence dependencies
 
 > [!TIP]
-> **(Antigravity Only)** For parallelizable slices, use `self` subagents with `Workspace: branch`. Each subagent gets its own git branch to implement a slice concurrently.
+> For parallelizable slices, use `self` subagents with `Workspace: branch`. Each subagent gets its own git branch to implement a slice concurrently.
 
 ### Step 3: Output
 
@@ -49,7 +49,7 @@ Operate in **read-only** mode:
 - Every task must include acceptance criteria and a verify step
 
 > [!TIP]
-> **(Antigravity Only)** Store the plan as an artifact with `RequestFeedback: true` in `<appDataDir>/brain/<conversation-id>/`. In other runtimes, write `tasks/plan.md` in the repo.
+> Store the plan as an artifact with `RequestFeedback: true` in `<appDataDir>/brain/<conversation-id>/`.
 
 
 ## Common Rationalizations
