@@ -20,14 +20,14 @@ Write the spec before the code. For trivial/small changes, the [lifecycle guide]
 Define what to build. Identify ambiguities, missing requirements, assumptions.
 
 > [!TIP]
-> **(Antigravity Only)** If underspecified, use `/grill-me` to run an iterative interview until you hit ~95% confidence. In other runtimes, ask clarifying questions directly.
+> If underspecified, use `/grill-me` to run an iterative interview until you hit ~95% confidence.
 
 ### 2. Draft the Spec
 
 Cover: **Objectives**, **Scope**, **Project Structure**, **Code Style**, **Testing Strategy**, **Boundaries** (non-goals, constraints).
 
 > [!TIP]
-> **(Antigravity Only)** Store the spec as an artifact with `RequestFeedback: true` so the human gets a review prompt, or persist in an Obsidian vault per `AGENTS.md §9`. In other runtimes, write a `SPEC.md` in the repo and ask for explicit approval.
+> Store the spec as an artifact with `RequestFeedback: true` so the human gets a review prompt, or persist in an Obsidian vault per `AGENTS.md §9`.
 
 ### 3. Human Approval
 

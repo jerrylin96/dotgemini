@@ -9,14 +9,13 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
 
 ## When to Use
 
-- **Always (Antigravity).** This is the mandatory entry point for any file modification in a repository.
-- **Other runtimes:** Use `git checkout -b` for branch isolation. Git worktrees are preferred when available, but a feature branch is the minimum requirement.
+- **Always.** This is the mandatory entry point for any file modification in a repository.
 - The only exception: changes to Antigravity artifacts, scratch files, or non-repo files.
 
 ## Core Rules
 > [!IMPORTANT]
 > - **Branch Naming**: Always prefix the feature branch with `gemini/` (e.g., `gemini/feature-name`).
-> - **No Primary Branch Pollution (Antigravity)**: Never run `git checkout -b` or modify files directly in the user's primary repository working directory. Always use a worktree. Other runtimes: use a feature branch at minimum.
+> - **No Primary Branch Pollution**: Never run `git checkout -b` or modify files directly in the user's primary repository working directory. Always use a worktree.
 > - **Worktree Cleanup**: Once the branch has been successfully pushed to the remote repository, prune/delete the worktree to save disk space and keep the workspace clean.
 
 ## Execution Steps
@@ -44,7 +43,7 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
    Before writing code, consult [resources/lifecycle-guide.md](resources/lifecycle-guide.md) to determine the appropriate lifecycle gates for your change's complexity (trivial → large). Follow the gates in order — each must pass before advancing to the next.
 
    > [!TIP]
-   > **Subagent Delegation (Antigravity Only)**: For complex changesets, instead of editing files directly, the main agent can change directories into the worktree path and invoke the built-in `self` subagent with `Workspace: inherit`. Tasks should explicitly instruct the subagent to use virtual environment wrappers (`setup_review_env.py` and `run_in_env.py`) for all runs/tests. This delegation contract is Antigravity-only; in other runtimes (e.g. Gemini CLI), the main agent performs these steps directly.
+   > **Subagent Delegation**: For complex changesets, instead of editing files directly, the main agent can change directories into the worktree path and invoke the built-in `self` subagent with `Workspace: inherit`. Tasks should explicitly instruct the subagent to use virtual environment wrappers (`setup_review_env.py` and `run_in_env.py`) for all runs/tests.
 
 6. **Pre-Commit Verification**: Before staging, verify that all lifecycle gates for the selected complexity tier have been satisfied (e.g., trivial tier requires only passing tests; higher tiers require review verdict with no CRITICAL findings open).
 7. **Stage & Commit**: Run git staging and commit commands from within the worktree directory:
