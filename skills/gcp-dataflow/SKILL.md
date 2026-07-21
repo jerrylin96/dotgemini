@@ -334,7 +334,7 @@ Use this section to monitor the progress of a running Dataflow job.
 
     *   For Streaming Jobs
         *   Overall Job Health: YOU MUST refer to
-            [streaming_job_health](references/streaming_job_health.md) to analyze
+            [dataflow_diagnostics_reference](resources/dataflow_diagnostics_reference.md) to analyze
             overall streaming job health.
         *   Analyze Bottlenecks and Parallelism. YOU MUST refer to
             [bottlenecks_and_parallelism_context][bottlenecks-context] and
@@ -353,7 +353,7 @@ Use this section to monitor the progress of a running Dataflow job.
 
     1.  **Overall Job State**: State categorization (Healthy, Mostly Healthy,
         Not Healthy) per
-        [streaming_job_health](references/streaming_job_health.md).
+        [dataflow_diagnostics_reference](resources/dataflow_diagnostics_reference.md).
     2.  **High-level Job Events**: Notable control plane events, errors, or
         stage failures parsed from job messages.
     3.  **Data Freshness**: Current data delay utilizing

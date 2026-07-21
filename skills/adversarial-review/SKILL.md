@@ -13,7 +13,7 @@ Automatically resolve context, create/update feature branch worktree, and perfor
 > - **Feature Branch (Target)**: The branch containing the new changes to review. The agent must ALWAYS ask the user to select this branch.
 > - **Worktree Checkout**: The resolver script creates/updates a managed worktree checked out to the selected **feature branch** at `worktree_path`.
 > - **Testing/Inspecting**: All testing, linting, or inspection of the feature branch code must be run inside the resolved `worktree_path` (by executing `cd <worktree_path>` first), leaving the active workspace untouched on the reference branch.
-> - **Subagent-First Review**: To prevent context bloat and eliminate author bias, launch a subagent (`invoke_subagent` with `TypeName: self` or `research` and `Workspace: inherit` on `worktree_path`) to execute the environment setup, test runs, diff inspection, and 5-axis audit. The subagent returns only the final synthesized report to the main agent.
+> - **Subagent Delegation & Recursion Guardrail**: Subagent delegation is initiated by the main/parent agent (`invoke_subagent` using `TypeName: self` with `Workspace: inherit` on `worktree_path`). **If the current agent is ALREADY executing as a review subagent inside `worktree_path`, it must NOT spawn nested subagents**; it executes Steps 1–5 directly.
 > - **Ephemeral Scratch files**: Creating temporary scratch files under the conversation's scratch directory for diff reading is permitted and does not violate repository/worktree read-only constraints, provided cleanup only removes those generated scratch files.
 
 ## Context Resolution
@@ -128,11 +128,12 @@ The script returns JSON on stdout. The schema depends on the outcome:
    - Paths under `~/.gemini/tmp/worktrees/` are disposable cache and may be force-removed or recreated at any time; do not use them for long-lived uncommitted work.
    - The file lock only serializes concurrent `resolve_branches.py` runs. Do not run git worktree commands against `~/.gemini/tmp/worktrees/` manually while a review is in progress.
    - Note: Git fetches are best-effort. If network resolution fails, the review may run against stale local tracking references.
-3. **Subagent Execution & Isolated Environment**:
-   - Prefer delegating the review execution to a background subagent (`invoke_subagent`) to keep the main agent's context clean and eliminate author bias:
-     - Use `TypeName: self` (or `research`) with `Workspace: inherit` inside `<worktree_path>`.
-     - Instruct the subagent to run environment setup, test execution, diff extraction, and 5-axis audit, returning only the synthesized report.
+3. **Subagent Execution & Environment Setup**:
+   - The main agent should delegate the review execution to a background subagent (`invoke_subagent`) to keep its context clean and eliminate author bias.
+     - **Subagent Selection**: Use `TypeName: self` with `Workspace: inherit` inside `<worktree_path>` (since `self` possesses the necessary write/execution tools to run environment setup and tests). Use `research` subagent ONLY for read-only static analysis.
+     - **Recursion Prevention**: If you are already running as the invoked review subagent, execute the steps below directly without spawning further subagents.
 
+   - **Sequential Execution Procedure**:
      1. Initialize the review environment for the worktree:
         ```bash
         python3 ~/.gemini/scripts/setup_review_env.py <worktree_path>

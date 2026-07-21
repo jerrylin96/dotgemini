@@ -45,9 +45,10 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
    > [!TIP]
    > **Subagent Delegation**: For complex changesets, instead of editing files directly, the main agent can change directories into the worktree path and invoke the built-in `self` subagent with `Workspace: inherit`. Tasks should explicitly instruct the subagent to use virtual environment wrappers (`setup_review_env.py` and `run_in_env.py`) for all runs/tests.
 
-6. **Pre-Commit Verification & Adversarial Review Gate**: Before staging, verify that all lifecycle gates for the selected complexity tier have been satisfied:
+6. **Pre-Commit Verification & Review Gate**: Before staging, verify that all lifecycle gates for the selected complexity tier have been satisfied:
    - For **Trivial** changes: Verify passing tests and linter output via `run_in_env.py`.
-   - For **Small, Medium, and Large** tiers: Launch a background subagent (`invoke_subagent` using `TypeName: self` or `research` with `Workspace: inherit` on `worktree_path`) to run an isolated [adversarial-review](../adversarial-review/SKILL.md). Do not stage or commit until the review verdict is `APPROVE` with zero `[CRITICAL]` findings open.
+   - For **Small** changes: Execute a five-axis code review ([code-review-and-quality](../code-review-and-quality/SKILL.md)).
+   - For **Medium and Large** changes: Launch a background `self` subagent (`invoke_subagent` using `TypeName: self` with `Workspace: inherit` on `worktree_path`) to run an isolated [adversarial-review](../adversarial-review/SKILL.md). Do not stage or commit until the review verdict is `APPROVE` with zero `[CRITICAL]` findings open.
 7. **Stage & Commit**: Run git staging and commit commands from within the worktree directory:
    ```bash
    git add <modified_files>
