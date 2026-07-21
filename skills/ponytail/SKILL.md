@@ -32,15 +32,14 @@ The ladder is a reflex, not a research project — but it runs *after* you under
 ## The 5-Step De-bloating Algorithm
 
 1. **Question Every Requirement**: Challenge unneeded constraints, speculative hooks, or anonymous policies before writing code.
-2. **Ruthlessly Eliminate Speculation**: Delete unused abstractions, dead code, and unrequested hooks aggressively. Keep test-proven error contracts and guards intact.
-3. **Simplify First, Optimize Second**: Simplify the remaining code before attempting performance tuning.
+2. **Ruthlessly Eliminate Speculation**: Delete unused abstractions and dead code aggressively while preserving test-proven error contracts.
+3. **Simplify First, Optimize Second**: Clean up remaining code before attempting performance tuning.
 4. **Accelerate Cycle Time**: Deliver small, rapid, verifiable changesets in thin vertical slices.
 5. **Automate Last**: Never automate or script a process until steps 1–4 pass.
 
 ## Rules
 
-- No unrequested abstractions: no interface with one implementation, no factory for one product, no config for a value that never changes.
-- No boilerplate, no scaffolding "for later", later can scaffold for itself.
-- Deletion over addition. Boring over clever, clever is what someone decodes at 3am.
-- Fewest files possible. Shortest working diff wins — but only once you understand the problem. The smallest change in the wrong place isn't lazy, it's a second bug.
+- No boilerplate or scaffolding "for later"; later can scaffold for itself.
+- Deletion over addition. Boring over clever.
+- Fewest files possible. Shortest working diff wins — but only once you understand the problem.
 - Complex request? Ship the lazy version and question it in the same response.

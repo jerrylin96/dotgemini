@@ -135,17 +135,11 @@ If `uv` is available but the environment setup fails, `run_tests.py` will exit w
 ### Project-Level Integration (Recommended for Sharing)
 If you want to bake this isolated environment setup directly into a specific project repository so that *any* agent working on it automatically uses it:
 1. **Copy the Env Manager**: Place the [setup_review_env.py](scripts/setup_review_env.py) script in the project repository (e.g., `scripts/setup_review_env.py`).
-2. **Add a Project-Level Guide**: Add an `AGENTS.md` (or `CLAUDE.md` / `GEMINI.md`) to the project's root containing:
+2. **Add a Project-Level Guide**: Add an `AGENTS.md` to the project's root containing:
    ````markdown
    ## Isolated Testing & Execution Environment
    All testing and validation commands must run inside the CPU-isolated virtual environment:
-   1. Initialize: `python3 scripts/setup_review_env.py`
-   2. Run Tests: Execute using the resolved virtual environment python path (printed by `setup_review_env.py` initialization) or via:
-      ```bash
-      # If using the global Antigravity environment wrapper:
-      python3 ~/.gemini/scripts/run_in_env.py <workspace_path> pytest
-      # Or client-neutral local alternative:
-      source .venv/bin/activate && pytest
-      ```
+   1. Initialize: `python3 scripts/setup_review_env.py <workspace_path>`
+   2. Run Tests: `python3 ~/.gemini/scripts/run_in_env.py <workspace_path> pytest`
    *(Note: The setup_review_env.py script automatically manages and prints details of the isolated environment.)*
    ````

@@ -86,6 +86,7 @@ The global settings contain dedicated skills under `~/.gemini/skills/` which can
 * [debugging-and-error-recovery/SKILL.md](skills/debugging-and-error-recovery/SKILL.md) — Root-cause triage checklists
 * [make-feature/SKILL.md](skills/make-feature/SKILL.md) — Isolated feature branch development via git worktree; mandatory entry point for codebase changes
 * [session-sync/SKILL.md](skills/session-sync/SKILL.md) — Sync/restore an Antigravity CLI conversation session across machines via a shared Git remote
+* [gcp-dataflow/SKILL.md](skills/gcp-dataflow/SKILL.md) — Apache Beam Dataflow pipeline development and diagnostics
 
 ---
 

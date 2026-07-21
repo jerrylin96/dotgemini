@@ -387,7 +387,7 @@ Use this section to monitor the progress of a running Dataflow job.
         (client-side configurations, or code corrections linked via absolute
         `file:///` URIs).
 
-[py-flex-ref]: references/python_flex_template_reference.md
+[py-flex-ref]: resources/python_flex_template_reference.md
 [udf-guide]: https://docs.cloud.google.com/dataflow/docs/guides/templates/create-template-udf
 [ssl-cert-guide]: https://docs.cloud.google.com/dataflow/docs/guides/templates/ssl-certificates
 [dest-prereqs]: #destination-specific-prerequisites
@@ -395,6 +395,6 @@ Use this section to monitor the progress of a running Dataflow job.
 [df-templates-repo]: https://github.com/GoogleCloudPlatform/DataflowTemplates
 [deadletter-schema]: https://github.com/GoogleCloudPlatform/DataflowTemplates/blob/main/v2/common/src/main/resources/schema/streaming_source_deadletter_table_schema.json
 [csv-bq-doc]: https://cloud.google.com/dataflow/docs/guides/templates/provided/cloud-storage-csv-to-bigquery#GcsCSVToBigQueryBadRecordsSchema
-[diag-ref]: references/dataflow_diagnostics_reference.md
-[bottlenecks-context]: references/bottlenecks_and_parallelism_context.md
-[autoscaling-analysis-link]: references/streaming_horizontal_autoscaling_analysis.md
+[diag-ref]: resources/dataflow_diagnostics_reference.md
+[bottlenecks-context]: resources/dataflow_metrics_core_job.md
+[autoscaling-analysis-link]: resources/dataflow_metrics_streaming_engine.md
