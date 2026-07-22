@@ -596,9 +596,8 @@ class TestWorkspaceClient(unittest.TestCase):
 
     def test_cli_subcommands_parse(self):
         with patch.object(sys, "argv", ["workspace_client.py", "tasklists", "list"]):
-            # Should parse without exception
             try:
-                with patch("workspace_client.get_credentials"), patch("workspace_client.build_tasks_service"):
+                with patch("workspace_client.get_credentials"), patch("workspace_client.fetch_tasklists", return_value=[]):
                     workspace_client.main()
             except SystemExit as e:
                 self.assertEqual(e.code, 0)
