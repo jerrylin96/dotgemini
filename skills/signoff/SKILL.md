@@ -50,9 +50,11 @@ Interrogate user across 4 core axes:
    After receiving initial user approval, re-verify state: current `HEAD` equals `<reviewed-commit-sha>`, no unstaged changes (`git diff --quiet`), and no staged changes (`git diff --cached --quiet`). If dirty or `HEAD` has moved, stop and declare signoff stale.
 
 3. **Compute & Validate Transcript Digest:**
-   After recording user confirmation in transcript, execute Python helper via temporary file to reliably capture stdout and exit status:
+   After recording user confirmation in transcript, execute Python helper via temporary file with explicit trap cleanup:
    ```bash
-   TMP_DIGEST_FILE=$(mktemp)
+   TMP_DIGEST_FILE=$(mktemp) || { echo "Error: mktemp failed. Aborting signoff." >&2; exit 1; }
+   trap 'rm -f "$TMP_DIGEST_FILE"' EXIT INT TERM
+
    python3 - <<'PY' > "$TMP_DIGEST_FILE"
    import os, sys, hashlib, re
    cid = os.environ.get("ANTIGRAVITY_CONVERSATION_ID", "").strip()
@@ -67,30 +69,29 @@ Interrogate user across 4 core axes:
        print("unavailable")
    PY
    DIGEST_STATUS=$?
-   DIGEST=$(tr -d '\r\n' < "$TMP_DIGEST_FILE")
+   DIGEST=$(cat "$TMP_DIGEST_FILE")
    rm -f "$TMP_DIGEST_FILE"
+   trap - EXIT INT TERM
    ```
 
 4. **Construct Flat Git Trailers & Determine Status:**
-   Evaluate helper exit status and normalized output strictly:
+   Evaluate helper exit status and exact output strictly. No subsequent trailer construction or commit occurs after an error abort:
    ```bash
    if [ $DIGEST_STATUS -ne 0 ]; then
-       # Helper failed non-zero: ABORT signoff immediately. Do not create trailers or commit.
-       echo "Error: Digest helper exited non-zero ($DIGEST_STATUS). Aborting signoff."
+       echo "Error: Digest helper exited non-zero ($DIGEST_STATUS). Aborting signoff." >&2
+       exit 1
    elif [[ "$DIGEST" =~ ^[a-f0-9]{64}$ ]]; then
-       # Valid 64-char hex digest:
        STATUS="VERIFIED_BY_HUMAN"
        TRAILER_DIGEST="sha256:$DIGEST"
    elif [ "$DIGEST" = "unavailable" ]; then
-       # Transcript unavailable/unreadable:
        STATUS="VERIFIED_BY_HUMAN_NO_TRANSCRIPT_DIGEST"
        TRAILER_DIGEST="unavailable"
        # REQUIRED ACTION: Present downgraded trailers and request second explicit user confirmation.
        # RE-VERIFY CLEAN STATE: Immediately after second approval, re-run clean-state checks
        # (HEAD == Reviewed-Commit-SHA, git diff --quiet, git diff --cached --quiet). Stop if dirty/stale.
    else
-       # Malformed, empty, or unexpected output: ABORT signoff immediately.
-       echo "Error: Unexpected digest output '$DIGEST'. Aborting signoff."
+       echo "Error: Unexpected or malformed digest output. Aborting signoff." >&2
+       exit 1
    fi
    ```
    *If `ANTIGRAVITY_CONVERSATION_ID` is unset or empty, write `Signoff-Conversation-ID: unavailable`; otherwise write `$ANTIGRAVITY_CONVERSATION_ID`.*
@@ -135,22 +136,31 @@ After successful execution of Option 2 or Option 3, report the resulting `Signof
 
 ## Verification & Debugging
 
-To manually verify the transcript digest helper logic across all 3 outcome classes:
+To manually verify the transcript digest helper logic across all outcome classes:
 
 1. **Valid Readable Transcript:**
-   `ANTIGRAVITY_CONVERSATION_ID="<valid-id>" python3 -c "..."`
+   `ANTIGRAVITY_CONVERSATION_ID="<valid-id>" ...`
    - Exit status: `0`
    - Output: 64-character lowercase hex digest. Status set to `VERIFIED_BY_HUMAN`.
 
 2. **Absent / Unreadable Transcript:**
-   `ANTIGRAVITY_CONVERSATION_ID="nonexistent" python3 -c "..."`
+   `ANTIGRAVITY_CONVERSATION_ID="nonexistent" ...`
    - Exit status: `0`
    - Output: `unavailable`. Status set to `VERIFIED_BY_HUMAN_NO_TRANSCRIPT_DIGEST` (requires second user confirmation).
 
 3. **Helper / Runtime Failure:**
    `python3 -c "import sys; sys.exit(1)"`
    - Exit status: `1` (non-zero)
-   - Status: Signoff aborts immediately. No trailers or commits created.
+   - Action: `exit 1` triggers immediate hard abort. No trailers or commits created.
+
+4. **Empty Output:**
+   Output is empty -> fails `^[a-f0-9]{64}$` regex -> `exit 1` triggers immediate hard abort.
+
+5. **Multi-line Output (e.g. two 32-character lines):**
+   Output contains embedded newline -> fails `^[a-f0-9]{64}$` regex -> `exit 1` triggers immediate hard abort.
+
+6. **`mktemp` Failure:**
+   `mktemp` exits non-zero -> `{ echo ... >&2; exit 1; }` triggers immediate hard abort.
 
 ---
 
