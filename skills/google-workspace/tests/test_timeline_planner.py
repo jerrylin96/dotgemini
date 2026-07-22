@@ -1312,3 +1312,340 @@ def test_handle_publish_doc_argparse_defaults(tmp_path, monkeypatch):
     mock_create_doc.assert_called_once_with(None, "Project Timeline & Execution Plan")
 
 
+def test_parse_proposed_timeline_horizon():
+    markdown = """# Proposed Timeline: OKR Project
+
+## Metadata
+- **Task List Name**: OKR Project List
+- **Timezone**: America/New_York
+- **Target Start Date**: 2026-07-22
+- **Timeline State**: pending_approval
+
+## Proposed Google Tasks
+- [ ] **Quarterly OKR Goal**
+  - **Horizon**: quarterly
+  - **Due**: 2026-07-25
+  - **Notes**: High-level objective.
+- [ ] **Weekly Focus Task**
+  - **Horizon**: weekly
+  - **Due**: 2026-07-23
+
+## Proposed Calendar Events
+- **Event**: Focus: Weekly Focus Task
+  - **Start**: 2026-07-23T09:00:00-04:00
+  - **End**: 2026-07-23T11:00:00-04:00
+"""
+    parsed = parse_proposed_timeline(markdown)
+    assert len(parsed["errors"]) == 0
+    assert len(parsed["tasks"]) == 2
+    assert parsed["tasks"][0]["horizon"] == "quarterly"
+    assert parsed["tasks"][1]["horizon"] == "weekly"
+
+
+def test_preflight_validate_timeline_horizon():
+    plan_data = {
+        "tasklist_name": "Test List",
+        "timezone": "America/New_York",
+        "tasks": [
+            {"title": "Valid Task", "due": "2026-07-25", "horizon": "quarterly"},
+            {"title": "Invalid Horizon Task", "due": "2026-07-25", "horizon": "monthly"},
+        ],
+        "events": [],
+        "errors": [],
+    }
+    errors = preflight_validate_timeline(plan_data)
+    assert any("Horizon 'monthly' must be 'quarterly' or 'weekly'" in e for e in errors)
+
+
+def test_handle_plan_horizon_support(tmp_path, monkeypatch):
+    import json
+    import timeline_planner
+    from types import SimpleNamespace
+
+    goals_file = tmp_path / "goals.json"
+    proposed_file = tmp_path / "proposed.md"
+
+    data = {
+        "tasklist_title": "OKR Sprint Plan",
+        "timezone": "UTC",
+        "days_limit": 7,
+        "working_hours": {"start": "09:00", "end": "17:00"},
+        "tasks": [
+            {"title": "Strategic OKR", "horizon": "quarterly", "duration_hours": 2.0},
+            {"title": "Tactical Sprint Task", "horizon": "weekly", "duration_hours": 1.0},
+        ],
+    }
+    goals_file.write_text(json.dumps(data))
+
+    monkeypatch.setattr("timeline_planner.get_credentials", lambda: None)
+    monkeypatch.setattr("timeline_planner.build_calendar_service", lambda creds: mock.MagicMock())
+    monkeypatch.setattr("timeline_planner.fetch_calendar_events", lambda s, min_iso, max_iso: [])
+
+    args = SimpleNamespace(goals_file=str(goals_file), proposed_file=str(proposed_file))
+    timeline_planner.handle_plan(args)
+
+    assert proposed_file.exists()
+    content = proposed_file.read_text()
+    assert "- **Horizon**: quarterly" in content
+    assert "- **Horizon**: weekly" in content
+
+
+def test_handle_weekly_rollup(tmp_path, monkeypatch):
+    import timeline_planner
+    from types import SimpleNamespace
+
+    proposed_file = tmp_path / "proposed.md"
+    proposed_file.write_text("# Proposed Timeline\n- **Task List Name**: Test Task List\n")
+
+    monkeypatch.setattr("timeline_planner.get_credentials", lambda: None)
+    
+    mock_tasks_svc = mock.MagicMock()
+    mock_list_call = mock.MagicMock()
+    now_iso = datetime.datetime.now(datetime.timezone.utc)
+    completed_date = (now_iso - datetime.timedelta(days=2)).strftime("%Y-%m-%dT10:00:00.000Z")
+    overdue_date = (now_iso - datetime.timedelta(days=1)).strftime("%Y-%m-%dT00:00:00.000Z")
+    future_date = (now_iso + datetime.timedelta(days=2)).strftime("%Y-%m-%dT00:00:00.000Z")
+
+    mock_list_call.execute.return_value = {
+        "items": [
+            {"title": "Completed Task 1", "status": "completed", "completed": completed_date},
+            {"title": "Overdue Task 2", "status": "needsAction", "due": overdue_date},
+            {"title": "Upcoming Task 3", "status": "needsAction", "due": future_date},
+        ]
+    }
+    mock_tasks_svc.tasks().list.return_value = mock_list_call
+    monkeypatch.setattr("timeline_planner.build_tasks_service", lambda creds: mock_tasks_svc)
+
+    mock_cal_svc = mock.MagicMock()
+    monkeypatch.setattr("timeline_planner.build_calendar_service", lambda creds: mock_cal_svc)
+    monkeypatch.setattr(
+        "timeline_planner.fetch_calendar_events",
+        lambda s, min_iso, max_iso: [{"summary": "Focus: Upcoming Task 3", "start": {"dateTime": future_date}}],
+    )
+
+    mock_append = mock.MagicMock()
+    mock_share = mock.MagicMock(return_value=["stakeholder@co.com"])
+    monkeypatch.setattr("timeline_planner.append_text_to_google_doc", mock_append)
+    monkeypatch.setattr("timeline_planner.share_google_doc", mock_share)
+
+    args = SimpleNamespace(
+        proposed_file=str(proposed_file),
+        tasklist="@default",
+        days=7,
+        doc_id="doc_xyz",
+        share="stakeholder@co.com",
+        role="reader",
+    )
+    timeline_planner.handle_weekly_rollup(args)
+
+    mock_append.assert_called_once()
+    assert "Weekly Sprint Rollup" in mock_append.call_args[0][2]
+    assert "Completed Task 1" in mock_append.call_args[0][2]
+    assert "Overdue Task 2" in mock_append.call_args[0][2]
+    assert "Upcoming Task 3" in mock_append.call_args[0][2]
+    mock_share.assert_called_once_with(None, "doc_xyz", ["stakeholder@co.com"], role="reader")
+
+
+def test_handle_plan_invalid_subtask_horizon(tmp_path, monkeypatch):
+    import json
+    import timeline_planner
+    from types import SimpleNamespace
+
+    goals_file = tmp_path / "goals.json"
+    proposed_file = tmp_path / "proposed.md"
+
+    data = {
+        "tasklist_title": "Invalid Subtask Plan",
+        "timezone": "UTC",
+        "days_limit": 7,
+        "working_hours": {"start": "09:00", "end": "17:00"},
+        "tasks": [
+            {
+                "title": "Parent Goal",
+                "horizon": "quarterly",
+                "subtasks": [
+                    {"title": "Subtask Bad", "horizon": "invalid_horizon", "duration_hours": 1.0}
+                ],
+            }
+        ],
+    }
+    goals_file.write_text(json.dumps(data))
+    monkeypatch.setattr("timeline_planner.get_credentials", lambda: None)
+
+    args = SimpleNamespace(goals_file=str(goals_file), proposed_file=str(proposed_file))
+    with pytest.raises(SystemExit):
+        timeline_planner.handle_plan(args)
+
+
+def test_handle_weekly_rollup_missing_tasklist(monkeypatch):
+    import timeline_planner
+    from types import SimpleNamespace
+
+    monkeypatch.setattr("timeline_planner.get_credentials", lambda: None)
+    mock_tasks_svc = mock.MagicMock()
+    mock_tasks_svc.tasklists().list().execute.return_value = {"items": [{"id": "L1", "title": "Other List"}]}
+    monkeypatch.setattr("timeline_planner.build_tasks_service", lambda creds: mock_tasks_svc)
+    monkeypatch.setattr("timeline_planner.build_calendar_service", lambda creds: mock.MagicMock())
+
+    args = SimpleNamespace(
+        proposed_file=None,
+        tasklist="NonExistentList",
+        days=7,
+        doc_id=None,
+        share=None,
+        role="reader",
+    )
+    with pytest.raises(SystemExit):
+        timeline_planner.handle_weekly_rollup(args)
+
+
+def test_handle_weekly_rollup_invalid_days(monkeypatch):
+    import timeline_planner
+    from types import SimpleNamespace
+
+    args = SimpleNamespace(
+        proposed_file=None,
+        tasklist="@default",
+        days=-5,
+        doc_id=None,
+        share=None,
+        role="reader",
+    )
+    with pytest.raises(SystemExit):
+        timeline_planner.handle_weekly_rollup(args)
+
+
+def test_handle_weekly_rollup_dynamic_days_and_stdout(monkeypatch, capsys):
+    import timeline_planner
+    from types import SimpleNamespace
+
+    monkeypatch.setattr("timeline_planner.get_credentials", lambda: None)
+    mock_tasks_svc = mock.MagicMock()
+    mock_tasks_svc.tasks().list().execute.return_value = {"items": []}
+    monkeypatch.setattr("timeline_planner.build_tasks_service", lambda creds: mock_tasks_svc)
+
+    mock_cal_svc = mock.MagicMock()
+    monkeypatch.setattr("timeline_planner.build_calendar_service", lambda creds: mock_cal_svc)
+    monkeypatch.setattr(
+        "timeline_planner.fetch_calendar_events",
+        lambda s, min_iso, max_iso: [
+            {"summary": "Focus: Core Feature", "start": {"dateTime": "2026-07-23T10:00:00Z"}},
+            {"summary": "Lunch with Friend", "start": {"dateTime": "2026-07-23T12:00:00Z"}},
+        ],
+    )
+
+    args = SimpleNamespace(
+        proposed_file=None,
+        tasklist="@default",
+        days=14,
+        doc_id=None,
+        share=None,
+        role="reader",
+    )
+    timeline_planner.handle_weekly_rollup(args)
+    captured = capsys.readouterr().out
+
+    assert "Past 14 Days" in captured
+    assert "Upcoming 14 Days" in captured
+    assert "Focus: Core Feature" in captured
+    assert "Lunch with Friend" not in captured
+
+
+def test_safe_parse_task_datetime():
+    from timeline_planner import safe_parse_task_datetime
+
+    # Date-only YYYY-MM-DD
+    dt_date = safe_parse_task_datetime("2026-07-23")
+    assert dt_date is not None
+    assert dt_date.year == 2026 and dt_date.month == 7 and dt_date.day == 23
+    assert dt_date.hour == 23 and dt_date.minute == 59 and dt_date.second == 59
+
+    # RFC 3339 timestamp with Z
+    dt_z = safe_parse_task_datetime("2026-07-23T10:00:00Z")
+    assert dt_z is not None
+    assert dt_z.year == 2026 and dt_z.hour == 10
+
+    # None and empty string
+    assert safe_parse_task_datetime(None) is None
+    assert safe_parse_task_datetime("") is None
+
+    # Naive timestamp (no offset)
+    assert safe_parse_task_datetime("2026-07-23T10:00:00") is None
+
+
+def test_handle_weekly_rollup_resolves_tasklist_from_proposed_file(tmp_path, monkeypatch):
+    import timeline_planner
+    from types import SimpleNamespace
+
+    proposed_file = tmp_path / "proposed.md"
+    proposed_file.write_text(
+        "# Proposed Timeline: Resolved Custom List\n\n"
+        "## Metadata\n"
+        "- **Task List Name**: Resolved Custom List\n"
+        "- **Timezone**: UTC\n\n"
+        "## Proposed Google Tasks\n\n"
+        "## Proposed Calendar Events\n"
+    )
+
+    monkeypatch.setattr("timeline_planner.get_credentials", lambda: None)
+    mock_tasks_svc = mock.MagicMock()
+    mock_tasks_svc.tasklists().list().execute.return_value = {
+        "items": [
+            {"id": "L1", "title": "Other List"},
+            {"id": "L2", "title": "Resolved Custom List"},
+        ]
+    }
+    mock_tasks_svc.tasks().list().execute.return_value = {"items": []}
+    monkeypatch.setattr("timeline_planner.build_tasks_service", lambda creds: mock_tasks_svc)
+    monkeypatch.setattr("timeline_planner.build_calendar_service", lambda creds: mock.MagicMock())
+    monkeypatch.setattr("timeline_planner.fetch_calendar_events", lambda s, min_iso, max_iso: [])
+
+    args = SimpleNamespace(
+        proposed_file=str(proposed_file),
+        tasklist=None,
+        days=7,
+        doc_id=None,
+        share=None,
+        role="reader",
+    )
+    timeline_planner.handle_weekly_rollup(args)
+    # Verify tasks.list was called with tasklist='L2'
+    assert mock_tasks_svc.tasks().list.call_args[1]["tasklist"] == "L2"
+
+
+def test_handle_weekly_rollup_malformed_proposed_file_exits_error(tmp_path, monkeypatch):
+    import timeline_planner
+    from types import SimpleNamespace
+
+    proposed_file = tmp_path / "proposed_malformed.md"
+    proposed_file.write_text("# Proposed Timeline\n- **Task List Name**: Intended Custom List\n")
+
+    monkeypatch.setattr("timeline_planner.get_credentials", lambda: None)
+    mock_tasks_svc = mock.MagicMock()
+    mock_tasks_svc.tasklists().list().execute.return_value = {
+        "items": [
+            {"id": "DEF", "title": "My Goal Timeline"},
+        ]
+    }
+    monkeypatch.setattr("timeline_planner.build_tasks_service", lambda creds: mock_tasks_svc)
+    monkeypatch.setattr("timeline_planner.build_calendar_service", lambda creds: mock.MagicMock())
+
+    args = SimpleNamespace(
+        proposed_file=str(proposed_file),
+        tasklist=None,
+        days=7,
+        doc_id=None,
+        share=None,
+        role="reader",
+    )
+    with pytest.raises(SystemExit):
+        timeline_planner.handle_weekly_rollup(args)
+
+    # Verify tasks.list was NEVER called (did not fallback to My Goal Timeline or fetch tasks)
+    assert mock_tasks_svc.tasks().list.call_count == 0
+
+
+
+
+
+

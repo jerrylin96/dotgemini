@@ -220,3 +220,23 @@ python3 ~/.gemini/skills/google-workspace/scripts/timeline_planner.py publish-do
 # Append revision update / postmortem to existing Google Doc
 python3 ~/.gemini/skills/google-workspace/scripts/timeline_planner.py publish-doc --doc-id "DOC_ID" --proposed-file artifacts/proposed_timeline.md
 ```
+
+#### Step 7: Weekly Sprint Rollup
+Generates a weekly sprint retro (completed and overdue tasks) and upcoming agenda (scheduled focus blocks and carried-over tasks), with optional Google Docs sync:
+```bash
+# Print weekly rollup to stdout
+python3 ~/.gemini/skills/google-workspace/scripts/timeline_planner.py weekly-rollup [--days 7] [--proposed-file artifacts/proposed_timeline.md]
+
+# Append weekly rollup to shared Google Doc and share with stakeholders
+python3 ~/.gemini/skills/google-workspace/scripts/timeline_planner.py weekly-rollup --doc-id "DOC_ID" --days 7 --share "boss@company.com" --role "reader"
+```
+
+> [!NOTE]
+> **Calendar Focus Block Filtering:**
+> Under "Scheduled Focus Blocks", only calendar events whose title starts with `Focus:` or contains `focus` (case-insensitive) are included in the upcoming agenda section.
+
+> [!NOTE]
+> **Multi-Horizon Goal Planning (`horizon`):**
+> Tasks and subtasks in `goals.json` support an optional `"horizon": "quarterly" | "weekly"` attribute (defaults to `"weekly"`).
+> High-level OKRs are tagged as `"quarterly"`, while 1-week focus blocks are tagged as `"weekly"`.
+

@@ -213,8 +213,9 @@ def parse_proposed_timeline(markdown_content):
                 # Property line
                 is_due = stripped.startswith("- **Due**:") or stripped.startswith("- **due**:")
                 is_notes = stripped.startswith("- **Notes**:") or stripped.startswith("- **notes**:")
+                is_horizon = stripped.startswith("- **Horizon**:") or stripped.startswith("- **horizon**:")
                 
-                if is_due or is_notes:
+                if is_due or is_notes or is_horizon:
                     val = stripped.split(":", 1)[1].strip()
                     line_expanded = line.expandtabs(4)
                     indent = len(line_expanded) - len(line_expanded.lstrip())
@@ -226,8 +227,10 @@ def parse_proposed_timeline(markdown_content):
                         
                     if is_due:
                         target_task["due"] = val
-                    else:
+                    elif is_notes:
                         target_task["notes"] = val
+                    else:
+                        target_task["horizon"] = val
                 else:
                     errors.append(
                         f"Line {idx}: Unrecognized task property line '{stripped}'."
@@ -337,6 +340,12 @@ def preflight_validate_timeline(plan_data):
                 errors.append(
                     f"Task '{title}' error: Due date '{due}' must be in YYYY-MM-DD format."
                 )
+
+        horizon = str(task.get("horizon", "")).strip().lower()
+        if horizon and horizon not in ["quarterly", "weekly"]:
+            errors.append(
+                f"Task '{title}' error: Horizon '{horizon}' must be 'quarterly' or 'weekly'."
+            )
 
     # 3. Validate Events
     for i, event in enumerate(plan_data.get("events", [])):
@@ -561,6 +570,14 @@ def handle_plan(args):
         if not title:
             print(f"Error: Task at index {i} is missing a title.", file=sys.stderr)
             sys.exit(1)
+
+        horizon = str(t.get("horizon", "weekly")).strip().lower()
+        if horizon not in ["quarterly", "weekly"]:
+            print(
+                f"Error: Task '{title}' horizon must be 'quarterly' or 'weekly'.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
             
         subtasks_cfg = t.get("subtasks", [])
         has_subtasks = False
@@ -594,6 +611,14 @@ def handle_plan(args):
                     print(
                         f"Error: Subtask '{sub_title}' under task '{title}' contains nested subtasks. "
                         "Google Tasks supports at most one level of task nesting.",
+                        file=sys.stderr,
+                    )
+                    sys.exit(1)
+
+                sub_horizon = str(sub.get("horizon", horizon)).strip().lower()
+                if sub_horizon not in ["quarterly", "weekly"]:
+                    print(
+                        f"Error: Subtask '{sub_title}' under task '{title}' horizon must be 'quarterly' or 'weekly'.",
                         file=sys.stderr,
                     )
                     sys.exit(1)
@@ -702,12 +727,14 @@ def handle_plan(args):
 
     for task_info in tasks_cfg:
         subtasks_cfg = task_info.get("subtasks", [])
+        horizon = str(task_info.get("horizon", "weekly")).strip().lower()
         if subtasks_cfg:
             # It's a parent task
             parent_task_entry = {
                 "title": task_info["title"],
                 "notes": task_info.get("notes", ""),
-                "subtasks": []
+                "horizon": horizon,
+                "subtasks": [],
             }
             # Schedule each subtask
             for sub_info in subtasks_cfg:
@@ -736,11 +763,13 @@ def handle_plan(args):
                     )
                     if slot:
                         slot_start, slot_end = slot
+                        sub_horizon = str(sub_info.get("horizon", horizon)).strip().lower()
                         parent_task_entry["subtasks"].append(
                             {
                                 "title": sub_info["title"],
                                 "due": check_date.strftime("%Y-%m-%d"),
                                 "notes": sub_info.get("notes", ""),
+                                "horizon": sub_horizon,
                             }
                         )
                         proposed_events.append(
@@ -801,6 +830,7 @@ def handle_plan(args):
                             "title": task_info["title"],
                             "due": check_date.strftime("%Y-%m-%d"),
                             "notes": task_info.get("notes", ""),
+                            "horizon": horizon,
                         }
                     )
                     proposed_events.append(
@@ -839,15 +869,18 @@ def handle_plan(args):
     for task in proposed_tasks:
         if "subtasks" in task:
             markdown_content += f"- [ ] **{task['title']}**\n"
+            markdown_content += f"  - **Horizon**: {task.get('horizon', 'weekly')}\n"
             if task.get("notes"):
                 markdown_content += f"  - **Notes**: {task['notes']}\n"
             for sub in task["subtasks"]:
                 markdown_content += f"  - [ ] **{sub['title']}**\n"
+                markdown_content += f"    - **Horizon**: {sub.get('horizon', 'weekly')}\n"
                 markdown_content += f"    - **Due**: {sub['due']}\n"
                 if sub.get("notes"):
                     markdown_content += f"    - **Notes**: {sub['notes']}\n"
         else:
             markdown_content += f"- [ ] **{task['title']}**\n"
+            markdown_content += f"  - **Horizon**: {task.get('horizon', 'weekly')}\n"
             markdown_content += f"  - **Due**: {task['due']}\n"
             if task.get("notes"):
                 markdown_content += f"  - **Notes**: {task['notes']}\n"
@@ -1362,6 +1395,219 @@ def handle_publish_doc(args):
         sys.exit(1)
 
 
+def safe_parse_task_datetime(dt_str):
+    """Safely parses task ISO or YYYY-MM-DD datetime strings."""
+    if not dt_str:
+        return None
+    try:
+        if len(dt_str) == 10 and "-" in dt_str:
+            d = datetime.datetime.strptime(dt_str, "%Y-%m-%d").date()
+            return datetime.datetime.combine(d, datetime.time.max, tzinfo=datetime.timezone.utc)
+        return parse_iso_datetime(dt_str)
+    except Exception:
+        return None
+
+
+def handle_weekly_rollup(args):
+    """Generates last week retro and next week agenda rollup."""
+    days = getattr(args, "days", 7)
+    try:
+        days = int(days)
+        if days <= 0:
+            raise ValueError
+    except (ValueError, TypeError):
+        print("Error: --days must be a positive integer.", file=sys.stderr)
+        sys.exit(1)
+
+    creds = get_credentials()
+    tasks_service = build_tasks_service(creds)
+    cal_service = build_calendar_service(creds)
+
+    tasklist_id = None
+    tasklist_name = "@default"
+
+    if getattr(args, "tasklist", None):
+        if args.tasklist == "@default":
+            tasklist_id = "@default"
+            tasklist_name = "@default"
+        else:
+            try:
+                tasklists = fetch_tasklists(tasks_service)
+            except HttpError as e:
+                print(f"Error fetching task lists: {e}", file=sys.stderr)
+                sys.exit(1)
+            for item in tasklists:
+                if item["title"] == args.tasklist or item["id"] == args.tasklist:
+                    tasklist_id = item["id"]
+                    tasklist_name = item["title"]
+                    break
+            if not tasklist_id:
+                print(
+                    f"Error: Specified Task List '{args.tasklist}' not found on Google Tasks.",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+    elif getattr(args, "proposed_file", None) and os.path.exists(args.proposed_file):
+        with open(args.proposed_file, "r") as f:
+            plan_data = parse_proposed_timeline(f.read())
+            if plan_data.get("errors"):
+                print(
+                    f"Error: Failed to parse proposed timeline file {args.proposed_file}: {plan_data['errors']}",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+            tasklist_name = plan_data.get("tasklist_name", "@default")
+            if tasklist_name != "@default":
+                try:
+                    tasklists = fetch_tasklists(tasks_service)
+                except HttpError as e:
+                    print(f"Error fetching task lists: {e}", file=sys.stderr)
+                    sys.exit(1)
+                for item in tasklists:
+                    if item["title"] == tasklist_name:
+                        tasklist_id = item["id"]
+                        break
+                if not tasklist_id:
+                    print(
+                        f"Error: Task list '{tasklist_name}' from {args.proposed_file} not found on Google Tasks.",
+                        file=sys.stderr,
+                    )
+                    sys.exit(1)
+            else:
+                tasklist_id = "@default"
+    else:
+        tasklist_id = "@default"
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    past_cutoff = now - datetime.timedelta(days=days)
+    future_cutoff = now + datetime.timedelta(days=days)
+
+    completed_retro = []
+    overdue_retro = []
+    open_agenda = []
+
+    tasks_items = []
+    page_token = None
+    while True:
+        try:
+            res = (
+                tasks_service.tasks()
+                .list(
+                    tasklist=tasklist_id,
+                    showCompleted=True,
+                    showHidden=True,
+                    pageToken=page_token,
+                )
+                .execute()
+            )
+            tasks_items.extend(res.get("items", []))
+            page_token = res.get("nextPageToken")
+            if not page_token:
+                break
+        except HttpError as e:
+            print(f"HTTP Error fetching tasks: {e}", file=sys.stderr)
+            sys.exit(1)
+
+    for task in tasks_items:
+        title = task.get("title", "(No Title)")
+        status = task.get("status")
+        if status == "completed":
+            completed_str = task.get("completed")
+            comp_dt = safe_parse_task_datetime(completed_str)
+            if comp_dt and comp_dt >= past_cutoff:
+                completed_retro.append(
+                    f"- [x] **{title}** (Completed: {comp_dt.strftime('%Y-%m-%d')})"
+                )
+        else:
+            due_str = task.get("due")
+            if due_str:
+                due_dt = safe_parse_task_datetime(due_str)
+                if due_dt:
+                    if due_dt < now:
+                        overdue_retro.append(
+                            f"- [ ] **{title}** (Due: {due_dt.strftime('%Y-%m-%d')})"
+                        )
+                    elif due_dt <= future_cutoff:
+                        open_agenda.append(
+                            f"- [ ] **{title}** (Due: {due_dt.strftime('%Y-%m-%d')})"
+                        )
+            else:
+                open_agenda.append(f"- [ ] **{title}**")
+
+    scheduled_events = []
+    try:
+        raw_events = fetch_calendar_events(
+            cal_service,
+            now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            future_cutoff.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        )
+        for event in raw_events:
+            summary = event.get("summary", "(No Title)")
+            if summary.startswith("Focus:") or "focus" in summary.lower():
+                start_data = event.get("start", {})
+                start_str = start_data.get("dateTime", start_data.get("date", ""))
+                scheduled_events.append(f"- [{start_str}] **{summary}**")
+    except HttpError as e:
+        print(f"HTTP Error fetching calendar events: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    lines = [
+        "# Weekly Sprint Rollup",
+        "",
+        f"## Last Week Retro (Past {days} Days)",
+        "### Completed Tasks",
+    ]
+    if completed_retro:
+        lines.extend(completed_retro)
+    else:
+        lines.append(f"- (No tasks completed in past {days} days)")
+
+    lines.extend([
+        "",
+        "### Overdue Tasks",
+    ])
+    if overdue_retro:
+        lines.extend(overdue_retro)
+    else:
+        lines.append("- (No overdue tasks)")
+
+    lines.extend([
+        "",
+        f"## Next Week Agenda (Upcoming {days} Days)",
+        "### Scheduled Focus Blocks",
+    ])
+    if scheduled_events:
+        lines.extend(scheduled_events)
+    else:
+        lines.append("- (No focus blocks scheduled)")
+
+    lines.extend([
+        "",
+        "### Carried-Over / Open Tasks",
+    ])
+    if open_agenda:
+        lines.extend(open_agenda)
+    else:
+        lines.append("- (No open tasks)")
+
+    rollup_content = "\n".join(lines) + "\n"
+    print(rollup_content)
+
+    if getattr(args, "doc_id", None):
+        try:
+            append_text_to_google_doc(creds, args.doc_id, "\n" + rollup_content)
+            print(f"Appended weekly rollup to Google Doc ID: {args.doc_id}")
+            if getattr(args, "share", None):
+                emails = [e.strip() for e in args.share.split(",") if e.strip()]
+                shared = share_google_doc(
+                    creds, args.doc_id, emails, role=getattr(args, "role", "reader")
+                )
+                print(f"Shared document with {len(shared)} stakeholder(s).")
+        except HttpError as e:
+            print(f"Error publishing to Google Doc: {e}", file=sys.stderr)
+            sys.exit(1)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Google Workspace Timeline Planner & Publisher."
@@ -1420,6 +1666,41 @@ def main():
         help="Path to local ID tracking state.",
     )
     status_parser.set_defaults(func=handle_status)
+
+    # weekly-rollup subcommand
+    weekly_rollup_parser = subparsers.add_parser(
+        "weekly-rollup", help="Generate last week retro and next week agenda rollup."
+    )
+    weekly_rollup_parser.add_argument(
+        "--proposed-file",
+        default="artifacts/proposed_timeline.md",
+        help="Path to proposed markdown timeline.",
+    )
+    weekly_rollup_parser.add_argument(
+        "--tasklist",
+        help="Google Task List title or ID (defaults to tasklist in proposed_timeline.md or @default).",
+    )
+    weekly_rollup_parser.add_argument(
+        "--days",
+        type=int,
+        default=7,
+        help="Number of days for retro and agenda windows (default: 7).",
+    )
+    weekly_rollup_parser.add_argument(
+        "--doc-id",
+        help="Existing Google Doc ID to append the weekly rollup.",
+    )
+    weekly_rollup_parser.add_argument(
+        "--share",
+        help="Comma-separated emails to share the Google Doc with.",
+    )
+    weekly_rollup_parser.add_argument(
+        "--role",
+        choices=["reader", "commenter", "writer"],
+        default="reader",
+        help="Stakeholder permission role (default: reader).",
+    )
+    weekly_rollup_parser.set_defaults(func=handle_weekly_rollup)
 
     # publish-doc subcommand
     publish_parser = subparsers.add_parser(
