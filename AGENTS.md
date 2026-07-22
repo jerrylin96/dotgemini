@@ -57,6 +57,12 @@ Use the following commands to navigate the development lifecycle:
 | **Simplify** | `/code-simplify` | Clarity over cleverness | [ponytail](skills/ponytail/SKILL.md) |
 | **Ship** | `/signoff` | Human owns the merge | [signoff](skills/signoff/SKILL.md) |
 
+### Mandatory Default Execution Pipeline
+For any non-trivial code modification, feature addition, refactor, or skill creation:
+1. **Automatic Lifecycle Trigger**: The agent MUST automatically initiate the lifecycle sequence (`/spec` draft artifact → `/plan` breakdown artifact → `make-feature` worktree) by default, without requiring explicit user prompt commands.
+2. **Isolated Worktree Mandate**: Strict prohibition against primary working tree mutations. All edits MUST take place inside a feature branch worktree (`gemini/<feature-name>`).
+3. **Ponytail Gate**: Apply YAGNI / Senior Dev ladder check before adding any new lines of code.
+
 ### Core Operating Behaviors
 * **Surface Assumptions:** Before writing any non-trivial code, explicitly list assumptions:
   ```markdown
