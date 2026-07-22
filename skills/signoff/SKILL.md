@@ -50,7 +50,7 @@ Interrogate user across 4 core axes:
    After receiving initial user approval, re-verify state: current `HEAD` equals `<reviewed-commit-sha>`, no unstaged changes (`git diff --quiet`), and no staged changes (`git diff --cached --quiet`). If dirty or `HEAD` has moved, stop and declare signoff stale.
 
 3. **Compute & Validate Transcript Digest:**
-   After recording user confirmation in transcript, compute SHA-256 digest using Python heredoc:
+   After recording user confirmation in transcript, compute SHA-256 digest and capture exit status:
    ```bash
    DIGEST=$(python3 - <<'PY'
    import os, sys, hashlib, re
@@ -66,34 +66,47 @@ Interrogate user across 4 core axes:
        print("unavailable")
    PY
    )
+   DIGEST_EXIT=$?
    ```
 
 4. **Construct Flat Git Trailers & Determine Status:**
-   - If `$DIGEST` is a valid 64-char hex:
-     - Set `Signoff-Status: VERIFIED_BY_HUMAN`
-     - Set `Signoff-Transcript-Digest: sha256:<hex-digest>`
-   - If `$DIGEST` is `unavailable`:
-     - Set `Signoff-Status: VERIFIED_BY_HUMAN_NO_TRANSCRIPT_DIGEST`
-     - Set `Signoff-Transcript-Digest: unavailable`
-     - **Required Action:** Present downgraded trailers and request a second explicit user confirmation before committing.
-     - **Re-verify Clean State:** Immediately after second approval, re-run clean-state checks (`HEAD == Reviewed-Commit-SHA`, `git diff --quiet`, `git diff --cached --quiet`). Stop if dirty or stale.
-   - If `$DIGEST` is neither 64-char hex nor `unavailable`, or command exits non-zero: **ABORT signoff immediately** without creating trailers or committing.
-   - If `ANTIGRAVITY_CONVERSATION_ID` is unset or empty, write `Signoff-Conversation-ID: unavailable`; otherwise write `$ANTIGRAVITY_CONVERSATION_ID`.
+   Evaluate helper execution and output strictly:
+   ```bash
+   if [ $DIGEST_EXIT -ne 0 ]; then
+       # Helper failed non-zero: ABORT signoff immediately. Do not create trailers or commit.
+       echo "Error: Digest helper exited non-zero ($DIGEST_EXIT). Aborting signoff."
+   elif [[ "$DIGEST" =~ ^[a-f0-9]{64}$ ]]; then
+       # Valid 64-char hex digest:
+       STATUS="VERIFIED_BY_HUMAN"
+       TRAILER_DIGEST="sha256:$DIGEST"
+   elif [ "$DIGEST" = "unavailable" ]; then
+       # Transcript unavailable/unreadable:
+       STATUS="VERIFIED_BY_HUMAN_NO_TRANSCRIPT_DIGEST"
+       TRAILER_DIGEST="unavailable"
+       # REQUIRED ACTION: Present downgraded trailers and request second explicit user confirmation.
+       # RE-VERIFY CLEAN STATE: Immediately after second approval, re-run clean-state checks
+       # (HEAD == Reviewed-Commit-SHA, git diff --quiet, git diff --cached --quiet). Stop if dirty/stale.
+   else
+       # Malformed or unexpected output: ABORT signoff immediately.
+       echo "Error: Unexpected digest output '$DIGEST'. Aborting signoff."
+   fi
+   ```
+   *If `ANTIGRAVITY_CONVERSATION_ID` is unset or empty, write `Signoff-Conversation-ID: unavailable`; otherwise write `$ANTIGRAVITY_CONVERSATION_ID`.*
 
 ```text
-Signoff-Status: VERIFIED_BY_HUMAN
+Signoff-Status: <STATUS>
 Signoff-Timestamp: <ISO-8601 UTC timestamp, e.g. date -u +%Y-%m-%dT%H:%M:%SZ>
 Signoff-Base-SHA: <merge-base-sha>
 Signoff-Reviewed-Commit-SHA: <reviewed-commit-sha>
 Signoff-Reviewed-Tree-SHA: <reviewed-tree-sha>
 Signoff-Conversation-ID: <conversation-id-or-unavailable>
-Signoff-Transcript-Digest: sha256:<hex-digest>
+Signoff-Transcript-Digest: <TRAILER_DIGEST>
 Signoff-Tradeoff: <Acknowledged Trade-off 1 or 'none'>
 Signoff-Risk: <Acknowledged Risk 1 or 'none'>
 Signoff-Verified-By: <Confirmed User Email>
 Signoff-Agent: <Executing Agent Name> /signoff v1.0
 ```
-*Note: For missing/unreadable transcripts, use `Signoff-Status: VERIFIED_BY_HUMAN_NO_TRANSCRIPT_DIGEST` and `Signoff-Transcript-Digest: unavailable`. Repeat `Signoff-Tradeoff:` and `Signoff-Risk:` lines for each acknowledged item; use `none` if empty.*
+*Note: Repeat `Signoff-Tradeoff:` and `Signoff-Risk:` lines for each acknowledged item; use `none` if empty.*
 
 ### 4. Commit Execution & Integrity Verification
 
