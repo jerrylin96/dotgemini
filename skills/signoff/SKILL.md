@@ -46,15 +46,15 @@ Interrogate user across 4 core axes:
    - Option 2: Amend unpushed commit `<reviewed-commit-sha>` (`git commit --amend`).
    - Option 3: Create a new empty attestation commit (`git commit --allow-empty`).
 
-   *Safety check for Option 2:* Before permitting Option 2, run `git branch -r --contains "<reviewed-commit-sha>"`. If the commit appears on any remote-tracking branch, block `--amend` and fall back to Option 3 to prevent rewriting published history.
+   *Safety check for Option 2:* Before permitting Option 2, run `git fetch --prune origin 2>/dev/null` followed by `git branch -r --contains "<reviewed-commit-sha>"`. If the commit appears on any remote-tracking branch, block `--amend` and fall back to Option 3 to prevent rewriting published history.
 
 2. **Verify Clean & Stale-Free State:**
-   After receiving user approval, re-verify state: current `HEAD` equals `<reviewed-commit-sha>`, no unstaged changes (`git diff --quiet`), and no staged changes (`git diff --cached --quiet`). If dirty or `HEAD` has moved, stop and declare signoff stale.
+   After receiving initial user approval, re-verify state: current `HEAD` equals `<reviewed-commit-sha>`, no unstaged changes (`git diff --quiet`), and no staged changes (`git diff --cached --quiet`). If dirty or `HEAD` has moved, stop and declare signoff stale.
 
 3. **Compute & Validate Transcript Digest:**
-   After recording user confirmation in transcript, compute SHA-256 digest using robust Python helper:
+   After recording user confirmation in transcript, compute SHA-256 digest using Python heredoc:
    ```bash
-   DIGEST=$(python3 -c '
+   DIGEST=$(python3 - <<'PY'
    import os, sys, hashlib, re
    cid = os.environ.get("ANTIGRAVITY_CONVERSATION_ID", "").strip()
    if not cid:
@@ -66,7 +66,8 @@ Interrogate user across 4 core axes:
        print(h if re.match(r"^[a-f0-9]{64}$", h) else "unavailable")
    except Exception:
        print("unavailable")
-   ')
+   PY
+   )
    ```
 
 4. **Construct Flat Git Trailers & Determine Status:**
@@ -76,7 +77,9 @@ Interrogate user across 4 core axes:
    - If `$DIGEST` is `unavailable`:
      - Set `Signoff-Status: VERIFIED_BY_HUMAN_NO_TRANSCRIPT_DIGEST`
      - Set `Signoff-Transcript-Digest: unavailable`
-     - Require explicit user confirmation of the downgraded status before proceeding.
+     - **Required Action:** Present the downgraded trailers and request a second explicit user confirmation before committing.
+     - **Re-verify Clean State:** Immediately after the second approval, re-run clean-state checks (`HEAD == Reviewed-Commit-SHA`, `git diff --quiet`, `git diff --cached --quiet`). Stop if dirty or stale.
+   - If `ANTIGRAVITY_CONVERSATION_ID` is unset or empty, write `Signoff-Conversation-ID: unavailable`; otherwise write `$ANTIGRAVITY_CONVERSATION_ID`.
 
 ```text
 Signoff-Status: VERIFIED_BY_HUMAN
