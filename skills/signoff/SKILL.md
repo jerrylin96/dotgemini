@@ -46,8 +46,6 @@ Interrogate user across 4 core axes:
    - Option 2: Amend unpushed commit `<reviewed-commit-sha>` (`git commit --amend`).
    - Option 3: Create a new empty attestation commit (`git commit --allow-empty`).
 
-   *Safety check for Option 2:* Run `git fetch --prune origin`. If `git fetch` fails (network/auth error), treat remote freshness as unverified and block Option 2. Otherwise, check `git branch -r --contains "<reviewed-commit-sha>"`. If the commit exists on any remote-tracking branch, block `--amend` and fall back to Option 3 to prevent rewriting published history.
-
 2. **Verify Clean & Stale-Free State:**
    After receiving initial user approval, re-verify state: current `HEAD` equals `<reviewed-commit-sha>`, no unstaged changes (`git diff --quiet`), and no staged changes (`git diff --cached --quiet`). If dirty or `HEAD` has moved, stop and declare signoff stale.
 
@@ -101,8 +99,18 @@ Signoff-Agent: <Executing Agent Name> /signoff v1.0
 
 Execute the user's selected choice:
 - **Option 1 (No Commit):** Present trailers in chat output. Report `Signoff-Attestation-Commit-SHA: none (trailers presented in chat only)`.
-- **Option 2 (Amend Unpushed Commit):** Append flat trailer block via `git commit --amend`.
+
+- **Option 2 (Amend Unpushed Commit):**
+  *Just-in-time publication check:* Immediately before executing `--amend`, determine configured upstream remote:
+  ```bash
+  REMOTE=$(git config "branch.$(git rev-parse --abbrev-ref HEAD).remote" 2>/dev/null || echo "origin")
+  ```
+  Run `git fetch --prune "$REMOTE"`.
+  - If `git fetch` fails (network/auth error), treat remote status as unverified, block Option 2, and require switching to Option 3 (`--allow-empty`) or Option 1.
+  - Run `git branch -r --contains "<reviewed-commit-sha>"`. If `<reviewed-commit-sha>` appears on any remote branch, block `--amend` and require switching to Option 3 (`--allow-empty`) or Option 1.
+  - If clean and unpublished, append flat trailer block via `git commit --amend`.
   - *Post-Operation Integrity Check:* Verify `git rev-parse HEAD^{tree}` equals `$TREE_SHA` and `git rev-parse HEAD^@` equals `$PARENTS`. If tree or parents changed, declare failure.
+
 - **Option 3 (Empty Attestation Commit):** Append flat trailer block via `git commit --allow-empty -m "..."`.
   - *Post-Operation Integrity Check:* Verify `git rev-parse HEAD^{tree}` equals `$TREE_SHA` and `git rev-parse HEAD~1` equals `<reviewed-commit-sha>`. If tree or parent changed, declare failure.
 
