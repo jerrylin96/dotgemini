@@ -102,7 +102,7 @@ This configuration is developed and tested on macOS and Linux (validated in CI).
     3. **Cleanup**: Once the branch is pushed to origin, Antigravity removes the worktree and prunes git metadata, keeping the environment clean.
 
 * `signoff` — Socratic human-comprehension and risk-ownership audit before merging.
-  * **User Workflow**: Trigger with `/signoff` before merging a feature branch. Antigravity reverse-interviews you across 4 core axes (mechanics, trade-offs, failure boundaries, ownership). Upon verified comprehension, it appends a tamper-evident, flat `Signoff-Attestation` trailer (with SHA-256 transcript digest) to the commit.
+  * **User Workflow**: Trigger with `/signoff` before merging a feature branch. Antigravity reverse-interviews you across 4 core axes (mechanics, trade-offs, failure boundaries, ownership). Upon verified comprehension and explicit user approval, it appends a flat block of `Signoff-*` git trailers (including a traceable SHA-256 transcript reference digest) to the commit.
 
 * `/ponytail` — Lazy senior developer instructions.
 * `/caveman` — Token-efficient caveman communication mode.
