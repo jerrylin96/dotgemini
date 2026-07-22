@@ -13,6 +13,7 @@ import sys
 import subprocess
 from zoneinfo import ZoneInfo
 from functools import lru_cache
+from googleapiclient.errors import HttpError
 
 # Add current directory to path to allow importing workspace_client
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -1312,7 +1313,11 @@ def resolve_artifact_path(path):
 
 def handle_publish_doc(args):
     """Publishes timeline markdown (and optional postmortems) to Google Docs and shares with stakeholders."""
-    file_path = resolve_artifact_path(args.proposed_file) if hasattr(args, "proposed_file") else args.proposed_file
+    if not getattr(args, "proposed_file", None) or not args.proposed_file.strip():
+        print("Error: --proposed-file must not be empty.", file=sys.stderr)
+        sys.exit(1)
+
+    file_path = resolve_artifact_path(args.proposed_file)
     if not os.path.exists(file_path):
         print(f"Error: Proposed timeline file not found at {file_path}", file=sys.stderr)
         sys.exit(1)
@@ -1330,7 +1335,7 @@ def handle_publish_doc(args):
         if args.doc_id:
             doc_id = args.doc_id
             doc_url = f"https://docs.google.com/document/d/{doc_id}/edit"
-            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            timestamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
             append_text = f"\n\n--- Revision / Postmortem Update ({timestamp}) ---\n\n{content}"
             append_text_to_google_doc(creds, doc_id, append_text)
             print(f"Appended timeline update to existing Google Doc ID: {doc_id}")
@@ -1346,6 +1351,12 @@ def handle_publish_doc(args):
             print(f"Shared document with {len(shared)} stakeholder(s) as {args.role}.")
 
         print(f"Google Doc URL: {doc_url}")
+    except HttpError as e:
+        if e.resp.status == 403 and args.doc_id:
+            print(f"Error publishing to Google Doc: Access forbidden (403). Note: under 'drive.file' scope, --doc-id must be a document created by this tool. Details: {e}", file=sys.stderr)
+        else:
+            print(f"Error publishing to Google Doc: {e}", file=sys.stderr)
+        sys.exit(1)
     except Exception as e:
         print(f"Error publishing to Google Doc: {e}", file=sys.stderr)
         sys.exit(1)

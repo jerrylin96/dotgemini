@@ -13,7 +13,7 @@ This skill relies on Google Application Default Credentials (ADC) with the corre
 
 If the user encounters authentication errors, ask them to run:
 ```bash
-gcloud auth application-default login --scopes="https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/calendar,https://www.googleapis.com/auth/tasks,https://www.googleapis.com/auth/documents,https://www.googleapis.com/auth/drive"
+gcloud auth application-default login --scopes="https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/calendar,https://www.googleapis.com/auth/tasks,https://www.googleapis.com/auth/documents,https://www.googleapis.com/auth/drive.file"
 ```
 
 To verify authentication (after setting up the environment using Option A or Option B below):
@@ -220,5 +220,3 @@ python3 ~/.gemini/skills/google-workspace/scripts/timeline_planner.py publish-do
 # Append revision update / postmortem to existing Google Doc
 python3 ~/.gemini/skills/google-workspace/scripts/timeline_planner.py publish-doc --doc-id "DOC_ID" --proposed-file artifacts/proposed_timeline.md
 ```
-
-
