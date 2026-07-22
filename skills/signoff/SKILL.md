@@ -46,7 +46,7 @@ Interrogate user across 4 core axes:
    - Option 2: Amend unpushed commit `<reviewed-commit-sha>` (`git commit --amend`).
    - Option 3: Create a new empty attestation commit (`git commit --allow-empty`).
 
-   *Safety check for Option 2:* Before permitting Option 2, run `git fetch --prune origin 2>/dev/null` followed by `git branch -r --contains "<reviewed-commit-sha>"`. If the commit appears on any remote-tracking branch, block `--amend` and fall back to Option 3 to prevent rewriting published history.
+   *Safety check for Option 2:* Run `git fetch --prune origin`. If `git fetch` fails (network/auth error), treat remote freshness as unverified and block Option 2. Otherwise, check `git branch -r --contains "<reviewed-commit-sha>"`. If the commit exists on any remote-tracking branch, block `--amend` and fall back to Option 3 to prevent rewriting published history.
 
 2. **Verify Clean & Stale-Free State:**
    After receiving initial user approval, re-verify state: current `HEAD` equals `<reviewed-commit-sha>`, no unstaged changes (`git diff --quiet`), and no staged changes (`git diff --cached --quiet`). If dirty or `HEAD` has moved, stop and declare signoff stale.
@@ -61,10 +61,10 @@ Interrogate user across 4 core axes:
        print("unavailable"); sys.exit(0)
    p = os.path.expanduser(f"~/.gemini/antigravity-cli/brain/{cid}/.system_generated/logs/transcript.jsonl")
    try:
-       data = open(p, "rb").read()
-       h = hashlib.sha256(data).hexdigest()
+       with open(p, "rb") as f:
+           h = hashlib.sha256(f.read()).hexdigest()
        print(h if re.match(r"^[a-f0-9]{64}$", h) else "unavailable")
-   except Exception:
+   except OSError:
        print("unavailable")
    PY
    )
@@ -77,8 +77,9 @@ Interrogate user across 4 core axes:
    - If `$DIGEST` is `unavailable`:
      - Set `Signoff-Status: VERIFIED_BY_HUMAN_NO_TRANSCRIPT_DIGEST`
      - Set `Signoff-Transcript-Digest: unavailable`
-     - **Required Action:** Present the downgraded trailers and request a second explicit user confirmation before committing.
-     - **Re-verify Clean State:** Immediately after the second approval, re-run clean-state checks (`HEAD == Reviewed-Commit-SHA`, `git diff --quiet`, `git diff --cached --quiet`). Stop if dirty or stale.
+     - **Required Action:** Present downgraded trailers and request a second explicit user confirmation before committing.
+     - **Re-verify Clean State:** Immediately after second approval, re-run clean-state checks (`HEAD == Reviewed-Commit-SHA`, `git diff --quiet`, `git diff --cached --quiet`). Stop if dirty or stale.
+   - If `$DIGEST` is neither 64-char hex nor `unavailable`, or command exits non-zero: **ABORT signoff immediately** without creating trailers or committing.
    - If `ANTIGRAVITY_CONVERSATION_ID` is unset or empty, write `Signoff-Conversation-ID: unavailable`; otherwise write `$ANTIGRAVITY_CONVERSATION_ID`.
 
 ```text
