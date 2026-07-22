@@ -141,6 +141,11 @@ python3 ~/.gemini/skills/google-workspace/scripts/workspace_client.py tasks [--t
 
 A specialized tool to decompose goals into scheduled timelines, resolving calendar conflicts by finding free blocks within working hours (Option B).
 
+> [!IMPORTANT]
+> **Lifecycle & Complexity Rule:**
+> - **Non-Trivial Project Timelines & Task Breakdowns**: Follow the full 2-phase lifecycle below (`goals.json` → `proposed_timeline.md` → User Review → `apply`). Never run `apply` directly on multi-task project requests without user review of `proposed_timeline.md`.
+> - **Trivial Single Events**: For single-event scheduling or single-task creation (e.g. "Add 1-hour meeting tomorrow"), skip `timeline_planner.py` and execute directly using `workspace_client.py`.
+
 #### Step 1: Initialize Goals
 Create a JSON configuration file under `artifacts/goals.json`. Example structure:
 ```json
