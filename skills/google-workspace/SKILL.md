@@ -232,6 +232,10 @@ python3 ~/.gemini/skills/google-workspace/scripts/timeline_planner.py weekly-rol
 ```
 
 > [!NOTE]
+> **Calendar Focus Block Filtering:**
+> Under "Scheduled Focus Blocks", only calendar events whose title starts with `Focus:` or contains `focus` (case-insensitive) are included in the upcoming agenda section.
+
+> [!NOTE]
 > **Multi-Horizon Goal Planning (`horizon`):**
 > Tasks and subtasks in `goals.json` support an optional `"horizon": "quarterly" | "weekly"` attribute (defaults to `"weekly"`).
 > High-level OKRs are tagged as `"quarterly"`, while 1-week focus blocks are tagged as `"weekly"`.

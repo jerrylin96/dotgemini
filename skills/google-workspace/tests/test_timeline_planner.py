@@ -1551,5 +1551,68 @@ def test_handle_weekly_rollup_dynamic_days_and_stdout(monkeypatch, capsys):
     assert "Lunch with Friend" not in captured
 
 
+def test_safe_parse_task_datetime():
+    from timeline_planner import safe_parse_task_datetime
+
+    # Date-only YYYY-MM-DD
+    dt_date = safe_parse_task_datetime("2026-07-23")
+    assert dt_date is not None
+    assert dt_date.year == 2026 and dt_date.month == 7 and dt_date.day == 23
+    assert dt_date.hour == 23 and dt_date.minute == 59 and dt_date.second == 59
+
+    # RFC 3339 timestamp with Z
+    dt_z = safe_parse_task_datetime("2026-07-23T10:00:00Z")
+    assert dt_z is not None
+    assert dt_z.year == 2026 and dt_z.hour == 10
+
+    # None and empty string
+    assert safe_parse_task_datetime(None) is None
+    assert safe_parse_task_datetime("") is None
+
+    # Naive timestamp (no offset)
+    assert safe_parse_task_datetime("2026-07-23T10:00:00") is None
+
+
+def test_handle_weekly_rollup_resolves_tasklist_from_proposed_file(tmp_path, monkeypatch):
+    import timeline_planner
+    from types import SimpleNamespace
+
+    proposed_file = tmp_path / "proposed.md"
+    proposed_file.write_text(
+        "# Proposed Timeline: Resolved Custom List\n\n"
+        "## Metadata\n"
+        "- **Task List Name**: Resolved Custom List\n"
+        "- **Timezone**: UTC\n\n"
+        "## Proposed Google Tasks\n\n"
+        "## Proposed Calendar Events\n"
+    )
+
+    monkeypatch.setattr("timeline_planner.get_credentials", lambda: None)
+    mock_tasks_svc = mock.MagicMock()
+    mock_tasks_svc.tasklists().list().execute.return_value = {
+        "items": [
+            {"id": "L1", "title": "Other List"},
+            {"id": "L2", "title": "Resolved Custom List"},
+        ]
+    }
+    mock_tasks_svc.tasks().list().execute.return_value = {"items": []}
+    monkeypatch.setattr("timeline_planner.build_tasks_service", lambda creds: mock_tasks_svc)
+    monkeypatch.setattr("timeline_planner.build_calendar_service", lambda creds: mock.MagicMock())
+    monkeypatch.setattr("timeline_planner.fetch_calendar_events", lambda s, min_iso, max_iso: [])
+
+    args = SimpleNamespace(
+        proposed_file=str(proposed_file),
+        tasklist=None,
+        days=7,
+        doc_id=None,
+        share=None,
+        role="reader",
+    )
+    timeline_planner.handle_weekly_rollup(args)
+    # Verify tasks.list was called with tasklist='L2'
+    assert mock_tasks_svc.tasks().list.call_args[1]["tasklist"] == "L2"
+
+
+
 
 

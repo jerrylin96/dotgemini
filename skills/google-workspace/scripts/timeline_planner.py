@@ -341,7 +341,7 @@ def preflight_validate_timeline(plan_data):
                     f"Task '{title}' error: Due date '{due}' must be in YYYY-MM-DD format."
                 )
 
-        horizon = task.get("horizon")
+        horizon = str(task.get("horizon", "")).strip().lower()
         if horizon and horizon not in ["quarterly", "weekly"]:
             errors.append(
                 f"Task '{title}' error: Horizon '{horizon}' must be 'quarterly' or 'weekly'."
@@ -1450,6 +1450,11 @@ def handle_weekly_rollup(args):
     elif getattr(args, "proposed_file", None) and os.path.exists(args.proposed_file):
         with open(args.proposed_file, "r") as f:
             plan_data = parse_proposed_timeline(f.read())
+            if plan_data.get("errors"):
+                print(
+                    f"Warning: Errors parsed in proposed file {args.proposed_file}: {plan_data['errors']}",
+                    file=sys.stderr,
+                )
             tasklist_name = plan_data.get("tasklist_name", "@default")
             if tasklist_name != "@default":
                 try:
