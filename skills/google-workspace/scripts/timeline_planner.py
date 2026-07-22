@@ -615,6 +615,14 @@ def handle_plan(args):
                     )
                     sys.exit(1)
 
+                sub_horizon = str(sub.get("horizon", horizon)).strip().lower()
+                if sub_horizon not in ["quarterly", "weekly"]:
+                    print(
+                        f"Error: Subtask '{sub_title}' under task '{title}' horizon must be 'quarterly' or 'weekly'.",
+                        file=sys.stderr,
+                    )
+                    sys.exit(1)
+
                 sub_duration = sub.get("duration_hours", 1.0)
                 try:
                     sub_duration = float(sub_duration)
@@ -1387,36 +1395,84 @@ def handle_publish_doc(args):
         sys.exit(1)
 
 
+def safe_parse_task_datetime(dt_str):
+    """Safely parses task ISO or YYYY-MM-DD datetime strings."""
+    if not dt_str:
+        return None
+    try:
+        if len(dt_str) == 10 and "-" in dt_str:
+            d = datetime.datetime.strptime(dt_str, "%Y-%m-%d").date()
+            return datetime.datetime.combine(d, datetime.time.max, tzinfo=datetime.timezone.utc)
+        return parse_iso_datetime(dt_str)
+    except Exception:
+        return None
+
+
 def handle_weekly_rollup(args):
     """Generates last week retro and next week agenda rollup."""
+    days = getattr(args, "days", 7)
+    try:
+        days = int(days)
+        if days <= 0:
+            raise ValueError
+    except (ValueError, TypeError):
+        print("Error: --days must be a positive integer.", file=sys.stderr)
+        sys.exit(1)
+
     creds = get_credentials()
     tasks_service = build_tasks_service(creds)
     cal_service = build_calendar_service(creds)
 
-    tasklist_id = "@default"
+    tasklist_id = None
     tasklist_name = "@default"
 
     if getattr(args, "tasklist", None):
-        tasklist_name = args.tasklist
-        if args.tasklist != "@default":
-            tasklists = fetch_tasklists(tasks_service)
+        if args.tasklist == "@default":
+            tasklist_id = "@default"
+            tasklist_name = "@default"
+        else:
+            try:
+                tasklists = fetch_tasklists(tasks_service)
+            except HttpError as e:
+                print(f"Error fetching task lists: {e}", file=sys.stderr)
+                sys.exit(1)
             for item in tasklists:
                 if item["title"] == args.tasklist or item["id"] == args.tasklist:
                     tasklist_id = item["id"]
                     tasklist_name = item["title"]
                     break
+            if not tasklist_id:
+                print(
+                    f"Error: Specified Task List '{args.tasklist}' not found on Google Tasks.",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
     elif getattr(args, "proposed_file", None) and os.path.exists(args.proposed_file):
         with open(args.proposed_file, "r") as f:
             plan_data = parse_proposed_timeline(f.read())
             tasklist_name = plan_data.get("tasklist_name", "@default")
-            tasklists = fetch_tasklists(tasks_service)
-            for item in tasklists:
-                if item["title"] == tasklist_name:
-                    tasklist_id = item["id"]
-                    break
+            if tasklist_name != "@default":
+                try:
+                    tasklists = fetch_tasklists(tasks_service)
+                except HttpError as e:
+                    print(f"Error fetching task lists: {e}", file=sys.stderr)
+                    sys.exit(1)
+                for item in tasklists:
+                    if item["title"] == tasklist_name:
+                        tasklist_id = item["id"]
+                        break
+                if not tasklist_id:
+                    print(
+                        f"Error: Task list '{tasklist_name}' from {args.proposed_file} not found on Google Tasks.",
+                        file=sys.stderr,
+                    )
+                    sys.exit(1)
+            else:
+                tasklist_id = "@default"
+    else:
+        tasklist_id = "@default"
 
     now = datetime.datetime.now(datetime.timezone.utc)
-    days = getattr(args, "days", 7)
     past_cutoff = now - datetime.timedelta(days=days)
     future_cutoff = now + datetime.timedelta(days=days)
 
@@ -1451,24 +1507,24 @@ def handle_weekly_rollup(args):
         status = task.get("status")
         if status == "completed":
             completed_str = task.get("completed")
-            if completed_str:
-                comp_dt = parse_iso_datetime(completed_str)
-                if comp_dt >= past_cutoff:
-                    completed_retro.append(
-                        f"- [x] **{title}** (Completed: {comp_dt.strftime('%Y-%m-%d')})"
-                    )
+            comp_dt = safe_parse_task_datetime(completed_str)
+            if comp_dt and comp_dt >= past_cutoff:
+                completed_retro.append(
+                    f"- [x] **{title}** (Completed: {comp_dt.strftime('%Y-%m-%d')})"
+                )
         else:
             due_str = task.get("due")
             if due_str:
-                due_dt = parse_iso_datetime(due_str)
-                if due_dt < now:
-                    overdue_retro.append(
-                        f"- [ ] **{title}** (Due: {due_dt.strftime('%Y-%m-%d')})"
-                    )
-                else:
-                    open_agenda.append(
-                        f"- [ ] **{title}** (Due: {due_dt.strftime('%Y-%m-%d')})"
-                    )
+                due_dt = safe_parse_task_datetime(due_str)
+                if due_dt:
+                    if due_dt < now:
+                        overdue_retro.append(
+                            f"- [ ] **{title}** (Due: {due_dt.strftime('%Y-%m-%d')})"
+                        )
+                    elif due_dt <= future_cutoff:
+                        open_agenda.append(
+                            f"- [ ] **{title}** (Due: {due_dt.strftime('%Y-%m-%d')})"
+                        )
             else:
                 open_agenda.append(f"- [ ] **{title}**")
 
@@ -1481,9 +1537,10 @@ def handle_weekly_rollup(args):
         )
         for event in raw_events:
             summary = event.get("summary", "(No Title)")
-            start_data = event.get("start", {})
-            start_str = start_data.get("dateTime", start_data.get("date", ""))
-            scheduled_events.append(f"- [{start_str}] **{summary}**")
+            if summary.startswith("Focus:") or "focus" in summary.lower():
+                start_data = event.get("start", {})
+                start_str = start_data.get("dateTime", start_data.get("date", ""))
+                scheduled_events.append(f"- [{start_str}] **{summary}**")
     except HttpError as e:
         print(f"HTTP Error fetching calendar events: {e}", file=sys.stderr)
         sys.exit(1)
@@ -1491,13 +1548,13 @@ def handle_weekly_rollup(args):
     lines = [
         "# Weekly Sprint Rollup",
         "",
-        "## Last Week Retro (Past 7 Days)",
+        f"## Last Week Retro (Past {days} Days)",
         "### Completed Tasks",
     ]
     if completed_retro:
         lines.extend(completed_retro)
     else:
-        lines.append("- (No tasks completed in past 7 days)")
+        lines.append(f"- (No tasks completed in past {days} days)")
 
     lines.extend([
         "",
@@ -1510,7 +1567,7 @@ def handle_weekly_rollup(args):
 
     lines.extend([
         "",
-        "## Next Week Agenda (Upcoming 7 Days)",
+        f"## Next Week Agenda (Upcoming {days} Days)",
         "### Scheduled Focus Blocks",
     ])
     if scheduled_events:
