@@ -1,6 +1,6 @@
 ---
 name: google-workspace
-description: Manage Google Calendar events and Google Tasks. Use when listing, creating, updating, or deleting calendar events or tasks.
+description: Manage Google Calendar events, Google Tasks, and Google Docs timeline publishing. Use when listing, creating, updating, or deleting calendar events or tasks, or when asked to create a timeline, project plan, task breakdown, schedule focus time, or manage project deadlines.
 ---
 
 # Google Workspace (Calendar & Tasks) Integration
