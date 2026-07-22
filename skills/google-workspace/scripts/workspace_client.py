@@ -14,7 +14,7 @@ SCOPES = [
     "https://www.googleapis.com/auth/calendar",
     "https://www.googleapis.com/auth/tasks",
     "https://www.googleapis.com/auth/documents",
-    "https://www.googleapis.com/auth/drive",
+    "https://www.googleapis.com/auth/drive.file",
 ]
 
 
@@ -38,7 +38,7 @@ def get_credentials():
         print(
             "Error: Application Default Credentials (ADC) not found.\n"
             "Please run the following command to authenticate:\n\n"
-            'gcloud auth application-default login --scopes="https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/calendar,https://www.googleapis.com/auth/tasks,https://www.googleapis.com/auth/documents,https://www.googleapis.com/auth/drive"\n',
+            'gcloud auth application-default login --scopes="https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/calendar,https://www.googleapis.com/auth/tasks,https://www.googleapis.com/auth/documents,https://www.googleapis.com/auth/drive.file"\n',
             file=sys.stderr,
         )
         sys.exit(1)
@@ -74,8 +74,9 @@ def create_google_doc(credentials, title):
 
 
 def share_google_doc(credentials, doc_id, emails, role="reader"):
-    """Shares a Google Doc with specified emails."""
+    """Shares a Google Doc with specified emails, returning list of successful email addresses."""
     service = build_drive_service(credentials)
+    successful = []
     for email in emails:
         clean_email = email.strip()
         if not clean_email:
@@ -86,8 +87,10 @@ def share_google_doc(credentials, doc_id, emails, role="reader"):
                 body={"role": role, "type": "user", "emailAddress": clean_email},
                 sendNotificationEmail=True,
             ).execute()
+            successful.append(clean_email)
         except HttpError as e:
             print(f"Warning: Failed to share doc with {clean_email}: {e}", file=sys.stderr)
+    return successful
 
 
 def append_text_to_google_doc(credentials, doc_id, text_content):
@@ -404,8 +407,8 @@ def handle_docs_create(args):
 
         if args.share:
             emails = [e.strip() for e in args.share.split(",") if e.strip()]
-            share_google_doc(creds, doc_id, emails, role=args.role)
-            print(f"Shared document with {len(emails)} user(s) as {args.role}.")
+            shared = share_google_doc(creds, doc_id, emails, role=args.role)
+            print(f"Shared document with {len(shared)} user(s) as {args.role}.")
     except Exception as e:
         print(f"Error creating Google Doc: {e}", file=sys.stderr)
         sys.exit(1)
@@ -427,8 +430,8 @@ def handle_docs_share(args):
     creds = get_credentials()
     try:
         emails = [e.strip() for e in args.email.split(",") if e.strip()]
-        share_google_doc(creds, args.doc_id, emails, role=args.role)
-        print(f"Shared Google Doc {args.doc_id} with {len(emails)} user(s) as {args.role}.")
+        shared = share_google_doc(creds, args.doc_id, emails, role=args.role)
+        print(f"Shared Google Doc {args.doc_id} with {len(shared)} user(s) as {args.role}.")
     except Exception as e:
         print(f"Error sharing Google Doc: {e}", file=sys.stderr)
         sys.exit(1)
@@ -511,6 +514,21 @@ def main():
     tasks_delete = tasks_sub.add_parser("delete", help="Delete a task.")
     tasks_delete.add_argument("--task-id", required=True, help="Task ID to delete.")
     tasks_delete.set_defaults(func=handle_tasks_delete)
+
+    # Tasklists subparsers
+    tasklists_parser = subparsers.add_parser(
+        "tasklists", help="Google Task Lists operations."
+    )
+    tasklists_sub = tasklists_parser.add_subparsers(dest="action", required=True)
+
+    tasklists_list = tasklists_sub.add_parser("list", help="List task lists.")
+    tasklists_list.set_defaults(func=handle_tasklists_list)
+
+    tasklists_create = tasklists_sub.add_parser("create", help="Create a task list.")
+    tasklists_create.add_argument(
+        "--title", required=True, help="Title of the task list."
+    )
+    tasklists_create.set_defaults(func=handle_tasklists_create)
 
     # Docs subparsers
     docs_parser = subparsers.add_parser("docs", help="Google Docs and Drive sharing operations.")

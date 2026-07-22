@@ -1310,6 +1310,47 @@ def resolve_artifact_path(path):
     return resolved
 
 
+def handle_publish_doc(args):
+    """Publishes timeline markdown (and optional postmortems) to Google Docs and shares with stakeholders."""
+    file_path = resolve_artifact_path(args.proposed_file) if hasattr(args, "proposed_file") else args.proposed_file
+    if not os.path.exists(file_path):
+        print(f"Error: Proposed timeline file not found at {file_path}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            content = f.read()
+    except Exception as e:
+        print(f"Error reading file {file_path}: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    creds = get_credentials()
+
+    try:
+        if args.doc_id:
+            doc_id = args.doc_id
+            doc_url = f"https://docs.google.com/document/d/{doc_id}/edit"
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            append_text = f"\n\n--- Revision / Postmortem Update ({timestamp}) ---\n\n{content}"
+            append_text_to_google_doc(creds, doc_id, append_text)
+            print(f"Appended timeline update to existing Google Doc ID: {doc_id}")
+        else:
+            title = args.title or "Project Timeline & Execution Plan"
+            doc_id, doc_url = create_google_doc(creds, title)
+            append_text_to_google_doc(creds, doc_id, content)
+            print(f"Published Timeline to new Google Doc ID: {doc_id}")
+
+        if args.share:
+            emails = [e.strip() for e in args.share.split(",") if e.strip()]
+            shared = share_google_doc(creds, doc_id, emails, role=args.role)
+            print(f"Shared document with {len(shared)} stakeholder(s) as {args.role}.")
+
+        print(f"Google Doc URL: {doc_url}")
+    except Exception as e:
+        print(f"Error publishing to Google Doc: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Google Workspace Timeline Planner & Publisher."
@@ -1384,6 +1425,7 @@ def main():
     )
     publish_parser.add_argument(
         "--title",
+        default="Project Timeline & Execution Plan",
         help="Title of the new Google Doc (defaults to 'Project Timeline & Execution Plan').",
     )
     publish_parser.add_argument(

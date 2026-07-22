@@ -1226,3 +1226,47 @@ def test_handle_plan_partial_scheduling_conflict(tmp_path, monkeypatch):
     assert "## Unscheduled Tasks" in content
     assert "Parent Task -> Subtask 2" in content
 
+
+def test_handle_publish_doc_new_and_append(tmp_path, monkeypatch):
+    import timeline_planner
+    from types import SimpleNamespace
+    proposed_file = tmp_path / "proposed.md"
+    proposed_file.write_text("# Proposed Timeline\n- [ ] Task 1")
+
+    monkeypatch.setattr("timeline_planner.get_credentials", lambda: None)
+    
+    mock_create_doc = mock.MagicMock(return_value=("doc123", "https://docs.google.com/document/d/doc123/edit"))
+    mock_append_doc = mock.MagicMock()
+    mock_share_doc = mock.MagicMock(return_value=["boss@co.com"])
+
+    monkeypatch.setattr("timeline_planner.create_google_doc", mock_create_doc)
+    monkeypatch.setattr("timeline_planner.append_text_to_google_doc", mock_append_doc)
+    monkeypatch.setattr("timeline_planner.share_google_doc", mock_share_doc)
+
+    args_new = SimpleNamespace(
+        proposed_file=str(proposed_file),
+        doc_id=None,
+        title="My Timeline",
+        share="boss@co.com",
+        role="reader",
+    )
+
+    timeline_planner.handle_publish_doc(args_new)
+    mock_create_doc.assert_called_once_with(None, "My Timeline")
+    mock_append_doc.assert_called_once()
+    mock_share_doc.assert_called_once_with(None, "doc123", ["boss@co.com"], role="reader")
+
+    # Test append mode
+    mock_append_doc.reset_mock()
+    args_append = SimpleNamespace(
+        proposed_file=str(proposed_file),
+        doc_id="doc123",
+        title=None,
+        share=None,
+        role="reader",
+    )
+
+    timeline_planner.handle_publish_doc(args_append)
+    mock_append_doc.assert_called_once()
+
+

@@ -564,6 +564,52 @@ class TestWorkspaceClient(unittest.TestCase):
         self.assertEqual(list_calls[0][1].get("pageToken"), None)
         self.assertEqual(list_calls[1][1].get("pageToken"), "token789")
 
+    @patch("workspace_client.build_docs_service")
+    def test_create_google_doc(self, mock_build_docs):
+        mock_service = MagicMock()
+        mock_build_docs.return_value = mock_service
+        mock_service.documents.return_value.create.return_value.execute.return_value = {
+            "documentId": "doc123"
+        }
+        doc_id, url = workspace_client.create_google_doc("creds", "My Doc")
+        self.assertEqual(doc_id, "doc123")
+        self.assertIn("doc123", url)
+
+    @patch("workspace_client.build_drive_service")
+    def test_share_google_doc(self, mock_build_drive):
+        mock_service = MagicMock()
+        mock_build_drive.return_value = mock_service
+        mock_service.permissions.return_value.create.return_value.execute.return_value = {}
+
+        shared = workspace_client.share_google_doc("creds", "doc123", ["a@b.com", "c@d.com"], role="reader")
+        self.assertEqual(shared, ["a@b.com", "c@d.com"])
+
+    @patch("workspace_client.build_docs_service")
+    def test_append_text_to_google_doc(self, mock_build_docs):
+        mock_service = MagicMock()
+        mock_build_docs.return_value = mock_service
+        mock_service.documents.return_value.get.return_value.execute.return_value = {
+            "body": {"content": [{"endIndex": 50}]}
+        }
+        workspace_client.append_text_to_google_doc("creds", "doc123", "Hello World")
+        mock_service.documents.return_value.batchUpdate.assert_called_once()
+
+    def test_cli_subcommands_parse(self):
+        with patch.object(sys, "argv", ["workspace_client.py", "tasklists", "list"]):
+            # Should parse without exception
+            try:
+                with patch("workspace_client.get_credentials"), patch("workspace_client.build_tasks_service"):
+                    workspace_client.main()
+            except SystemExit as e:
+                self.assertEqual(e.code, 0)
+
+        with patch.object(sys, "argv", ["workspace_client.py", "docs", "create", "--title", "Test"]):
+            try:
+                with patch("workspace_client.get_credentials"), patch("workspace_client.create_google_doc", return_value=("id", "url")):
+                    workspace_client.main()
+            except SystemExit as e:
+                self.assertEqual(e.code, 0)
+
 
 if __name__ == "__main__":
     unittest.main()
