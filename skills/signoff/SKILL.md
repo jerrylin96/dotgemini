@@ -50,9 +50,10 @@ Interrogate user across 4 core axes:
    After receiving initial user approval, re-verify state: current `HEAD` equals `<reviewed-commit-sha>`, no unstaged changes (`git diff --quiet`), and no staged changes (`git diff --cached --quiet`). If dirty or `HEAD` has moved, stop and declare signoff stale.
 
 3. **Compute & Validate Transcript Digest:**
-   After recording user confirmation in transcript, compute SHA-256 digest and capture exit status:
+   After recording user confirmation in transcript, execute Python helper via temporary file to reliably capture stdout and exit status:
    ```bash
-   DIGEST=$(python3 - <<'PY'
+   TMP_DIGEST_FILE=$(mktemp)
+   python3 - <<'PY' > "$TMP_DIGEST_FILE"
    import os, sys, hashlib, re
    cid = os.environ.get("ANTIGRAVITY_CONVERSATION_ID", "").strip()
    if not cid:
@@ -65,16 +66,17 @@ Interrogate user across 4 core axes:
    except OSError:
        print("unavailable")
    PY
-   )
-   DIGEST_EXIT=$?
+   DIGEST_STATUS=$?
+   DIGEST=$(tr -d '\r\n' < "$TMP_DIGEST_FILE")
+   rm -f "$TMP_DIGEST_FILE"
    ```
 
 4. **Construct Flat Git Trailers & Determine Status:**
-   Evaluate helper execution and output strictly:
+   Evaluate helper exit status and normalized output strictly:
    ```bash
-   if [ $DIGEST_EXIT -ne 0 ]; then
+   if [ $DIGEST_STATUS -ne 0 ]; then
        # Helper failed non-zero: ABORT signoff immediately. Do not create trailers or commit.
-       echo "Error: Digest helper exited non-zero ($DIGEST_EXIT). Aborting signoff."
+       echo "Error: Digest helper exited non-zero ($DIGEST_STATUS). Aborting signoff."
    elif [[ "$DIGEST" =~ ^[a-f0-9]{64}$ ]]; then
        # Valid 64-char hex digest:
        STATUS="VERIFIED_BY_HUMAN"
@@ -87,7 +89,7 @@ Interrogate user across 4 core axes:
        # RE-VERIFY CLEAN STATE: Immediately after second approval, re-run clean-state checks
        # (HEAD == Reviewed-Commit-SHA, git diff --quiet, git diff --cached --quiet). Stop if dirty/stale.
    else
-       # Malformed or unexpected output: ABORT signoff immediately.
+       # Malformed, empty, or unexpected output: ABORT signoff immediately.
        echo "Error: Unexpected digest output '$DIGEST'. Aborting signoff."
    fi
    ```
@@ -106,7 +108,7 @@ Signoff-Risk: <Acknowledged Risk 1 or 'none'>
 Signoff-Verified-By: <Confirmed User Email>
 Signoff-Agent: <Executing Agent Name> /signoff v1.0
 ```
-*Note: Repeat `Signoff-Tradeoff:` and `Signoff-Risk:` lines for each acknowledged item; use `none` if empty.*
+*Note: For missing/unreadable transcripts, use `Signoff-Status: VERIFIED_BY_HUMAN_NO_TRANSCRIPT_DIGEST` and `Signoff-Transcript-Digest: unavailable`. Repeat `Signoff-Tradeoff:` and `Signoff-Risk:` lines for each acknowledged item; use `none` if empty.*
 
 ### 4. Commit Execution & Integrity Verification
 
@@ -128,6 +130,27 @@ Execute the user's selected choice:
   - *Post-Operation Integrity Check:* Verify `git rev-parse HEAD^{tree}` equals `$TREE_SHA` and `git rev-parse HEAD~1` equals `<reviewed-commit-sha>`. If tree or parent changed, declare failure.
 
 After successful execution of Option 2 or Option 3, report the resulting `Signoff-Attestation-Commit-SHA` (`git rev-parse HEAD`).
+
+---
+
+## Verification & Debugging
+
+To manually verify the transcript digest helper logic across all 3 outcome classes:
+
+1. **Valid Readable Transcript:**
+   `ANTIGRAVITY_CONVERSATION_ID="<valid-id>" python3 -c "..."`
+   - Exit status: `0`
+   - Output: 64-character lowercase hex digest. Status set to `VERIFIED_BY_HUMAN`.
+
+2. **Absent / Unreadable Transcript:**
+   `ANTIGRAVITY_CONVERSATION_ID="nonexistent" python3 -c "..."`
+   - Exit status: `0`
+   - Output: `unavailable`. Status set to `VERIFIED_BY_HUMAN_NO_TRANSCRIPT_DIGEST` (requires second user confirmation).
+
+3. **Helper / Runtime Failure:**
+   `python3 -c "import sys; sys.exit(1)"`
+   - Exit status: `1` (non-zero)
+   - Status: Signoff aborts immediately. No trailers or commits created.
 
 ---
 
