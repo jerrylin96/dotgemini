@@ -33,13 +33,18 @@ Interrogate user across 4 core axes:
 - **Vague / Hand-waving:** Switch to `explain-diff` mode to explain code mechanics, then re-probe with a targeted scenario until mastery is proven.
 - **Silent Failures Found:** Instruct adding explicit runtime guards before signoff.
 
-### 3. Attestation Trailer
-Once satisfied, offer to stage/commit with trailer:
+### 3. Attestation & Commit Generation
+Once satisfied:
+1. Compute transcript digest:
+   `shasum -a 256 <appDataDir>/brain/<conversation-id>/.system_generated/logs/transcript.jsonl | awk '{print $1}'`
+2. Present attestation summary and offer to commit or amend:
 
 ```text
 Signoff-Attestation:
   Status: VERIFIED_BY_HUMAN
   Timestamp: <ISO-8601>
+  Conversation-ID: <Conversation-ID>
+  Transcript-Digest: sha256:<hash>
   Acknowledged-Tradeoffs: ["<Tradeoff 1>"]
   Acknowledged-Risks: ["<Risk 1>"]
   Verified-By: <User Email>
