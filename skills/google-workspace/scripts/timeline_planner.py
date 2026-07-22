@@ -1452,9 +1452,10 @@ def handle_weekly_rollup(args):
             plan_data = parse_proposed_timeline(f.read())
             if plan_data.get("errors"):
                 print(
-                    f"Warning: Errors parsed in proposed file {args.proposed_file}: {plan_data['errors']}",
+                    f"Error: Failed to parse proposed timeline file {args.proposed_file}: {plan_data['errors']}",
                     file=sys.stderr,
                 )
+                sys.exit(1)
             tasklist_name = plan_data.get("tasklist_name", "@default")
             if tasklist_name != "@default":
                 try:

@@ -1613,6 +1613,39 @@ def test_handle_weekly_rollup_resolves_tasklist_from_proposed_file(tmp_path, mon
     assert mock_tasks_svc.tasks().list.call_args[1]["tasklist"] == "L2"
 
 
+def test_handle_weekly_rollup_malformed_proposed_file_exits_error(tmp_path, monkeypatch):
+    import timeline_planner
+    from types import SimpleNamespace
+
+    proposed_file = tmp_path / "proposed_malformed.md"
+    proposed_file.write_text("# Proposed Timeline\n- **Task List Name**: Intended Custom List\n")
+
+    monkeypatch.setattr("timeline_planner.get_credentials", lambda: None)
+    mock_tasks_svc = mock.MagicMock()
+    mock_tasks_svc.tasklists().list().execute.return_value = {
+        "items": [
+            {"id": "DEF", "title": "My Goal Timeline"},
+        ]
+    }
+    monkeypatch.setattr("timeline_planner.build_tasks_service", lambda creds: mock_tasks_svc)
+    monkeypatch.setattr("timeline_planner.build_calendar_service", lambda creds: mock.MagicMock())
+
+    args = SimpleNamespace(
+        proposed_file=str(proposed_file),
+        tasklist=None,
+        days=7,
+        doc_id=None,
+        share=None,
+        role="reader",
+    )
+    with pytest.raises(SystemExit):
+        timeline_planner.handle_weekly_rollup(args)
+
+    # Verify tasks.list was NEVER called (did not fallback to My Goal Timeline or fetch tasks)
+    assert mock_tasks_svc.tasks().list.call_count == 0
+
+
+
 
 
 
