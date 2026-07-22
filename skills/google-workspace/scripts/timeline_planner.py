@@ -13,6 +13,7 @@ import sys
 import subprocess
 from zoneinfo import ZoneInfo
 from functools import lru_cache
+from googleapiclient.errors import HttpError
 
 # Add current directory to path to allow importing workspace_client
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -21,6 +22,9 @@ from workspace_client import (
     build_calendar_service,
     build_tasks_service,
     fetch_tasklists,
+    create_google_doc,
+    share_google_doc,
+    append_text_to_google_doc,
 )
 
 
@@ -1307,9 +1311,60 @@ def resolve_artifact_path(path):
     return resolved
 
 
+def handle_publish_doc(args):
+    """Publishes timeline markdown (and optional postmortems) to Google Docs and shares with stakeholders."""
+    if not getattr(args, "proposed_file", None) or not args.proposed_file.strip():
+        print("Error: --proposed-file must not be empty.", file=sys.stderr)
+        sys.exit(1)
+
+    file_path = resolve_artifact_path(args.proposed_file)
+    if not os.path.exists(file_path):
+        print(f"Error: Proposed timeline file not found at {file_path}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            content = f.read()
+    except Exception as e:
+        print(f"Error reading file {file_path}: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    creds = get_credentials()
+
+    try:
+        if args.doc_id:
+            doc_id = args.doc_id
+            doc_url = f"https://docs.google.com/document/d/{doc_id}/edit"
+            timestamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+            append_text = f"\n\n--- Revision / Postmortem Update ({timestamp}) ---\n\n{content}"
+            append_text_to_google_doc(creds, doc_id, append_text)
+            print(f"Appended timeline update to existing Google Doc ID: {doc_id}")
+        else:
+            title = args.title or "Project Timeline & Execution Plan"
+            doc_id, doc_url = create_google_doc(creds, title)
+            append_text_to_google_doc(creds, doc_id, content)
+            print(f"Published Timeline to new Google Doc ID: {doc_id}")
+
+        if args.share:
+            emails = [e.strip() for e in args.share.split(",") if e.strip()]
+            shared = share_google_doc(creds, doc_id, emails, role=args.role)
+            print(f"Shared document with {len(shared)} stakeholder(s) as {args.role}.")
+
+        print(f"Google Doc URL: {doc_url}")
+    except HttpError as e:
+        if e.resp.status == 403 and args.doc_id:
+            print(f"Error publishing to Google Doc: Access forbidden (403). Note: under 'drive.file' scope, --doc-id must be a document created by this tool. Details: {e}", file=sys.stderr)
+        else:
+            print(f"Error publishing to Google Doc: {e}", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error publishing to Google Doc: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description="Google Workspace Timeline Planner CLI."
+        description="Google Workspace Timeline Planner & Publisher."
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -1365,6 +1420,36 @@ def main():
         help="Path to local ID tracking state.",
     )
     status_parser.set_defaults(func=handle_status)
+
+    # publish-doc subcommand
+    publish_parser = subparsers.add_parser(
+        "publish-doc", help="Publish timeline and postmortems to a shared Google Doc."
+    )
+    publish_parser.add_argument(
+        "--proposed-file",
+        default="artifacts/proposed_timeline.md",
+        help="Path to proposed markdown timeline.",
+    )
+    publish_parser.add_argument(
+        "--doc-id",
+        help="Existing Google Doc ID to append revision/postmortem update.",
+    )
+    publish_parser.add_argument(
+        "--title",
+        default="Project Timeline & Execution Plan",
+        help="Title of the new Google Doc (defaults to 'Project Timeline & Execution Plan').",
+    )
+    publish_parser.add_argument(
+        "--share",
+        help="Comma-separated emails to share the Google Doc with (e.g. boss@co.com,team@co.com).",
+    )
+    publish_parser.add_argument(
+        "--role",
+        choices=["reader", "commenter", "writer"],
+        default="reader",
+        help="Stakeholder permission role (default: reader).",
+    )
+    publish_parser.set_defaults(func=handle_publish_doc)
 
     args = parser.parse_args()
     

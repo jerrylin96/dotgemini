@@ -13,6 +13,8 @@ from googleapiclient.errors import HttpError
 SCOPES = [
     "https://www.googleapis.com/auth/calendar",
     "https://www.googleapis.com/auth/tasks",
+    "https://www.googleapis.com/auth/documents",
+    "https://www.googleapis.com/auth/drive.file",
 ]
 
 
@@ -36,7 +38,7 @@ def get_credentials():
         print(
             "Error: Application Default Credentials (ADC) not found.\n"
             "Please run the following command to authenticate:\n\n"
-            'gcloud auth application-default login --scopes="https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/calendar,https://www.googleapis.com/auth/tasks"\n',
+            'gcloud auth application-default login --scopes="https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/calendar,https://www.googleapis.com/auth/tasks,https://www.googleapis.com/auth/documents,https://www.googleapis.com/auth/drive.file"\n',
             file=sys.stderr,
         )
         sys.exit(1)
@@ -50,6 +52,63 @@ def build_calendar_service(credentials):
 def build_tasks_service(credentials):
     """Builds the Tasks API service."""
     return build("tasks", "v1", credentials=credentials)
+
+
+def build_docs_service(credentials):
+    """Builds the Docs API service."""
+    return build("docs", "v1", credentials=credentials)
+
+
+def build_drive_service(credentials):
+    """Builds the Drive API service."""
+    return build("drive", "v3", credentials=credentials)
+
+
+def create_google_doc(credentials, title):
+    """Creates a new Google Doc and returns (doc_id, doc_url)."""
+    service = build_docs_service(credentials)
+    doc = service.documents().create(body={"title": title}).execute()
+    doc_id = doc.get("documentId")
+    doc_url = f"https://docs.google.com/document/d/{doc_id}/edit"
+    return doc_id, doc_url
+
+
+def share_google_doc(credentials, doc_id, emails, role="reader"):
+    """Shares a Google Doc with specified emails, returning list of successful email addresses."""
+    service = build_drive_service(credentials)
+    successful = []
+    for email in emails:
+        clean_email = email.strip()
+        if not clean_email:
+            continue
+        try:
+            service.permissions().create(
+                fileId=doc_id,
+                body={"role": role, "type": "user", "emailAddress": clean_email},
+                sendNotificationEmail=True,
+            ).execute()
+            successful.append(clean_email)
+        except HttpError as e:
+            print(f"Warning: Failed to share doc with {clean_email}: {e}", file=sys.stderr)
+    return successful
+
+
+def append_text_to_google_doc(credentials, doc_id, text_content):
+    """Appends text content to the end of a Google Doc."""
+    service = build_docs_service(credentials)
+    doc = service.documents().get(documentId=doc_id).execute()
+    content = doc.get("body", {}).get("content", [])
+    end_index = content[-1].get("endIndex", 1) - 1 if content else 1
+
+    requests = [
+        {
+            "insertText": {
+                "location": {"index": max(1, end_index)},
+                "text": text_content,
+            }
+        }
+    ]
+    service.documents().batchUpdate(documentId=doc_id, requests={"requests": requests}).execute()
 
 
 def fetch_tasklists(service):
@@ -338,6 +397,46 @@ def handle_tasklists_create(args):
         sys.exit(1)
 
 
+def handle_docs_create(args):
+    """Creates a Google Doc and optionally shares it."""
+    creds = get_credentials()
+    try:
+        doc_id, doc_url = create_google_doc(creds, args.title)
+        print(f"Created Google Doc ID: {doc_id}")
+        print(f"URL: {doc_url}")
+
+        if args.share:
+            emails = [e.strip() for e in args.share.split(",") if e.strip()]
+            shared = share_google_doc(creds, doc_id, emails, role=args.role)
+            print(f"Shared document with {len(shared)} user(s) as {args.role}.")
+    except Exception as e:
+        print(f"Error creating Google Doc: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def handle_docs_append(args):
+    """Appends text to a Google Doc."""
+    creds = get_credentials()
+    try:
+        append_text_to_google_doc(creds, args.doc_id, args.text)
+        print(f"Appended text to Google Doc ID: {args.doc_id}")
+    except Exception as e:
+        print(f"Error appending to Google Doc: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def handle_docs_share(args):
+    """Shares a Google Doc with specified emails."""
+    creds = get_credentials()
+    try:
+        emails = [e.strip() for e in args.email.split(",") if e.strip()]
+        shared = share_google_doc(creds, args.doc_id, emails, role=args.role)
+        print(f"Shared Google Doc {args.doc_id} with {len(shared)} user(s) as {args.role}.")
+    except Exception as e:
+        print(f"Error sharing Google Doc: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Google Workspace Integration Client.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -430,6 +529,31 @@ def main():
         "--title", required=True, help="Title of the task list."
     )
     tasklists_create.set_defaults(func=handle_tasklists_create)
+
+    # Docs subparsers
+    docs_parser = subparsers.add_parser("docs", help="Google Docs and Drive sharing operations.")
+    docs_sub = docs_parser.add_subparsers(dest="action", required=True)
+
+    docs_create = docs_sub.add_parser("create", help="Create a Google Doc.")
+    docs_create.add_argument("--title", required=True, help="Document title.")
+    docs_create.add_argument("--share", help="Comma-separated emails to share document with.")
+    docs_create.add_argument(
+        "--role", choices=["reader", "commenter", "writer"], default="reader", help="Permission role (default: reader)."
+    )
+    docs_create.set_defaults(func=handle_docs_create)
+
+    docs_append = docs_sub.add_parser("append", help="Append text to a Google Doc.")
+    docs_append.add_argument("--doc-id", required=True, help="Google Document ID.")
+    docs_append.add_argument("--text", required=True, help="Text content to append.")
+    docs_append.set_defaults(func=handle_docs_append)
+
+    docs_share = docs_sub.add_parser("share", help="Share a Google Doc with users.")
+    docs_share.add_argument("--doc-id", required=True, help="Google Document ID.")
+    docs_share.add_argument("--email", required=True, help="Comma-separated email addresses.")
+    docs_share.add_argument(
+        "--role", choices=["reader", "commenter", "writer"], default="reader", help="Permission role (default: reader)."
+    )
+    docs_share.set_defaults(func=handle_docs_share)
 
     args = parser.parse_args()
 
