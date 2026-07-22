@@ -55,6 +55,7 @@ Use the following commands to navigate the development lifecycle:
 | **Test** | `/test` | Tests are proof | [test-driven-development](skills/test-driven-development/SKILL.md) |
 | **Review** | `/review` | Improve code health | [code-review-and-quality](skills/code-review-and-quality/SKILL.md) |
 | **Simplify** | `/code-simplify` | Clarity over cleverness | [ponytail](skills/ponytail/SKILL.md) |
+| **Ship** | `/signoff` | Human owns the merge | [signoff](skills/signoff/SKILL.md) |
 
 ### Core Operating Behaviors
 * **Surface Assumptions:** Before writing any non-trivial code, explicitly list assumptions:
@@ -87,6 +88,7 @@ The global settings contain dedicated skills under `~/.gemini/skills/` which can
 * [make-feature/SKILL.md](skills/make-feature/SKILL.md) — Isolated feature branch development via git worktree; mandatory entry point for codebase changes
 * [session-sync/SKILL.md](skills/session-sync/SKILL.md) — Sync/restore an Antigravity CLI conversation session across machines via a shared Git remote
 * [gcp-dataflow/SKILL.md](skills/gcp-dataflow/SKILL.md) — Apache Beam Dataflow pipeline development and diagnostics
+* [signoff/SKILL.md](skills/signoff/SKILL.md) — Socratic reverse-interview verifying human comprehension and risk ownership before merge; maps to `/signoff`
 
 ---
 

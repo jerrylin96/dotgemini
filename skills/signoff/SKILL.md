@@ -1,6 +1,6 @@
 ---
 name: signoff
-description: Socratic reverse-interview to verify human comprehension, domain risk awareness, and explicit accountability for branch diffs before merging.
+description: Socratic reverse-interview to verify human comprehension, domain risk awareness, and explicit accountability for branch diffs before merging. Maps to /signoff. Use when the user asks to sign off, attest, or finalize a branch before merging.
 ---
 
 # /signoff: Human Comprehension & Accountability Verification
@@ -16,11 +16,10 @@ Intentional trade-offs (e.g. surrogates violating exact domain laws for speed) p
 
 ## Workflow
 
-### 1. Diff Analysis
-Inspect `git diff`. Identify:
-- Core mechanisms, governing constraints, model assumptions, or approximations.
-- Deviations from exact contracts, baseline laws, or standards.
-- Unhandled silent failure paths (NaNs, un-checked boundaries).
+### 1. Context & Range Resolution
+1. Resolve baseline reference SHA (`<reference_commit>`) and target HEAD SHA (`<target_commit>`) using the branch/PR resolution protocol from **@skill:explain-diff**.
+2. Inspect the explicit merge-base range: `git diff "<reference_commit>...<target_commit>"`.
+3. Record `Base-SHA` and `Target-SHA` for the attestation record.
 
 ### 2. Socratic Interview Loop (1-2 Probes / Turn)
 Interrogate user across 4 core axes:
@@ -30,26 +29,34 @@ Interrogate user across 4 core axes:
 4. **Ownership:** Confirm explicit accountability for results and risks.
 
 **Evaluation & Remediation:**
-- **Vague / Hand-waving:** Switch to `explain-diff` mode to explain code mechanics, then re-probe with a targeted scenario until mastery is proven.
+- **Vague / Hand-waving:** Switch to **@skill:explain-diff** to explain code mechanics, then re-probe with a targeted scenario until mastery is proven.
 - **Silent Failures Found:** Instruct adding explicit runtime guards before signoff.
 
-### 3. Attestation & Commit Generation
-Once satisfied:
-1. Compute transcript digest:
-   `shasum -a 256 <appDataDir>/brain/<conversation-id>/.system_generated/logs/transcript.jsonl | awk '{print $1}'`
-2. Present attestation summary and offer to commit or amend:
+### 3. Attestation & Commit Execution
+
+1. **Verify Unchanged State:** Ensure current `HEAD` matches `<target_commit>`. If diff changed, stop and declare signoff stale.
+2. **Transcript Digest:** Compute transcript hash up to current turn using portable Python one-liner:
+   ```bash
+   CID="${ANTIGRAVITY_CONVERSATION_ID}"
+   TPATH="$HOME/.gemini/antigravity-cli/brain/$CID/.system_generated/logs/transcript.jsonl"
+   python3 -c "import os, sys, hashlib; p=sys.argv[1]; print('sha256:' + hashlib.sha256(open(p,'rb').read()).hexdigest() if os.path.exists(p) else 'unavailable')" "$TPATH"
+   ```
+   *If `ANTIGRAVITY_CONVERSATION_ID` is unset or file is missing, set digest to `unavailable` with explicit notice.*
+3. **User Approval & Attestation:** Present completed trailers and request explicit user confirmation before committing:
 
 ```text
-Signoff-Attestation:
-  Status: VERIFIED_BY_HUMAN
-  Timestamp: <ISO-8601>
-  Conversation-ID: <Conversation-ID>
-  Transcript-Digest: sha256:<hash>
-  Acknowledged-Tradeoffs: ["<Tradeoff 1>"]
-  Acknowledged-Risks: ["<Risk 1>"]
-  Verified-By: <User Email>
-  Agent: Antigravity /signoff v1.0
+Signoff-Status: VERIFIED_BY_HUMAN
+Signoff-Timestamp: <ISO-8601 UTC>
+Signoff-Base-SHA: <reference_commit>
+Signoff-Target-SHA: <target_commit>
+Signoff-Conversation-ID: <conversation-id>
+Signoff-Transcript-Digest: sha256:<hash>
+Signoff-Tradeoff: <Acknowledged Trade-off>
+Signoff-Risk: <Acknowledged Risk>
+Signoff-Verified-By: <git config user.email>
+Signoff-Agent: Antigravity /signoff v1.0
 ```
+4. Append flat trailer block to the bottom of the commit message body.
 
 ---
 
