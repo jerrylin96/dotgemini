@@ -80,9 +80,9 @@ python3 ~/.gemini/skills/google-workspace/scripts/workspace_client.py calendar u
 
 ---
 
-## 6. Phase 5: Retro Artifact Persistence
+## 6. Phase 5: Retro Artifact Persistence & Google Docs Sync
 
-Save a concise retro report to `<workspace-root>/artifacts/postmortems/YYYY-MM-DD_<topic>_retro.md`:
+1. Save a concise retro report locally to `<workspace-root>/artifacts/postmortems/YYYY-MM-DD_<topic>_retro.md`:
 
 ```markdown
 # Timeline Postmortem Retro
@@ -99,3 +99,9 @@ Save a concise retro report to `<workspace-root>/artifacts/postmortems/YYYY-MM-D
   1. <Risk 1> → Mitigation: <Guard 1>
   2. <Risk 2> → Mitigation: <Guard 2>
 ```
+
+2. **Publish / Append to Shared Stakeholder Google Doc**:
+   If a shared Google Doc exists for the timeline, append the retro report to the living document:
+   ```bash
+   python3 ~/.gemini/skills/google-workspace/scripts/timeline_planner.py publish-doc --doc-id "DOC_ID" --proposed-file artifacts/postmortems/YYYY-MM-DD_<topic>_retro.md
+   ```

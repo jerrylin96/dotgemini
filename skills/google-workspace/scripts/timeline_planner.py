@@ -21,6 +21,9 @@ from workspace_client import (
     build_calendar_service,
     build_tasks_service,
     fetch_tasklists,
+    create_google_doc,
+    share_google_doc,
+    append_text_to_google_doc,
 )
 
 
@@ -1309,7 +1312,7 @@ def resolve_artifact_path(path):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Google Workspace Timeline Planner CLI."
+        description="Google Workspace Timeline Planner & Publisher."
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -1365,6 +1368,35 @@ def main():
         help="Path to local ID tracking state.",
     )
     status_parser.set_defaults(func=handle_status)
+
+    # publish-doc subcommand
+    publish_parser = subparsers.add_parser(
+        "publish-doc", help="Publish timeline and postmortems to a shared Google Doc."
+    )
+    publish_parser.add_argument(
+        "--proposed-file",
+        default="artifacts/proposed_timeline.md",
+        help="Path to proposed markdown timeline.",
+    )
+    publish_parser.add_argument(
+        "--doc-id",
+        help="Existing Google Doc ID to append revision/postmortem update.",
+    )
+    publish_parser.add_argument(
+        "--title",
+        help="Title of the new Google Doc (defaults to 'Project Timeline & Execution Plan').",
+    )
+    publish_parser.add_argument(
+        "--share",
+        help="Comma-separated emails to share the Google Doc with (e.g. boss@co.com,team@co.com).",
+    )
+    publish_parser.add_argument(
+        "--role",
+        choices=["reader", "commenter", "writer"],
+        default="reader",
+        help="Stakeholder permission role (default: reader).",
+    )
+    publish_parser.set_defaults(func=handle_publish_doc)
 
     args = parser.parse_args()
     

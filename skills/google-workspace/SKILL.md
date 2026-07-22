@@ -13,7 +13,7 @@ This skill relies on Google Application Default Credentials (ADC) with the corre
 
 If the user encounters authentication errors, ask them to run:
 ```bash
-gcloud auth application-default login --scopes="https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/calendar,https://www.googleapis.com/auth/tasks"
+gcloud auth application-default login --scopes="https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/calendar,https://www.googleapis.com/auth/tasks,https://www.googleapis.com/auth/documents,https://www.googleapis.com/auth/drive"
 ```
 
 To verify authentication (after setting up the environment using Option A or Option B below):
@@ -210,4 +210,15 @@ Checks task status from Google Tasks and automatically updates the markdown chec
 ```bash
 python3 ~/.gemini/skills/google-workspace/scripts/timeline_planner.py status --proposed-file artifacts/proposed_timeline.md --state-file artifacts/timeline_state.json
 ```
+
+#### Step 6: Publish & Share Timeline to Google Docs
+Publishes the local Markdown timeline to a shared Google Doc for stakeholder visibility (boss, team, subordinates) and appends revision/postmortem updates:
+```bash
+# Create new Google Doc and share with stakeholders (reader, commenter, writer)
+python3 ~/.gemini/skills/google-workspace/scripts/timeline_planner.py publish-doc --proposed-file artifacts/proposed_timeline.md --title "Project Alpha Execution Plan" --share "boss@company.com,team@company.com" --role "reader"
+
+# Append revision update / postmortem to existing Google Doc
+python3 ~/.gemini/skills/google-workspace/scripts/timeline_planner.py publish-doc --doc-id "DOC_ID" --proposed-file artifacts/proposed_timeline.md
+```
+
 
