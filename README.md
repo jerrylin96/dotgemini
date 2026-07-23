@@ -1,4 +1,4 @@
-# Antigravity Global Agent Config (`dotagent`)
+# Antigravity Global Agent Config (`dotgemini`)
 
 Personal global configuration and custom skills for Google Antigravity CLI.
 
