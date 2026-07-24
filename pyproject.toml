@@ -1,3 +1,16 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dotgemini"
+version = "0.1.0"
+readme = "README.md"
+requires-python = ">=3.10"
+
+[tool.setuptools.packages.find]
+include = ["antigravity*", "scripts*", "skills*"]
+
 [tool.ruff]
 line-length = 120
 target-version = "py313"
@@ -5,4 +18,5 @@ target-version = "py313"
 [tool.ruff.lint]
 select = ["E", "F"]
 ignore = ["E402", "E501"]
+
 
