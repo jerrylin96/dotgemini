@@ -5,7 +5,7 @@ description: Creates specs before coding. Maps to `/spec`. Use when starting a n
 
 ## Overview
 
-Write the spec before the code. For trivial/small changes, the [lifecycle guide](../make-feature/resources/lifecycle-guide.md) permits skipping this gate — but for medium and large changes, a spec is required.
+Write the spec before the code. Every non-trivial change follows the unified [make-feature](../make-feature/SKILL.md) pipeline — after drafting the `/spec` artifact, the agent **pauses for explicit human approval** before advancing to `/plan`.
 
 ## When to Use
 
@@ -29,9 +29,9 @@ Cover: **Objectives**, **Scope**, **Project Structure**, **Code Style**, **Testi
 > [!TIP]
 > Store the spec as an artifact with `RequestFeedback: true` so the human gets a review prompt, or persist in an Obsidian vault per `AGENTS.md §9`.
 
-### 3. Human Approval
+### 3. Human Approval (Sequential Pause)
 
-No code until the human signs off.
+**PAUSE**: Do not write code or advance to `/plan` until the human engineer explicitly approves the spec (`make-feature` Step 2).
 
 ### 4. Plan & Implement
 
@@ -59,7 +59,7 @@ Break the approved spec into small, verifiable tasks.
 ## Verification
 
 - [ ] Spec covers: objectives, scope, structure, testing, boundaries
-- [ ] Human has reviewed and approved
+- [ ] Human has reviewed and explicitly approved spec (`make-feature` Step 2 pause)
 - [ ] Success criteria are specific, measurable, testable
 - [ ] Constraints explicitly defined
 - [ ] Spec persisted (artifact, vault, or repo document such as `SPEC.md`)

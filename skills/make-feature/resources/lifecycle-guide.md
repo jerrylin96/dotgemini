@@ -18,15 +18,29 @@ Assess before starting work. Pick the first tier that fits:
 > [!IMPORTANT]
 > When in doubt, tier UP, not down. Skipping a gate is a one-way door — you can't retroactively add a spec after building the wrong thing.
 
+## Unified Gate Progression & Sequential Pauses
+
+All codebase modifications follow the unified `/make-feature` sequential step pipeline:
+
+1. **Step 1 (Resolve Branch)**: Identify target base branch (`<base_branch>`) and feature name (`gemini/<feature-name>`).
+2. **Step 2 (`/spec` Gate)**: Draft spec artifact → **PAUSE for explicit human approval**.
+3. **Step 3 (`/plan` Gate)**: Draft plan artifact → **PAUSE for explicit human approval**.
+4. **Step 4 (Build & Test)**: Worktree setup, code implementation, test execution via `run_in_env.py`.
+5. **Step 5 (Stage, Commit & Push)**: Commit worktree changes and push to `origin`.
+6. **Step 6 (Adversarial Review Loop)**: Subagent review loop until `APPROVE` verdict with 0 open critical findings.
+7. **Step 7 (Human Review & Signoff Gate)**: **PAUSE for human merge decision**. Recommended tools: [/explain-diff](../../explain-diff/SKILL.md) and [/signoff](../../signoff/SKILL.md).
+
 ## Gate-to-Skill Mapping
 
 | Gate | Slash Command | Skill | What It Produces |
 |---|---|---|---|
-| **Spec** | `/spec` | [spec-driven-development](../../spec-driven-development/SKILL.md) | Requirements artifact with acceptance criteria |
-| **Plan** | `/plan` | [planning-and-task-breakdown](../../planning-and-task-breakdown/SKILL.md) | Ordered task list with verification steps |
+| **Spec** | `/spec` | [spec-driven-development](../../spec-driven-development/SKILL.md) | Requirements artifact (Pauses for human approval) |
+| **Plan** | `/plan` | [planning-and-task-breakdown](../../planning-and-task-breakdown/SKILL.md) | Ordered task list (Pauses for human approval) |
 | **Build** | `/build` | [incremental-implementation](../../incremental-implementation/SKILL.md) | Working code in thin vertical slices |
 | **Test** | `/test` | [test-driven-development](../../test-driven-development/SKILL.md) | Passing tests that prove correctness |
-| **Review** | `/review` | [adversarial-review](../../adversarial-review/SKILL.md) | Five-axis review verdict (subagent-isolated review loop on pushed branch) |
+| **Review** | `/review` | [adversarial-review](../../adversarial-review/SKILL.md) | Subagent review loop on pushed branch |
+| **Explain Diff** | `/explain-diff` | [explain-diff](../../explain-diff/SKILL.md) | Interactive, neutral changeset walkthrough |
+| **Signoff** | `/signoff` | [signoff](../../signoff/SKILL.md) | Socratic reverse-interview before merge |
 | **Debug** | — | [debugging-and-error-recovery](../../debugging-and-error-recovery/SKILL.md) | Root-cause fix (invoke when tests fail) |
 | **Simplify** | `/code-simplify` | [ponytail](../../ponytail/SKILL.md) | Reduced complexity (Ponytail philosophy) |
 
@@ -36,10 +50,11 @@ Before skipping any gate, check the **Common Rationalizations** table in that ga
 
 ## Exit Criteria Summary
 
-Each gate is complete when its skill's **Verification** checklist is satisfied. Don't advance to the next gate until the current one passes. Key checkpoints:
+Each gate is complete when its skill's **Verification** checklist is satisfied. Key checkpoints:
 
-- **Spec done** → Human reviewed, acceptance criteria testable, boundaries defined
-- **Plan done** → Tasks atomic, ordered, each has acceptance criteria and verify step
-- **Build done** → Each slice tested and verified before next slice
-- **Test done** → All tests pass, no regressions, edge cases covered
-- **Review done** → Subagent adversarial review complete on pushed branch (Step 8/9 loop resolved with APPROVE verdict, zero open CRITICAL findings); presented to human for final review and merge decision (Step 10)
+- **Spec done** → Human reviewed and explicitly approved `/spec` artifact (Step 2)
+- **Plan done** → Human reviewed and explicitly approved `/plan` artifact (Step 3)
+- **Build done** → Each slice tested and verified in worktree (Step 4)
+- **Test done** → All unit tests pass cleanly via `run_in_env.py` (Step 4)
+- **Review done** → Subagent adversarial review loop resolved with `APPROVE` verdict (Step 6)
+- **Signoff & Merge done** → Human engineer reviews report (using optional `/explain-diff` and `/signoff`) and authorizes/executes merge into `<base_branch>` (Step 7)

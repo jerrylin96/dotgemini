@@ -20,48 +20,44 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
 
 ## Execution Steps
 
-1. **Resolve Repository Root**: Locate the root of the git repository you want to modify (e.g., `<repo_root>` for the active project or `~/.gemini` for global skills).
-2. **Determine Branch and Base**: 
-   * Identify a clear, concise name for the feature (e.g., `make-feature-skill`). Prefix it with `gemini/` to form `gemini/<feature-name>`.
-   * Identify the target base integration branch (`<base_branch>`, e.g., `main`, `master`, `develop`, or active release branch).
-3. **Fetch Latest Changes**: Sync with remote to ensure you branch off the latest commit:
-   ```bash
-   git fetch origin
-   ```
-4. **Add Git Worktree**:
-   * **Sanitize Feature Name**: Construct `<sanitized-feature-name>` from `<feature-name>` by keeping only alphanumeric, `-`, `_`, and `.` characters, and replacing `/` or `\` with `_` to prevent directory traversal.
-   * If creating a new branch, run:
+1. **Resolve Repository Root & Target Base Branch**:
+   - Locate the root of the git repository (`<repo_root>` or `~/.gemini`).
+   - Identify feature branch name (`gemini/<feature-name>`) and target base integration branch (`<base_branch>`, e.g., `main`, `master`, `develop`, or active release branch).
+2. **Draft `/spec` Artifact (PAUSE for Human Approval)**:
+   - Automatically create/update the `/spec` artifact ([spec-driven-development](../spec-driven-development/SKILL.md)) outlining goals, requirements, and acceptance criteria.
+   - **PAUSE**: Present the spec artifact to the human engineer and wait for explicit approval before proceeding.
+3. **Draft `/plan` Artifact (PAUSE for Human Approval)**:
+   - Upon spec approval, automatically create/update the `/plan` artifact ([planning-and-task-breakdown](../planning-and-task-breakdown/SKILL.md)) decomposing the spec into atomic tasks.
+   - **PAUSE**: Present the plan artifact to the human engineer and wait for explicit approval before proceeding.
+4. **Add Git Worktree & Develop (`/build` & `/test`)**:
+   - Sync latest changes via `git fetch origin`.
+   - Add git worktree off `origin/<base_branch>`:
      ```bash
      git worktree add -b gemini/<feature-name> ~/.gemini/tmp/worktrees/gemini_<sanitized-feature-name> origin/<base_branch>
      ```
-   * If checking out an existing local or remote branch, run:
+   - Perform all file edits, writes, and local commands inside the isolated worktree directory (`~/.gemini/tmp/worktrees/gemini_<sanitized-feature-name>`). Do not make changes in the primary workspace.
+   - Verify code using virtual environment wrappers (`run_in_env.py` for linters and tests).
+5. **Stage, Commit & Push to Remote**:
+   - Stage modified files and commit on the feature branch inside the worktree:
      ```bash
-     git worktree add ~/.gemini/tmp/worktrees/gemini_<sanitized-feature-name> gemini/<feature-name>
+     git add <modified_files>
+     git commit -m "<descriptive commit message>"
      ```
-5. **Modify & Develop**: Perform all file edits, writes, and local commands inside the isolated worktree directory (`~/.gemini/tmp/worktrees/gemini_<sanitized-feature-name>`). Do not make changes in the primary workspace.
-
-   Before writing code, consult [resources/lifecycle-guide.md](resources/lifecycle-guide.md) to determine the appropriate lifecycle gates for your change's complexity (trivial → large). Follow the gates in order — each must pass before advancing to the next.
-
-   > [!TIP]
-   > **Subagent Delegation**: For complex changesets, instead of editing files directly, the main agent can change directories into the worktree path and invoke the built-in `self` subagent with `Workspace: inherit`. Tasks should explicitly instruct the subagent to use virtual environment wrappers (`setup_review_env.py` and `run_in_env.py`) for all runs/tests.
-
-6. **Pre-Commit Verification**: Run passing tests and linters via `run_in_env.py` before staging.
-7. **Stage & Commit**: Run git staging and commit commands from within the worktree directory:
-   ```bash
-   git add <modified_files>
-   git commit -m "<descriptive commit message>"
-   ```
-8. **Push Branch to Remote**: Push the feature branch to remote origin so it is published for remote review:
-   ```bash
-   git push origin gemini/<feature-name>
-   ```
-9. **Adversarial Review Loop**:
+   - Push feature branch to remote origin so it is published for remote review:
+     ```bash
+     git push origin gemini/<feature-name>
+     ```
+6. **Adversarial Review Loop**:
    - Launch a background `self` subagent (`invoke_subagent` using `TypeName: self` with `Workspace: inherit` on `worktree_path`) to run an isolated [adversarial-review](../adversarial-review/SKILL.md) on the pushed feature branch.
-   - If the review reports defects or open `[CRITICAL]` findings: Fix the issues in the worktree, run tests, commit, push to remote (`git push origin gemini/<feature-name>`), and re-trigger Step 9 in a loop.
+   - If findings or open `[CRITICAL]` defects are reported: Fix issues in the worktree, run tests, commit, push to remote (`git push origin gemini/<feature-name>`), and re-trigger Step 6 in a loop.
    - Repeat until the review verdict is `APPROVE` with zero open `[CRITICAL]` findings.
-10. **Human Review & Signoff**: Present the adversarial review report, diff summary, and remote branch link to the user. Do **not** initiate an automated merge. The human engineer retains full ownership of the decision to merge into the target base branch (`<base_branch>`) or invoke `/signoff`. Once merged, remove the worktree:
-    ```bash
-    git worktree remove ~/.gemini/tmp/worktrees/gemini_<sanitized-feature-name>
-    git worktree prune
-    ```
-    *Note: If the worktree contains untracked or uncommitted changes and you want to discard them, add `--force` to the removal command.*
+7. **Human Review & Signoff Gate (PAUSE for Merge)**:
+   - **PAUSE**: Present the adversarial review report, diff summary, and remote branch link to the human engineer.
+   - **Recommended Commands**: Suggest using [/explain-diff](../explain-diff/SKILL.md) to inspect file-by-file diffs and [/signoff](../signoff/SKILL.md) to conduct Socratic reverse-interview signoff.
+   - Do **not** initiate an automated merge. The human engineer retains full ownership of the decision to merge into `<base_branch>`.
+   - Once merged by the user, remove the worktree:
+     ```bash
+     git worktree remove ~/.gemini/tmp/worktrees/gemini_<sanitized-feature-name>
+     git worktree prune
+     ```
+     *Note: If the worktree contains untracked or uncommitted changes and you want to discard them, add `--force` to the removal command.*

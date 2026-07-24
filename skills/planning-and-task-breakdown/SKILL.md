@@ -5,7 +5,7 @@ description: Decompose specs into small, verifiable tasks with acceptance criter
 
 ## Overview
 
-Transforms a specification or feature request into granular, actionable, testable units of work.
+Transforms a specification or feature request into granular, actionable, testable units of work. Every non-trivial change follows the unified [make-feature](../make-feature/SKILL.md) pipeline — after drafting the `/plan` artifact, the agent **pauses for explicit human approval** before creating worktrees or writing code.
 
 ## When to Use
 
@@ -78,4 +78,4 @@ Operate in **read-only** mode:
 - [ ] Dependencies identified and ordered
 - [ ] No task touches >5 files
 - [ ] Checkpoints between major phases
-- [ ] Plan reviewed and approved (via `RequestFeedback` gate in Antigravity, or explicit human sign-off)
+- [ ] Plan reviewed and explicitly approved by human engineer (`make-feature` Step 3 pause)
