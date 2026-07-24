@@ -60,7 +60,7 @@ Use the following commands to navigate the development lifecycle:
 ### Mandatory Default Execution Pipeline
 For any non-trivial code modification, feature addition, refactor, or skill creation:
 1. **Automatic Unified Trigger**: The agent MUST automatically initiate the unified `/make-feature` lifecycle sequence (`/spec` → `/plan` → worktree `/build` & `/test` → push → `/adversarial-review` loop → human signoff & merge).
-2. **Sequential Human Confirmation Pauses**: The agent MUST pause for explicit human confirmation after drafting `/spec` (Step 2), after drafting `/plan` (Step 3), and after completing `/adversarial-review` (Step 7). The agent MUST NOT write code, create worktrees, or attempt merges without preceding human approval.
+2. **Sequential Human Confirmation Pauses**: The agent MUST pause for explicit human confirmation after drafting `/spec` (Step 2), after drafting `/plan` (Step 3), and after completing `/adversarial-review` (Step 6 / Step 7 merge gate). The agent MUST NOT write code, create worktrees, or attempt merges without preceding human approval.
 3. **Isolated Worktree Mandate**: Strict prohibition against primary working tree mutations. All edits MUST take place inside a feature branch worktree (`gemini/<feature-name>`).
 4. **Ponytail Gate**: Apply YAGNI / Senior Dev ladder check before adding any new lines of code.
 
