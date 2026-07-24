@@ -66,7 +66,8 @@ For any non-trivial code modification, feature addition, refactor, or skill crea
 3. **Sequential Milestone Goals & Stop Gates**:
    - **Phase 1 (Spec & Plan)**: Goal = User-approved `/spec` and `/plan`. The agent MUST pause after drafting `/spec` and `/plan` artifacts and receive explicit human confirmation before creating worktrees or writing code.
    - **Phase 2 (Build & Worktree)**: Goal = Isolated worktree created, code edited, tested, and committed locally.
-   - **Phase 3 (Push & Adversarial Review)**: Goal = Feature branch pushed to `origin` AND `/adversarial-review` report (`resolve_branches.py`) posted in chat.
+   - **Phase 3 (Push & Adversarial Review)**: Goal = Feature branch pushed to `origin` AND subagent review verdict `APPROVE` posted in chat.
+     - *Subagent Delegation Mandate*: The parent agent is STRICTLY FORBIDDEN from running the review directly in its own context. The parent agent MUST call `invoke_subagent` (`TypeName: self`, `Role: Adversarial Code Reviewer`) to execute the isolated review loop until `APPROVE`.
    - **Phase 4 (Human Signoff & Merge)**: Goal = User confirms merge; branch merged to integration branch.
 4. **Turn-Boundary & Merge Prohibition**:
    - The agent is STRICTLY FORBIDDEN from executing `git merge`, `git rebase`, or main-branch integration within the same turn as `/build` or `/adversarial-review`.

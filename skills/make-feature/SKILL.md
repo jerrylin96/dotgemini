@@ -45,12 +45,14 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
      ```
 
 3. **Phase 3 (Push & Adversarial Review)**:
-   - **Goal**: Feature branch pushed to `origin` AND `/adversarial-review` report (`resolve_branches.py`) posted in chat.
+   - **Goal**: Feature branch pushed to `origin` AND `/adversarial-review` report posted by subagent in chat.
    - **Step 6 (Push to Remote)**: Push feature branch to remote origin:
      ```bash
      git push origin gemini/<feature-name>
      ```
-   - **Step 7 (Adversarial Review Loop)**: Launch background `self` subagent to run isolated [adversarial-review](../adversarial-review/SKILL.md). Repeat fix-commit-push loop until verdict is `APPROVE` with zero open `[CRITICAL]` findings. Post final review report (`resolve_branches.py`) in chat.
+   - **Step 7 (Subagent Adversarial Review Loop)**:
+     - *Mandatory Subagent Delegation*: The parent agent MUST NOT run the review in its own context. The parent agent MUST execute `invoke_subagent` (`TypeName: self`, `Role: Adversarial Code Reviewer`, `Workspace: inherit`).
+     - The subagent runs isolated review on the worktree. Repeat fix-commit-push loop until verdict is `APPROVE` with zero open `[CRITICAL]` findings. Post review report in chat.
 
 4. **Phase 4 (Human Signoff & Merge)**:
    - **Goal**: User confirms merge; branch merged to integration branch.
