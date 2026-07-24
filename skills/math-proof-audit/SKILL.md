@@ -50,15 +50,18 @@ The draft proof artifact MUST contain:
 
 ### Phase 2: Red Teaming via Subagent (`/adversarial-review`)
 
-Spawn an isolated subagent (`invoke_subagent` with `TypeName: self` and `Workspace: inherit`) to perform an adversarial audit of the draft proof and code implementation.
+The parent agent spawns an isolated subagent (`invoke_subagent` with `TypeName: self` and `Workspace: inherit`).
+
+> [!IMPORTANT]
+> **Subagent Invocation Directive:** The parent agent MUST explicitly include the absolute draft proof path (`<appDataDir>/brain/<conversation-id>/scratch/draft_proof_<concept>.md`) and the empirical script path (`<appDataDir>/brain/<conversation-id>/scratch/temp_math_audit_<concept>.py`) in the subagent prompt. Do not rely on implicit subagent context.
 
 #### Subagent Action Steps:
 
-1. **Empirical Verification Scripts (`scratch/temp_math_audit_<concept>.py`)**:
+1. **Empirical Verification Scripts**:
    - Write python test scripts under `<appDataDir>/brain/<conversation-id>/scratch/temp_math_audit_<concept>.py`.
-   - **Environment & Dependency Preflight:** Execute scripts using the workspace virtual environment runner:
+   - **Environment & Dependency Preflight:** Execute scripts using the workspace virtual environment runner and full absolute script path:
      ```bash
-     python3 ~/.gemini/scripts/run_in_env.py <workspace_path> python3 scratch/temp_math_audit_<concept>.py
+     python3 ~/.gemini/scripts/run_in_env.py <workspace_path> python3 <appDataDir>/brain/<conversation-id>/scratch/temp_math_audit_<concept>.py
      ```
    - Dependencies: `sympy`, `numpy`, or `scipy` when available. If optional dependencies are absent in the environment, the script MUST execute pure-Python fallback checks (using `math`/`cmath`) and log a clear preflight notice (`[PREFLIGHT WARNING]: sympy/numpy not installed. Running pure-Python fallback checks...`). Do not fail silently.
    - Compare symbolic mathematical results against exact numerical code outputs.
