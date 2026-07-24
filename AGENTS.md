@@ -58,7 +58,7 @@ Use the following commands to navigate the development lifecycle:
 | **Ship** | `/signoff` | Human owns the merge | [signoff](skills/signoff/SKILL.md) |
 
 ### Mandatory Default Execution Pipeline & Milestone Gates
-For any non-trivial code modification, feature addition, refactor, or skill creation:
+For any code modification, feature addition, refactor, or skill creation:
 1. **Automatic Unified Trigger**: The agent MUST automatically initiate the unified `/make-feature` lifecycle sequence across four distinct, sequential milestone phases.
 2. **Pre-Execution Worktree Circuit Breaker (Hard Stop)**:
    - Before invoking any file modification tool (`replace_file_content`, `write_to_file`, etc.) on a git repository file, the agent MUST verify that `TargetFile` is inside `~/.gemini/tmp/worktrees/`.
