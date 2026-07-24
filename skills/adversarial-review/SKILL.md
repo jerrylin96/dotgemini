@@ -150,6 +150,10 @@ The script returns JSON on stdout. The schema depends on the outcome:
    - Analyze the diff and perform an adversarial review focusing on:
      - **Technical Bugs** (Unconditional): Logical errors, performance issues, security vulnerabilities, regression risks, and code design.
      - **Writing Quality** (Unconditional): Clarity and accuracy of documentation, comments, markdown, and precision of language.
+     - **LaTeX / TeX Check** (Conditional): If the diff touches any `.tex`, `.cls`, `.sty`, or `.bib` files, additionally check:
+       - **Root Document Compilation**: Identify root document(s) containing `\documentclass` that include modified files (or compile all root `.tex` files if inclusion is unresolvable). Compile with `latexmk -pdf -interaction=nonstopmode -halt-on-error -cd <root>.tex`. Non-zero exit is a **blocking defect** (fix and recompile before commit). Warnings (overfull boxes, undefined references) are non-blocking.
+       - **Toolchain Availability & Honesty**: If no TeX toolchain (`latexmk`/`pdflatex`) is installed in the environment, explicitly report in the summary that TeX compilation was **unverified**. Never claim a document compiles without empirical build logs.
+       - **Class Macro Compatibility**: Never copy preamble macros between documents using different document classes without verifying macro definitions in the target class (e.g., checking `.cls` files).
      - **HPC / Scientific Check** (Conditional): If the diff touches HPC job scripts or scientific/numerical code, additionally check:
        - **HPC Constraints**: Do not expect intermediate compute files from HPC jobs or attempt running scripts requiring HPC-level resources.
        - **Scientific & Interpretation Errors**: Formula correctness, numerical stability, incorrect statistical assumptions, data leakage, and misinterpretation of data/metrics.
