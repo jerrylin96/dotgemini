@@ -84,6 +84,10 @@
     "make-feature": {
       "status": "installed",
       "checksum": "b549c2ee9a2bcf8a52c5e83a45ff2e65b872aec4272c31a7e45a15bd0fac1a07"
+    },
+    "math-proof-audit": {
+      "status": "installed",
+      "checksum": "89b9717e6538292ffbf90912c9322f06b9a11c4526e708a26ac72d3e8bf94a80"
     }
   }
 }
