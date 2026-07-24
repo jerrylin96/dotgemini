@@ -16,7 +16,7 @@ Every change gets reviewed before merge — no exceptions. Review covers five ax
 > [!TIP]
 > For adversarial / deep-dive merge reviews, see the [adversarial-review](../adversarial-review/SKILL.md) skill.
 
-## The Five-Axis Review
+## Review Axes & Domain Checklists
 
 ### 1. Correctness
 - Does code do what it claims?
@@ -50,6 +50,12 @@ Every change gets reviewed before merge — no exceptions. Review covers five ax
 - Unnecessary computation/fetching?
 - Memory leaks, blocking main thread?
 - Efficient data structures?
+
+### Domain Checklist: LaTeX & TeX Documents (When `.tex`, `.cls`, `.sty`, `.bib` files change)
+- **Root Document Resolution**: Identify root document(s) containing `\documentclass` that include modified files directly or via `\input`/`\include`. If unresolvable, compile all root `.tex` files in the repository.
+- **Compilation Gate**: Compile with `latexmk -pdf -interaction=nonstopmode -halt-on-error -cd <root>.tex`. Non-zero exit is a **blocking failure** (fix and recompile before commit). Warnings (overfull/underfull boxes, undefined references) are non-blocking.
+- **Environment Honesty**: If no TeX toolchain (`latexmk`/`pdflatex`) is installed, explicitly state that compilation is **unverified** in the review summary. Never claim a document compiles without empirical build logs.
+- **Class Macro Compatibility**: Never copy preamble macros between different document classes without verifying macro definitions in the target class (e.g., grepping `.cls`).
 
 ## Process
 1. **Scope**: Review changed lines + context. If >100 lines, request split into smaller commits.
