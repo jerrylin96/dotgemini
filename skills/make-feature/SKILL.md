@@ -45,25 +45,22 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
    > [!TIP]
    > **Subagent Delegation**: For complex changesets, instead of editing files directly, the main agent can change directories into the worktree path and invoke the built-in `self` subagent with `Workspace: inherit`. Tasks should explicitly instruct the subagent to use virtual environment wrappers (`setup_review_env.py` and `run_in_env.py`) for all runs/tests.
 
-6. **Pre-Commit Verification & Review Gate**: Before staging, verify that all lifecycle gates for the selected complexity tier have been satisfied:
-   - For **Trivial** changes: Verify passing tests and linter output via `run_in_env.py`.
-   - For **Small, Medium, and Large** changes (default for all feature work): Launch a background `self` subagent (`invoke_subagent` using `TypeName: self` with `Workspace: inherit` on `worktree_path`) to run an isolated [adversarial-review](../adversarial-review/SKILL.md). Do not stage or commit until the review verdict is `APPROVE` with zero `[CRITICAL]` findings open.
+6. **Pre-Commit Verification**: Verify passing tests and linter output via `run_in_env.py` before staging.
 7. **Stage & Commit**: Run git staging and commit commands from within the worktree directory:
    ```bash
    git add <modified_files>
    git commit -m "<descriptive commit message>"
    ```
-8. **Push Branch**: Push the feature branch to the remote origin:
+8. **Push Branch to Remote**: Push the feature branch to remote origin so it is available for external/remote adversarial review:
    ```bash
    git push origin gemini/<feature-name>
    ```
-9. **Clean Up**: Remove the worktree:
-   ```bash
-   git worktree remove ~/.gemini/tmp/worktrees/gemini_<sanitized-feature-name>
-   ```
-   *Note: If the worktree contains untracked or uncommitted changes and you want to discard them, add `--force` to the removal command.*
-   
-   Finally, prune git worktree metadata:
-   ```bash
-   git worktree prune
-   ```
+9. **Adversarial Review Gate**: Before merging into the target integration branch (`main`/`master`):
+   - For **Trivial** changes: Verify passing tests and linter output.
+   - For **Small, Medium, and Large** changes (default for all feature work): Launch a background `self` subagent (`invoke_subagent` using `TypeName: self` with `Workspace: inherit` on `worktree_path`) to run an isolated [adversarial-review](../adversarial-review/SKILL.md) on the pushed feature branch. Do not merge into the target branch until the review verdict is `APPROVE` with zero `[CRITICAL]` findings open.
+10. **Merge & Clean Up**: Merge `gemini/<feature-name>` into the target integration branch (e.g., `main`), then remove the worktree:
+    ```bash
+    git worktree remove ~/.gemini/tmp/worktrees/gemini_<sanitized-feature-name>
+    git worktree prune
+    ```
+    *Note: If the worktree contains untracked or uncommitted changes and you want to discard them, add `--force` to the removal command.*

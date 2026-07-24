@@ -42,4 +42,4 @@ Each gate is complete when its skill's **Verification** checklist is satisfied. 
 - **Plan done** → Tasks atomic, ordered, each has acceptance criteria and verify step
 - **Build done** → Each slice tested and verified before next slice
 - **Test done** → All tests pass, no regressions, edge cases covered
-- **Review done** → Five-axis review complete (subagent adversarial review per make-feature Step 6), verdict rendered, no CRITICAL findings open
+- **Review done** → Five-axis review complete (subagent adversarial review on pushed branch per make-feature Step 9), verdict rendered, no CRITICAL findings open
