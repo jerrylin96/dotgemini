@@ -47,8 +47,7 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
 
 6. **Pre-Commit Verification & Review Gate**: Before staging, verify that all lifecycle gates for the selected complexity tier have been satisfied:
    - For **Trivial** changes: Verify passing tests and linter output via `run_in_env.py`.
-   - For **Small** changes: Execute a five-axis code review ([code-review-and-quality](../code-review-and-quality/SKILL.md)).
-   - For **Medium and Large** changes: Launch a background `self` subagent (`invoke_subagent` using `TypeName: self` with `Workspace: inherit` on `worktree_path`) to run an isolated [adversarial-review](../adversarial-review/SKILL.md). Do not stage or commit until the review verdict is `APPROVE` with zero `[CRITICAL]` findings open.
+   - For **Small, Medium, and Large** changes (default for all feature work): Launch a background `self` subagent (`invoke_subagent` using `TypeName: self` with `Workspace: inherit` on `worktree_path`) to run an isolated [adversarial-review](../adversarial-review/SKILL.md). Do not stage or commit until the review verdict is `APPROVE` with zero `[CRITICAL]` findings open.
 7. **Stage & Commit**: Run git staging and commit commands from within the worktree directory:
    ```bash
    git add <modified_files>
