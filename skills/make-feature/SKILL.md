@@ -45,20 +45,21 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
    > [!TIP]
    > **Subagent Delegation**: For complex changesets, instead of editing files directly, the main agent can change directories into the worktree path and invoke the built-in `self` subagent with `Workspace: inherit`. Tasks should explicitly instruct the subagent to use virtual environment wrappers (`setup_review_env.py` and `run_in_env.py`) for all runs/tests.
 
-6. **Pre-Commit Verification**: Verify passing tests and linter output via `run_in_env.py` before staging.
+6. **Pre-Commit Verification**: Run passing tests and linters via `run_in_env.py` before staging.
 7. **Stage & Commit**: Run git staging and commit commands from within the worktree directory:
    ```bash
    git add <modified_files>
    git commit -m "<descriptive commit message>"
    ```
-8. **Push Branch to Remote**: Push the feature branch to remote origin so it is available for external/remote adversarial review:
+8. **Push Branch to Remote**: Push the feature branch to remote origin so it is published for remote review:
    ```bash
    git push origin gemini/<feature-name>
    ```
-9. **Adversarial Review Gate**: Before merging into the target integration branch (`main`/`master`):
-   - For **Trivial** changes: Verify passing tests and linter output.
-   - For **Small, Medium, and Large** changes (default for all feature work): Launch a background `self` subagent (`invoke_subagent` using `TypeName: self` with `Workspace: inherit` on `worktree_path`) to run an isolated [adversarial-review](../adversarial-review/SKILL.md) on the pushed feature branch. Do not merge into the target branch until the review verdict is `APPROVE` with zero `[CRITICAL]` findings open.
-10. **Merge & Clean Up**: Merge `gemini/<feature-name>` into the target integration branch (e.g., `main`), then remove the worktree:
+9. **Adversarial Review Loop**:
+   - Launch a background `self` subagent (`invoke_subagent` using `TypeName: self` with `Workspace: inherit` on `worktree_path`) to run an isolated [adversarial-review](../adversarial-review/SKILL.md) on the pushed feature branch.
+   - If the review reports defects or open `[CRITICAL]` findings: Fix the issues in the worktree, run tests, commit, push to remote (`git push origin gemini/<feature-name>`), and re-trigger Step 9 in a loop.
+   - Repeat until the review verdict is `APPROVE` with zero open `[CRITICAL]` findings.
+10. **Human Review & Signoff**: Present the adversarial review report, diff summary, and remote branch link to the user. Do **not** initiate an automated merge. The human engineer retains full ownership of the decision to merge into the primary branch (`main`/`master`) or invoke `/signoff`. Once merged, remove the worktree:
     ```bash
     git worktree remove ~/.gemini/tmp/worktrees/gemini_<sanitized-feature-name>
     git worktree prune

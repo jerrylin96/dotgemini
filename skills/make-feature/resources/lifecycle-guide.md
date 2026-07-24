@@ -26,7 +26,7 @@ Assess before starting work. Pick the first tier that fits:
 | **Plan** | `/plan` | [planning-and-task-breakdown](../../planning-and-task-breakdown/SKILL.md) | Ordered task list with verification steps |
 | **Build** | `/build` | [incremental-implementation](../../incremental-implementation/SKILL.md) | Working code in thin vertical slices |
 | **Test** | `/test` | [test-driven-development](../../test-driven-development/SKILL.md) | Passing tests that prove correctness |
-| **Review** | `/review` | [adversarial-review](../../adversarial-review/SKILL.md) (Default for Small, Medium, Large) | Five-axis review verdict (subagent-isolated adversarial review) |
+| **Review** | `/review` | [adversarial-review](../../adversarial-review/SKILL.md) | Five-axis review verdict (subagent-isolated review loop on pushed branch) |
 | **Debug** | — | [debugging-and-error-recovery](../../debugging-and-error-recovery/SKILL.md) | Root-cause fix (invoke when tests fail) |
 | **Simplify** | `/code-simplify` | [ponytail](../../ponytail/SKILL.md) | Reduced complexity (Ponytail philosophy) |
 
@@ -42,4 +42,4 @@ Each gate is complete when its skill's **Verification** checklist is satisfied. 
 - **Plan done** → Tasks atomic, ordered, each has acceptance criteria and verify step
 - **Build done** → Each slice tested and verified before next slice
 - **Test done** → All tests pass, no regressions, edge cases covered
-- **Review done** → Five-axis review complete (subagent adversarial review on pushed branch per make-feature Step 9), verdict rendered, no CRITICAL findings open
+- **Review done** → Subagent adversarial review complete on pushed branch (Step 8/9 loop resolved with APPROVE verdict, zero open CRITICAL findings); presented to human for final review and merge decision (Step 10)
