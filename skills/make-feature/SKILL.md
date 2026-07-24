@@ -23,7 +23,7 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
 1. **Resolve Repository Root**: Locate the root of the git repository you want to modify (e.g., `<repo_root>` for the active project or `~/.gemini` for global skills).
 2. **Determine Branch and Base**: 
    * Identify a clear, concise name for the feature (e.g., `make-feature-skill`). Prefix it with `gemini/` to form `gemini/<feature-name>`.
-   * Find the correct base integration branch (e.g., `main` or `master`).
+   * Identify the target base integration branch (`<base_branch>`, e.g., `main`, `master`, `develop`, or active release branch).
 3. **Fetch Latest Changes**: Sync with remote to ensure you branch off the latest commit:
    ```bash
    git fetch origin
@@ -59,7 +59,7 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
    - Launch a background `self` subagent (`invoke_subagent` using `TypeName: self` with `Workspace: inherit` on `worktree_path`) to run an isolated [adversarial-review](../adversarial-review/SKILL.md) on the pushed feature branch.
    - If the review reports defects or open `[CRITICAL]` findings: Fix the issues in the worktree, run tests, commit, push to remote (`git push origin gemini/<feature-name>`), and re-trigger Step 9 in a loop.
    - Repeat until the review verdict is `APPROVE` with zero open `[CRITICAL]` findings.
-10. **Human Review & Signoff**: Present the adversarial review report, diff summary, and remote branch link to the user. Do **not** initiate an automated merge. The human engineer retains full ownership of the decision to merge into the primary branch (`main`/`master`) or invoke `/signoff`. Once merged, remove the worktree:
+10. **Human Review & Signoff**: Present the adversarial review report, diff summary, and remote branch link to the user. Do **not** initiate an automated merge. The human engineer retains full ownership of the decision to merge into the target base branch (`<base_branch>`) or invoke `/signoff`. Once merged, remove the worktree:
     ```bash
     git worktree remove ~/.gemini/tmp/worktrees/gemini_<sanitized-feature-name>
     git worktree prune
