@@ -95,11 +95,12 @@ This configuration is developed and tested on macOS and Linux (validated in CI).
 * `explain-diff` — Interactive, read-only walkthrough explaining what changed between a feature branch, pull request, or specific commit/range and a reference branch.
   * **User Workflow**: Trigger with `/explain-diff`. Branch selection works exactly like `adversarial-review` (it reuses the same branch resolver and worktree cache). You then get an overall summary of the changeset and a numbered menu of changed files; pick one for a hunk-by-hunk explanation, ask follow-up questions, and return to the menu until done. Nothing is executed or modified — no tests, no linters.
 
-* `make-feature` — Git worktree-based isolated feature branch development helper.
-  * **User Workflow**: Trigger with `/make-feature` (or when preparing to write/contribute edits).
-    1. **Initialize Feature**: Antigravity creates a new feature branch prefixed with `gemini/` and checks it out to a clean, isolated worktree under `<repo_root>/tmp/worktrees/`, keeping your primary working directory branch checkout completely untouched.
-    2. **Isolated Edits**: Modify files, run tests, and execute git commit/push commands from inside the worktree directory.
-    3. **Cleanup**: Once the branch is pushed to origin, Antigravity removes the worktree and prunes git metadata, keeping the environment clean.
+* `make-feature` — Git worktree-based isolated feature branch development engine and mandatory software lifecycle pipeline.
+  * **User Workflow**: Trigger with `/make-feature` (or automatically whenever preparing to write or edit codebase files).
+    1. **Phase 1 (Spec & Plan)**: Draft `/spec` and `/plan` artifacts. Antigravity pauses for explicit human approval before creating worktrees or writing code.
+    2. **Phase 2 (Build & Worktree)**: Creates a feature branch prefixed with `gemini/` checked out to an isolated worktree under `~/.gemini/tmp/worktrees/`. Performs all file modifications and runs tests via isolated environment wrappers (`run_in_env.py`).
+    3. **Phase 3 (Push & Subagent Review)**: Pushes the feature branch to `origin` and delegates an isolated background subagent to execute an `/adversarial-review` loop until approved.
+    4. **Phase 4 (Human Signoff & Merge)**: Antigravity pauses, presents the review report, and awaits explicit user confirmation (`/signoff`) before merging into the target branch and pruning the worktree.
 
 * `signoff` — Socratic human-comprehension and risk-ownership audit before merging.
   * **User Workflow**: Trigger with `/signoff` before merging a feature branch. Antigravity reverse-interviews you across 4 core axes (mechanics, trade-offs, failure boundaries, ownership). Upon verified comprehension and explicit user approval, it appends a flat block of `Signoff-*` git trailers (including a traceable SHA-256 transcript reference digest) to the commit.
