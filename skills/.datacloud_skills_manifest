@@ -87,7 +87,7 @@
     },
     "math-proof-audit": {
       "status": "installed",
-      "checksum": "303049b4e6480f9a93f684746684c0086c63f6781b3f2a37700d8c93b5e0fd19"
+      "checksum": "e3dec2aabe40a1ba41a2ab54287693328e359aec0463217e4aa1b19b25510088"
     }
   }
 }

@@ -55,12 +55,13 @@ Spawn an isolated subagent (`invoke_subagent` with `TypeName: self` and `Workspa
 #### Subagent Action Steps:
 
 1. **Empirical Verification Scripts (`scratch/temp_math_audit_<concept>.py`)**:
-   - Write python test scripts under `scratch/` using `sympy`, `numpy`, or `scipy`.
-   - **Environment Isolation:** Execute scripts using the workspace virtual environment runner:
+   - Write python test scripts under `<appDataDir>/brain/<conversation-id>/scratch/temp_math_audit_<concept>.py`.
+   - **Environment & Dependency Preflight:** Execute scripts using the workspace virtual environment runner:
      ```bash
      python3 ~/.gemini/scripts/run_in_env.py <workspace_path> python3 scratch/temp_math_audit_<concept>.py
      ```
-   - Compare symbolic mathematical results (via `sympy`) against exact numerical code outputs.
+   - Dependencies: `sympy`, `numpy`, or `scipy` when available. If optional dependencies are absent in the environment, the script MUST execute pure-Python fallback checks (using `math`/`cmath`) and log a clear preflight notice (`[PREFLIGHT WARNING]: sympy/numpy not installed. Running pure-Python fallback checks...`). Do not fail silently.
+   - Compare symbolic mathematical results against exact numerical code outputs.
    - Test floating-point precision, extreme scale values ($10^{-15}, 10^{15}$), and edge vectors.
 
 2. **5-Point Discrepancy Checklist**:
@@ -72,7 +73,7 @@ Spawn an isolated subagent (`invoke_subagent` with `TypeName: self` and `Workspa
    | **2. Indexing & Bounds** | 0-vs-1 indexing shifts, inclusive vs exclusive summation bounds ($\sum_{i=1}^N$ vs `range(0, N)`), off-by-one errors. | Audit loop bounds, array slice indices, and summation limits. |
    | **3. Matrix Dimensions & Transposition** | $XW$ vs $WX$, row vs column vector conventions, improper matrix transposes, `axis=0` vs `axis=1`. | Inspect tensor shapes step-by-step; verify matrix multiplication alignment ($N \times D \cdot D \times K = N \times K$). |
    | **4. Numerical Stability** | Direct $\log(x)$ or $\exp(x)$ without stabilization, division by zero, underflow/overflow, missing epsilon smoothing. | Check for `log1p`, log-sum-exp trick, softmax stabilization (`x - max(x)`), and $\epsilon > 0$ denominators. |
-   | **5. Boundary Assumptions** | $x \le 0$, singular/non-invertible matrices, NaNs/Infs, zero-variance inputs, empty inputs, non-positive-definite matrices. | Test zero matrices, negative inputs, singular matrices, and sub-boundary conditions in `scratch/temp_math_audit_<concept>.py`. |
+   | **5. Boundary Assumptions** | $x \le 0$, singular/non-invertible matrices, NaNs/Infs, zero-variance inputs, empty inputs, non-positive-definite matrices. | Test zero matrices, negative inputs, singular matrices, and sub-boundary conditions in verification script. |
 
 3. **Report Generation**:
    - Subagent outputs detailed findings detailing passed/failed checklist items and empirical script output.
@@ -106,13 +107,15 @@ Upon receiving explicit user signoff/approval in Phase 3:
    4. Primary workspace fallback: `artifacts/Projects/<project_name>/Proofs/<concept>.md`.
 
 2. **Generate Persistent Proof Reference Note**:
-   Save markdown artifact to `Projects/<project_name>/Proofs/<concept>.md` (where `<project_name>` is resolved dynamically from current git repo root and `<concept>` is a slugified concept name):
+   Save markdown artifact to `Projects/<project_name>/Proofs/<concept>.md` (where `<project_name>` is resolved dynamically from current git repo root and `<concept>` is a slugified concept name).
+
+   *Note: Embed all empirical test logs and results directly within Section 4 of the persistent proof note so the durable document remains self-contained without depending on ephemeral `scratch/` file paths.*
 
 ````markdown
 # Math Proof Reference: <Concept Name>
 
 - **Date:** <ISO-8601 Date>
-- **Target Implementation:** [`<filename>`](file:///<path_to_file>#L<start>-L<end>)
+- **Target Implementation:** `<repo-relative-path>:L<start>-L<end>`
 - **Signoff Status:** `VERIFIED_BY_HUMAN`
 
 ---
@@ -135,14 +138,19 @@ $$
 <aligned code snippet>
 ```
 
-## 4. Red Team Audit & Empirical Verification
+## 4. Red Team Audit & Empirical Verification Summary
 
-- **Empirical Check Script:** `scratch/temp_math_audit_<concept>.py`
+- **Empirical Check Suite:** Pure-Python / SymPy Verification
 - **Scale & Normalization:** PASSED / FIXED
 - **Indexing & Bounds:** PASSED / FIXED
 - **Matrix Dimensions & Transposition:** PASSED / FIXED
 - **Numerical Stability:** PASSED / FIXED
 - **Boundary Assumptions:** PASSED / FIXED
+
+### Embedded Test Output
+```text
+<empirical script output log>
+```
 
 ## 5. Attestation & Signoff Record
 
