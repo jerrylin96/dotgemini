@@ -146,7 +146,7 @@ The script returns JSON on stdout. The schema depends on the outcome:
         python3 ~/.gemini/scripts/run_in_env.py <worktree_path> ruff check .
         ```
 
-5. **Perform Adversarial Review**:
+4. **Perform Adversarial Review**:
    - Analyze the diff and perform an adversarial review focusing on:
      - **Technical Bugs** (Unconditional): Logical errors, performance issues, security vulnerabilities, regression risks, and code design.
      - **Writing Quality** (Unconditional): Clarity and accuracy of documentation, comments, markdown, and precision of language.
@@ -157,4 +157,4 @@ The script returns JSON on stdout. The schema depends on the outcome:
      - **HPC / Scientific Check** (Conditional): If the diff touches HPC job scripts or scientific/numerical code, additionally check:
        - **HPC Constraints**: Do not expect intermediate compute files from HPC jobs or attempt running scripts requiring HPC-level resources.
        - **Scientific & Interpretation Errors**: Formula correctness, numerical stability, incorrect statistical assumptions, data leakage, and misinterpretation of data/metrics.
-6. Output the final review report directly into the chat. Do not save to file unless requested.
+5. Output the final review report directly into the chat. Do not save to file unless requested.
