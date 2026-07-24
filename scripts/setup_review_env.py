@@ -408,7 +408,7 @@ def main():
                 )
             else:
                 requirements_path = os.path.join(workspace_path, "requirements.txt")
-                if not os.path.exists(pyproject_path) and os.path.exists(requirements_path):
+                if os.path.exists(requirements_path):
                     print("Installing requirements.txt via 'uv pip install -r'...")
                     subprocess.run(
                         [uv_bin, "pip", "install", "-r", requirements_path],

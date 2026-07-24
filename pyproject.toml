@@ -7,6 +7,10 @@ name = "dotgemini"
 version = "0.1.0"
 readme = "README.md"
 requires-python = ">=3.10"
+dependencies = [
+    "google-api-python-client",
+    "google-auth",
+]
 
 [tool.setuptools.packages.find]
 include = ["antigravity*", "scripts*", "skills*"]
@@ -18,5 +22,6 @@ target-version = "py313"
 [tool.ruff.lint]
 select = ["E", "F"]
 ignore = ["E402", "E501"]
+
 
 
