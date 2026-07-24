@@ -95,6 +95,7 @@ The global settings contain dedicated skills under `~/.gemini/skills/` which can
 * [make-feature/SKILL.md](skills/make-feature/SKILL.md) — Isolated feature branch development via git worktree; mandatory entry point for codebase changes
 * [session-sync/SKILL.md](skills/session-sync/SKILL.md) — Sync/restore an Antigravity CLI conversation session across machines via a shared Git remote
 * [gcp-dataflow/SKILL.md](skills/gcp-dataflow/SKILL.md) — Apache Beam Dataflow pipeline development and diagnostics
+* [math-proof-audit/SKILL.md](skills/math-proof-audit/SKILL.md) — Verify math/statistical code implementations against formal LaTeX specs, audit for bugs via red teaming subagent, Socratic signoff, and Obsidian Vault export; maps to `/showproof`
 * [signoff/SKILL.md](skills/signoff/SKILL.md) — Socratic reverse-interview verifying human comprehension and risk ownership before merge; maps to `/signoff`
 
 ---
