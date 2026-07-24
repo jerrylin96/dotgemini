@@ -53,6 +53,7 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
    - **Step 7 (Subagent Adversarial Review Loop)**:
      - *Mandatory Subagent Delegation*: The parent agent MUST NOT run the review in its own context. The parent agent MUST execute `invoke_subagent` (`TypeName: self`, `Role: Adversarial Code Reviewer`, `Workspace: inherit`).
      - The subagent runs isolated review on the worktree. Repeat fix-commit-push loop until verdict is `APPROVE` with zero open `[CRITICAL]` findings. Post review report in chat.
+     - *Subagent Lifecycle Cleanup*: Once the subagent finishes and posts its review report, the parent agent MUST kill the dangling subagent instance using `manage_subagents` (`Action: "kill"`, `ConversationIds: [<subagent_conversation_id>]`).
 
 4. **Phase 4 (Human Signoff & Merge)**:
    - **Goal**: User confirms merge; branch merged to integration branch.
@@ -62,7 +63,7 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
      > - Strictly forbid executing `git merge`, `git rebase`, or main-branch integration within the same turn as `/build` or `/adversarial-review`.
      > - The agent MUST pause after posting the `/adversarial-review` report in chat and wait for an explicit user merge confirmation prompt before attempting any merge.
    - Recommended commands for user: [/explain-diff](../explain-diff/SKILL.md) and [/signoff](../signoff/SKILL.md).
-   - Once merged by the user, remove the worktree:
+   - Once merged by the user, remove the worktree and ensure any remaining subagents are terminated:
      ```bash
      git worktree remove ~/.gemini/tmp/worktrees/gemini_<sanitized-feature-name>
      git worktree prune

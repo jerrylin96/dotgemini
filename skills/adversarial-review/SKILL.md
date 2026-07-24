@@ -132,6 +132,7 @@ The script returns JSON on stdout. The schema depends on the outcome:
    - The main agent should delegate the review execution to a background subagent (`invoke_subagent`) to keep its context clean and eliminate author bias.
      - **Subagent Selection**: Use `TypeName: self` with `Workspace: inherit` inside `<worktree_path>` (since `self` possesses the necessary write/execution tools to run environment setup and tests). Use `research` subagent ONLY for read-only static analysis.
      - **Recursion Prevention**: If you are already running as the invoked review subagent, execute the steps below directly without spawning further subagents.
+   - **Headless Execution Guardrail (No `ctrl+k` Prompts)**: All test, linter, compilation, and setup commands MUST be run using `python3 ~/.gemini/scripts/run_in_env.py <worktree_path> <cmd>` (or whitelisted file/git tools). Direct execution of bare un-wrapped terminal commands (`pytest`, `mkdir`, bare `python`, etc.) is strictly forbidden as it triggers interactive permission prompts.
    - **Sequential Execution Procedure**:
      1. Initialize the review environment for the worktree:
         ```bash
@@ -157,4 +158,6 @@ The script returns JSON on stdout. The schema depends on the outcome:
      - **HPC / Scientific Check** (Conditional): If the diff touches HPC job scripts or scientific/numerical code, additionally check:
        - **HPC Constraints**: Do not expect intermediate compute files from HPC jobs or attempt running scripts requiring HPC-level resources.
        - **Scientific & Interpretation Errors**: Formula correctness, numerical stability, incorrect statistical assumptions, data leakage, and misinterpretation of data/metrics.
-5. Output the final review report directly into the chat. Do not save to file unless requested.
+5. **Output Report & Terminate Turn**:
+   - Output the final review report directly into the chat. Do not save to file unless requested.
+   - **Turn Termination**: Immediately upon posting the review report, the subagent MUST stop calling tools to conclude its turn. Do not execute further steps or linger in an idle loop.
