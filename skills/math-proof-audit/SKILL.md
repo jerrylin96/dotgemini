@@ -55,7 +55,11 @@ Spawn an isolated subagent (`invoke_subagent` with `TypeName: self` and `Workspa
 #### Subagent Action Steps:
 
 1. **Empirical Verification Scripts (`scratch/temp_math_audit_<concept>.py`)**:
-   - Write python test scripts in `scratch/` using `sympy`, `numpy`, or `scipy`.
+   - Write python test scripts under `scratch/` using `sympy`, `numpy`, or `scipy`.
+   - **Environment Isolation:** Execute scripts using the workspace virtual environment runner:
+     ```bash
+     python3 ~/.gemini/scripts/run_in_env.py <workspace_path> python3 scratch/temp_math_audit_<concept>.py
+     ```
    - Compare symbolic mathematical results (via `sympy`) against exact numerical code outputs.
    - Test floating-point precision, extreme scale values ($10^{-15}, 10^{15}$), and edge vectors.
 
@@ -104,7 +108,7 @@ Upon receiving explicit user signoff/approval in Phase 3:
 2. **Generate Persistent Proof Reference Note**:
    Save markdown artifact to `Projects/<project_name>/Proofs/<concept>.md` (where `<project_name>` is resolved dynamically from current git repo root and `<concept>` is a slugified concept name):
 
-```markdown
+````markdown
 # Math Proof Reference: <Concept Name>
 
 - **Date:** <ISO-8601 Date>
@@ -144,4 +148,4 @@ $$
 
 - **Verified By:** <User Email>
 - **Attestation SHA:** <Commit SHA / Attestation Digest>
-```
+````
