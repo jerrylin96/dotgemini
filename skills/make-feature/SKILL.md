@@ -18,43 +18,50 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
 > - **No Primary Branch Pollution**: Never run `git checkout -b` or modify files directly in the user's primary repository working directory. Always use a worktree.
 > - **Worktree Cleanup**: Once the branch has been successfully pushed to the remote repository, prune/delete the worktree to save disk space and keep the workspace clean.
 
-## Execution Steps
+## Milestone Phase Goals & Gate Enforcement
 
-1. **Resolve Repository Root & Target Base Branch**:
-   - Locate the root of the git repository (`<repo_root>` or `~/.gemini`).
-   - Identify feature branch name (`gemini/<feature-name>`) and target base integration branch (`<base_branch>`, e.g., `main`, `master`, `develop`, or active release branch).
-2. **Draft `/spec` Artifact (PAUSE for Human Approval)**:
-   - Automatically create/update the `/spec` artifact ([spec-driven-development](../spec-driven-development/SKILL.md)) outlining goals, requirements, and acceptance criteria.
-   - **PAUSE**: Present the spec artifact to the human engineer and wait for explicit approval before proceeding.
-3. **Draft `/plan` Artifact (PAUSE for Human Approval)**:
-   - Upon spec approval, automatically create/update the `/plan` artifact ([planning-and-task-breakdown](../planning-and-task-breakdown/SKILL.md)) decomposing the spec into atomic tasks.
-   - **PAUSE**: Present the plan artifact to the human engineer and wait for explicit approval before proceeding.
-4. **Add Git Worktree & Develop (`/build` & `/test`)**:
-   - Sync latest changes via `git fetch origin`.
-   - Add git worktree off `origin/<base_branch>`:
+> [!CAUTION]
+> **Pre-Execution Worktree Circuit Breaker (Hard Stop)**:
+> Before calling any file edit tool (`replace_file_content`, `write_to_file`, etc.) on a repository file, verify `TargetFile` is under `~/.gemini/tmp/worktrees/`. Modifying files directly in the primary workspace is **STRICTLY PROHIBITED**. If target is in the primary workspace, HALT immediately and initiate Phase 1 (`/spec` & `/plan`).
+
+1. **Phase 1 (Spec & Plan)**:
+   - **Goal**: User-approved `/spec` and `/plan`.
+   - **Step 1 (Resolve Branch)**: Identify target base branch (`<base_branch>`) and feature branch (`gemini/<feature-name>`).
+   - **Step 2 (Draft `/spec`)**: Automatically create/update `/spec` artifact ([spec-driven-development](../spec-driven-development/SKILL.md)). **PAUSE** for explicit human approval.
+   - **Step 3 (Draft `/plan`)**: Automatically create/update `/plan` artifact ([planning-and-task-breakdown](../planning-and-task-breakdown/SKILL.md)). **PAUSE** for explicit human approval.
+   - *Gate Enforcement*: The agent MUST NOT create worktrees, edit code, or advance to Phase 2 until Phase 1 is fully user-approved.
+
+2. **Phase 2 (Build & Worktree)**:
+   - **Goal**: Isolated worktree created, code edited, tested, and committed locally.
+   - **Step 4 (Add Git Worktree & Develop `/build` & `/test`)**: Sync latest changes (`git fetch origin`) and create git worktree off `origin/<base_branch>`:
      ```bash
      git worktree add -b gemini/<feature-name> ~/.gemini/tmp/worktrees/gemini_<sanitized-feature-name> origin/<base_branch>
      ```
-   - Perform all file edits, writes, and local commands inside the isolated worktree directory (`~/.gemini/tmp/worktrees/gemini_<sanitized-feature-name>`). Do not make changes in the primary workspace.
-   - Verify code using virtual environment wrappers (`run_in_env.py` for linters and tests).
-5. **Stage, Commit & Push to Remote**:
-   - Stage modified files and commit on the feature branch inside the worktree:
+     Perform all file edits inside isolated worktree directory and verify using virtual environment wrappers (`run_in_env.py` for linters and tests).
+   - **Step 5 (Stage & Commit)**: Stage modified files and commit on the feature branch inside the worktree:
      ```bash
      git add <modified_files>
      git commit -m "<descriptive commit message>"
      ```
-   - Push feature branch to remote origin so it is published for remote review:
+
+3. **Phase 3 (Push & Adversarial Review)**:
+   - **Goal**: Feature branch pushed to `origin` AND `/adversarial-review` report posted by subagent in chat.
+   - **Step 6 (Push to Remote)**: Push feature branch to remote origin:
      ```bash
      git push origin gemini/<feature-name>
      ```
-6. **Adversarial Review Loop**:
-   - Launch a background `self` subagent (`invoke_subagent` using `TypeName: self` with `Workspace: inherit` on `worktree_path`) to run an isolated [adversarial-review](../adversarial-review/SKILL.md) on the pushed feature branch.
-   - If findings or open `[CRITICAL]` defects are reported: Fix issues in the worktree, run tests, commit, push to remote (`git push origin gemini/<feature-name>`), and re-trigger Step 6 in a loop.
-   - Repeat until the review verdict is `APPROVE` with zero open `[CRITICAL]` findings.
-7. **Human Review & Signoff Gate (PAUSE for Merge)**:
-   - **PAUSE**: Present the adversarial review report, diff summary, and remote branch link to the human engineer.
-   - **Recommended Commands**: Suggest using [/explain-diff](../explain-diff/SKILL.md) to inspect file-by-file diffs and [/signoff](../signoff/SKILL.md) to conduct Socratic reverse-interview signoff.
-   - Do **not** initiate an automated merge. The human engineer retains full ownership of the decision to merge into `<base_branch>`.
+   - **Step 7 (Subagent Adversarial Review Loop)**:
+     - *Mandatory Subagent Delegation*: The parent agent MUST NOT run the review in its own context. The parent agent MUST execute `invoke_subagent` (`TypeName: self`, `Role: Adversarial Code Reviewer`, `Workspace: inherit`).
+     - The subagent runs isolated review on the worktree. Repeat fix-commit-push loop until verdict is `APPROVE` with zero open `[CRITICAL]` findings. Post review report in chat.
+
+4. **Phase 4 (Human Signoff & Merge)**:
+   - **Goal**: User confirms merge; branch merged to integration branch.
+   - **Step 8 (Human Review & Signoff Gate)**: **PAUSE**. Present review report, diff summary, and remote branch link to user.
+   - **Turn-Boundary & Merge Prohibition**:
+     > [!CAUTION]
+     > - Strictly forbid executing `git merge`, `git rebase`, or main-branch integration within the same turn as `/build` or `/adversarial-review`.
+     > - The agent MUST pause after posting the `/adversarial-review` report in chat and wait for an explicit user merge confirmation prompt before attempting any merge.
+   - Recommended commands for user: [/explain-diff](../explain-diff/SKILL.md) and [/signoff](../signoff/SKILL.md).
    - Once merged by the user, remove the worktree:
      ```bash
      git worktree remove ~/.gemini/tmp/worktrees/gemini_<sanitized-feature-name>
