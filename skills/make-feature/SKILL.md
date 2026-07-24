@@ -23,7 +23,7 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
 1. **Resolve Repository Root**: Locate the root of the git repository you want to modify (e.g., `<repo_root>` for the active project or `~/.gemini` for global skills).
 2. **Determine Branch and Base**: 
    * Identify a clear, concise name for the feature (e.g., `make-feature-skill`). Prefix it with `gemini/` to form `gemini/<feature-name>`.
-   * Find the correct base integration branch (e.g., `main` or `master`).
+   * Identify the target base integration branch (`<base_branch>`, e.g., `main`, `master`, `develop`, or active release branch).
 3. **Fetch Latest Changes**: Sync with remote to ensure you branch off the latest commit:
    ```bash
    git fetch origin
@@ -45,26 +45,23 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
    > [!TIP]
    > **Subagent Delegation**: For complex changesets, instead of editing files directly, the main agent can change directories into the worktree path and invoke the built-in `self` subagent with `Workspace: inherit`. Tasks should explicitly instruct the subagent to use virtual environment wrappers (`setup_review_env.py` and `run_in_env.py`) for all runs/tests.
 
-6. **Pre-Commit Verification & Review Gate**: Before staging, verify that all lifecycle gates for the selected complexity tier have been satisfied:
-   - For **Trivial** changes: Verify passing tests and linter output via `run_in_env.py`.
-   - For **Small** changes: Execute a five-axis code review ([code-review-and-quality](../code-review-and-quality/SKILL.md)).
-   - For **Medium and Large** changes: Launch a background `self` subagent (`invoke_subagent` using `TypeName: self` with `Workspace: inherit` on `worktree_path`) to run an isolated [adversarial-review](../adversarial-review/SKILL.md). Do not stage or commit until the review verdict is `APPROVE` with zero `[CRITICAL]` findings open.
+6. **Pre-Commit Verification**: Run passing tests and linters via `run_in_env.py` before staging.
 7. **Stage & Commit**: Run git staging and commit commands from within the worktree directory:
    ```bash
    git add <modified_files>
    git commit -m "<descriptive commit message>"
    ```
-8. **Push Branch**: Push the feature branch to the remote origin:
+8. **Push Branch to Remote**: Push the feature branch to remote origin so it is published for remote review:
    ```bash
    git push origin gemini/<feature-name>
    ```
-9. **Clean Up**: Remove the worktree:
-   ```bash
-   git worktree remove ~/.gemini/tmp/worktrees/gemini_<sanitized-feature-name>
-   ```
-   *Note: If the worktree contains untracked or uncommitted changes and you want to discard them, add `--force` to the removal command.*
-   
-   Finally, prune git worktree metadata:
-   ```bash
-   git worktree prune
-   ```
+9. **Adversarial Review Loop**:
+   - Launch a background `self` subagent (`invoke_subagent` using `TypeName: self` with `Workspace: inherit` on `worktree_path`) to run an isolated [adversarial-review](../adversarial-review/SKILL.md) on the pushed feature branch.
+   - If the review reports defects or open `[CRITICAL]` findings: Fix the issues in the worktree, run tests, commit, push to remote (`git push origin gemini/<feature-name>`), and re-trigger Step 9 in a loop.
+   - Repeat until the review verdict is `APPROVE` with zero open `[CRITICAL]` findings.
+10. **Human Review & Signoff**: Present the adversarial review report, diff summary, and remote branch link to the user. Do **not** initiate an automated merge. The human engineer retains full ownership of the decision to merge into the target base branch (`<base_branch>`) or invoke `/signoff`. Once merged, remove the worktree:
+    ```bash
+    git worktree remove ~/.gemini/tmp/worktrees/gemini_<sanitized-feature-name>
+    git worktree prune
+    ```
+    *Note: If the worktree contains untracked or uncommitted changes and you want to discard them, add `--force` to the removal command.*
