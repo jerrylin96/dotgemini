@@ -68,10 +68,10 @@ For any code modification, feature addition, refactor, or skill creation:
    - **Phase 2 (Build & Worktree)**: Goal = Isolated worktree created, code edited, tested, and committed locally.
    - **Phase 3 (Push & Adversarial Review)**: Goal = Feature branch pushed to `origin` AND subagent review verdict `APPROVE` posted in chat.
      - *Subagent Delegation Mandate*: The parent agent is STRICTLY FORBIDDEN from running the review directly in its own context. The parent agent MUST call `invoke_subagent` (`TypeName: self`, `Role: Adversarial Code Reviewer`) to execute the isolated review loop until `APPROVE`.
-   - **Phase 4 (Human Signoff & Merge)**: Goal = User confirms merge; branch merged to integration branch.
-4. **Turn-Boundary & Merge Prohibition**:
-   - The agent is STRICTLY FORBIDDEN from executing `git merge`, `git rebase`, or main-branch integration within the same turn as `/build` or `/adversarial-review`.
-   - The agent MUST pause after posting the `/adversarial-review` report in chat and wait for an explicit user merge confirmation prompt before attempting any merge.
+   - **Phase 4 (Human Signoff & Manual Merge)**: Goal = Human engineer reviews post-review audit report artifact and manually merges branch to integration branch.
+4. **Strict Agent Merge Prohibition**:
+   - Merging code into the integration or production branch (`main`, `master`, etc.) is **ALWAYS performed manually by the human engineer** (e.g. via GitHub Pull Request UI or manual git merge).
+   - The AI agent is STRICTLY FORBIDDEN from executing `git merge`, `git rebase`, or performing automated main-branch integration under any circumstances.
 5. **Isolated Worktree Mandate**: Strict prohibition against primary working tree mutations. All edits MUST take place inside a feature branch worktree (`gemini/<feature-name>`).
 6. **Ponytail Gate**: Apply YAGNI / Senior Dev ladder check before adding any new lines of code.
 

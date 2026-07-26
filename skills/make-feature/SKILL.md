@@ -42,16 +42,18 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
      > **Empirical Grounding Directive**: Prohibit declaring success, test passes, or schema validity without empirical execution output present in the context window.
    - **Step 4b (Builder Pre-Review Quality Check & Manifest Creation)**:
      - Run `python3 ~/.gemini/scripts/run_in_env.py <worktree_path> pytest` and `ruff check .` inside worktree and verify 100% pass rate.
-     - Create `<worktree_path>/REVIEW_MANIFEST.md` detailing:
+     - Create local ephemeral `<worktree_path>/REVIEW_MANIFEST.md` detailing:
        - *Summary & Rationale*: Concise explanation of changes and Ponytail YAGNI justification.
        - *TDD Proof*: List of test cases added/modified and empirical pass log snippet.
        - *High-Risk Areas*: Key files or edge cases for reviewer focus.
+     > [!IMPORTANT]
+     > `REVIEW_MANIFEST.md` is an ephemeral hand-off file for the adversarial reviewer subagent only. It MUST NOT be staged, committed to Git, or pushed to the remote repository.
    - **Step 4c (HARD GATE: Human Approval of Review Manifest)**:
      - **PAUSE**. Present `<worktree_path>/REVIEW_MANIFEST.md` to user in chat.
      - *Gate Enforcement*: The agent MUST receive explicit user approval of the review manifest before pushing to remote origin or launching Phase 3 subagent review.
-   - **Step 5 (Stage & Commit)**: Stage modified files and commit on the feature branch inside the worktree:
+   - **Step 5 (Stage & Commit)**: Stage modified feature files (excluding `REVIEW_MANIFEST.md`) and commit on the feature branch inside the worktree:
      ```bash
-     git add <modified_files> REVIEW_MANIFEST.md
+     git add <modified_files>
      git commit -m "<descriptive commit message>"
      ```
 
@@ -71,18 +73,18 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
        - *What was changed* (file diff breakdown and architectural decisions)
        - *Human Review Attention Points* (edge cases, potential risks, or recommendations for signoff)
 
-4. **Phase 4 (Human Signoff & Merge)**:
-   - **Goal**: User confirms merge; branch merged to integration branch.
-   - **Step 8 (Human Review & Signoff Gate)**: **PAUSE**. Present review report artifact, diff summary, and remote branch link to user.
-   - **Turn-Boundary & Merge Prohibition**:
+4. **Phase 4 (Human Signoff & Manual Merge)**:
+   - **Goal**: Human engineer reviews artifact and manually merges branch to integration branch.
+   - **Step 8 (Human Review & Manual Merge Gate)**: **PAUSE**. Present review report artifact, diff summary, and remote branch link to user.
+   - **Strict Agent Merge Prohibition**:
      > [!CAUTION]
-     > - Strictly forbid executing `git merge`, `git rebase`, or main-branch integration within the same turn as `/build` or `/adversarial-review`.
-     > - The agent MUST pause after posting the `/adversarial-review` report in chat and wait for an explicit user merge confirmation prompt before attempting any merge.
-   - Recommended commands for user: [/explain-diff](../explain-diff/SKILL.md) and [/signoff](../signoff/SKILL.md).
-   - Once merged by the user, remove the worktree and ensure any remaining subagents are terminated:
+     > - **Human-Only Merge Ownership**: Merging code into the integration or production branch (`main`, `master`, etc.) is **ALWAYS performed manually by the human engineer** (e.g. via GitHub Pull Request UI or manual git merge).
+     > - **Agent Merge Prohibited**: The AI agent is STRICTLY FORBIDDEN from executing `git merge`, `git rebase`, or performing automated branch integration. The agent's work concludes upon delivering the approved feature branch, passing adversarial review, and generating the post-review report artifact.
+   - Recommended tools for user: [/explain-diff](../explain-diff/SKILL.md) and [/signoff](../signoff/SKILL.md).
+   - Once merged manually by the user, remove the worktree:
      ```bash
-     git worktree remove ~/.gemini/tmp/worktrees/gemini_<sanitized-feature-name>
+     git worktree remove ~/.gemini/tmp/worktrees/gemini_<sanitized-feature-name> --force
      git worktree prune
      ```
-     *Note: If the worktree contains untracked or uncommitted changes and you want to discard them, add `--force` to the removal command.*
+
 
