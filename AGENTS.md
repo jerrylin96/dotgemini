@@ -64,7 +64,7 @@ For any code modification, feature addition, refactor, or skill creation:
    - Before invoking any file modification tool (`replace_file_content`, `write_to_file`, etc.) on a git repository file, the agent MUST verify that `TargetFile` is inside `~/.gemini/tmp/worktrees/`.
    - Modifying files directly in the primary working tree is **STRICTLY PROHIBITED**. If `TargetFile` is in the primary workspace, HALT immediately and initiate Phase 1 (`/spec` & `/plan`).
 3. **Sequential Milestone Goals & Stop Gates**:
-   - **Phase 1 (Spec & Plan)**: Goal = User-approved `/spec` and `/plan`. The agent MUST pause after drafting `/spec` and `/plan` artifacts and receive explicit human confirmation before creating worktrees or writing code.
+   - **Phase 1 (Spec & Plan - Two-Stage Sequential Gate)**: Goal = Sequential user approval of `/spec` (Stage 1a) followed by `/plan` (Stage 1b). The agent MUST draft `/spec`, PAUSE for human approval, and ONLY AFTER `/spec` is approved proceed to draft `/plan`. Explicit human approval of both artifacts is required before creating worktrees or writing code.
    - **Phase 2 (Build & Worktree)**: Goal = Isolated worktree created, code edited, tested, and committed locally.
    - **Phase 3 (Push & Adversarial Review)**: Goal = Feature branch pushed to `origin` AND subagent review verdict `APPROVE` posted in chat.
      - *Subagent Delegation Mandate*: The parent agent is STRICTLY FORBIDDEN from running the review directly in its own context. The parent agent MUST call `invoke_subagent` (`TypeName: self`, `Role: Adversarial Code Reviewer`) to execute the isolated review loop until `APPROVE`.

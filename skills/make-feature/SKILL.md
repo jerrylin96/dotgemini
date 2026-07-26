@@ -24,12 +24,13 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
 > **Pre-Execution Worktree Circuit Breaker (Hard Stop)**:
 > Before calling any file edit tool (`replace_file_content`, `write_to_file`, etc.) on a repository file, verify `TargetFile` is under `~/.gemini/tmp/worktrees/`. Modifying files directly in the primary workspace is **STRICTLY PROHIBITED**. If target is in the primary workspace, HALT immediately and initiate Phase 1 (`/spec` & `/plan`).
 
-1. **Phase 1 (Spec & Plan)**:
-   - **Goal**: User-approved `/spec` and `/plan`.
+1. **Phase 1 (Spec & Plan - Two-Stage Sequential Gate)**:
+   - **Goal**: Sequential user approval of `/spec` (Stage 1a) followed by `/plan` (Stage 1b).
    - **Step 1 (Resolve Branch)**: Identify target base branch (`<base_branch>`) and feature branch (`gemini/<feature-name>`).
-   - **Step 2 (Draft `/spec`)**: Automatically create/update `/spec` artifact ([spec-driven-development](../spec-driven-development/SKILL.md)). **PAUSE** for explicit human approval.
-   - **Step 3 (Draft `/plan`)**: Automatically create/update `/plan` artifact ([planning-and-task-breakdown](../planning-and-task-breakdown/SKILL.md)). Every task item MUST include explicit TDD `RED Test Spec`, `GREEN Implementation Target`, and `Verify Command`. **PAUSE** for explicit human approval.
-   - *Gate Enforcement*: The agent MUST NOT create worktrees, edit code, or advance to Phase 2 until Phase 1 is fully user-approved.
+   - **Step 2 (Stage 1a: Draft `/spec`)**: Automatically create/update `/spec` artifact ([spec-driven-development](../spec-driven-development/SKILL.md)). **PAUSE** and wait for explicit human approval of `/spec`.
+   - **Step 3 (Stage 1b: Draft `/plan`)**: *Only after `/spec` is explicitly approved*, inspect codebase and create/update `/plan` artifact ([planning-and-task-breakdown](../planning-and-task-breakdown/SKILL.md)). Every task item MUST include explicit TDD `RED Test Spec`, `GREEN Implementation Target`, and `Verify Command`. **PAUSE** and wait for explicit human approval of `/plan`.
+   - *Gate Enforcement*: Drafting `/plan` before `/spec` is approved is STRICTLY FORBIDDEN. Creating worktrees or editing code before `/plan` is approved is STRICTLY FORBIDDEN.
+
 
 2. **Phase 2 (Build & Worktree)**:
    - **Goal**: Isolated worktree created, TDD cycle executed, code edited, tested, committed locally, and review manifest approved by user.
