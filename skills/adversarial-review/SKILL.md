@@ -109,8 +109,9 @@ The script returns JSON on stdout. The schema depends on the outcome:
 ## Execution Steps
 
 1. **Read Review Manifest First (Fast Targeted Review)**:
-   - Check if `<worktree_path>/REVIEW_MANIFEST.md` exists. If present, view it using `view_file` to understand the builder's summary, TDD test proof, and identified high-risk areas.
+   - Check if `<appDataDir>/brain/<conversation-id>/review_manifest_<feature>.md` exists. If present, view it using `view_file` to understand the builder's summary, TDD test proof, and identified high-risk areas.
    - Use the manifest to target diff inspection directly at changed logic and high-risk modules, cutting unnecessary exploratory turns.
+
 
 2. **Get the Diff Safely**: To prevent terminal command output truncation (which silently trims long diff outputs or lines), do NOT read the raw output of `git diff` directly from the terminal tool. Instead, use the resolved `reference_commit_hash` and the explicit feature branch `commit_hash` returned by the branch resolution script (which is more robust than using a branch name directly, as it avoids stale local tracking branch issues).
    a. Run `git diff "<reference_commit_hash>...<commit_hash>" --stat > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_stat.txt"` (using `--merge-base` or `...` syntax) to see all changed files.

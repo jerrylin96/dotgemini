@@ -43,30 +43,30 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
      > **Empirical Grounding Directive**: Prohibit declaring success, test passes, or schema validity without empirical execution output present in the context window.
    - **Step 4b (Builder Pre-Review Quality Check & Manifest Creation)**:
      - Run `python3 ~/.gemini/scripts/run_in_env.py <worktree_path> pytest` and `ruff check .` inside worktree and verify 100% pass rate.
-     - Create local ephemeral `<worktree_path>/REVIEW_MANIFEST.md` detailing:
+     - Create review manifest artifact in the conversation artifact directory (`<appDataDir>/brain/<conversation-id>/review_manifest_<feature>.md`) detailing:
        - *Summary & Rationale*: Concise explanation of changes and Ponytail YAGNI justification.
        - *TDD Proof*: List of test cases added/modified and empirical pass log snippet.
        - *High-Risk Areas*: Key files or edge cases for reviewer focus.
-     > [!IMPORTANT]
-     > `REVIEW_MANIFEST.md` is an ephemeral hand-off file for the adversarial reviewer subagent only. It MUST NOT be staged, committed to Git, or pushed to the remote repository.
+     > [!NOTE]
+     > Storing the manifest in the external artifact directory ensures it never touches or pollutes the git repository working tree.
    - **Step 4c (HARD GATE: Human Approval of Review Manifest)**:
-     - **PAUSE**. Present `<worktree_path>/REVIEW_MANIFEST.md` to user in chat.
+     - **PAUSE**. Present `review_manifest_<feature>.md` artifact to user in chat.
      - *Gate Enforcement*: The agent MUST receive explicit user approval of the review manifest before pushing to remote origin or launching Phase 3 subagent review.
-   - **Step 5 (Stage & Commit)**: Stage modified feature files (excluding `REVIEW_MANIFEST.md`) and commit on the feature branch inside the worktree:
+   - **Step 5 (Stage & Commit)**: Stage modified feature files in the worktree and commit:
      ```bash
      git add <modified_files>
      git commit -m "<descriptive commit message>"
      ```
 
 3. **Phase 3 (Push & Adversarial Review)**:
-   - **Goal**: Feature branch pushed to `origin`, subagent `/adversarial-review` executed using review manifest, and post-review report artifact created.
+   - **Goal**: Feature branch pushed to `origin`, subagent `/adversarial-review` executed using review manifest artifact, and post-review report artifact created.
    - **Step 6 (Push to Remote)**: Push feature branch to remote origin:
      ```bash
      git push origin gemini/<feature-name>
      ```
    - **Step 7 (Subagent Adversarial Review Loop)**:
-     - *Mandatory Subagent Delegation*: The parent agent MUST NOT run the review in its own context. The parent agent MUST execute `invoke_subagent` (`TypeName: self`, `Role: Adversarial Code Reviewer`, `Workspace: inherit`). Prompt MUST specify `<worktree_path>/REVIEW_MANIFEST.md` path.
-     - The subagent runs isolated review on the worktree, reading `REVIEW_MANIFEST.md` first to target diff inspection. Repeat fix-commit-push loop until verdict is `APPROVE` with zero open `[CRITICAL]` findings. Post review report in chat.
+     - *Mandatory Subagent Delegation*: The parent agent MUST NOT run the review in its own context. The parent agent MUST execute `invoke_subagent` (`TypeName: self`, `Role: Adversarial Code Reviewer`, `Workspace: inherit`). Prompt MUST specify `<appDataDir>/brain/<conversation-id>/review_manifest_<feature>.md` path.
+     - The subagent runs isolated review on the worktree, reading `review_manifest_<feature>.md` first to target diff inspection. Repeat fix-commit-push loop until verdict is `APPROVE` with zero open `[CRITICAL]` findings. Post review report in chat.
      - *Subagent Lifecycle Cleanup*: Once the subagent finishes and posts its review report, the parent agent MUST kill the dangling subagent instance using `manage_subagents` (`Action: "kill"`, `ConversationIds: [<subagent_conversation_id>]`).
    - **Step 7b (Post-Review Audit Report Artifact)**:
      - Generate formal `review_report_<feature>.md` artifact detailing:
@@ -74,12 +74,12 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
        - *What was changed* (file diff breakdown and architectural decisions)
        - *Human Review Attention Points* (edge cases, potential risks, or recommendations for signoff)
 
-4. **Phase 4 (Human Signoff & Primary Branch Merge)**:
-   - **Goal**: Human engineer reviews post-review audit report artifact and manually merges feature branch to the selected primary integration branch (`<base_branch>`).
-   - **Step 8 (Human Review & Integration Gate)**: **PAUSE**. Present review report artifact, diff summary, and remote branch link to user.
-   - **Primary Integration vs. Feature Branch Sync Rules**:
+4. **Phase 4 (Human Signoff, PR Creation & Manual Merge)**:
+   - **Goal**: Human engineer reviews post-review audit report artifact, creates Pull Request, and manually merges feature branch to target integration branch (`<base_branch>`).
+   - **Step 8 (Human Review, PR Creation & Integration Gate)**: **PAUSE**. Present review report artifact, diff summary, and remote feature branch link to user.
+   - **Human Ownership of PR Creation & Integration**:
      > [!CAUTION]
-     > - **Human Ownership of Primary Branch Integration**: Integrating code *into* the selected target branch (`<base_branch>`, e.g., `main`, `develop`, `staging`, `release/*`, etc.) is **ALWAYS performed manually by the human engineer** (e.g. via GitHub Pull Request UI or manual git merge). The AI agent is strictly forbidden from mutating or merging directly into the primary integration branch.
+     > - **Human PR & Merge Ownership**: Creating Pull Requests (PRs), reviewing PR diffs, and merging code *into* the target integration branch (`<base_branch>`, e.g., `main`, `develop`, `staging`, `release/*`, etc.) is **ALWAYS performed manually by the human engineer**. The AI agent is strictly forbidden from creating PRs or merging directly into the primary integration branch.
      > - **Agent Permitted Feature Sync**: Inside its isolated feature worktree (`~/.gemini/tmp/worktrees/gemini_<feature-name>`), the AI agent IS permitted to rebase or pull upstream changes from its designated base branch (`git fetch origin && git rebase origin/<base_branch>`) to resolve drift and keep its feature branch clean for human review and merge.
    - Recommended tools for user: [/explain-diff](../explain-diff/SKILL.md) and [/signoff](../signoff/SKILL.md).
    - Once merged manually by the user, remove the worktree:
@@ -87,6 +87,7 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
      git worktree remove ~/.gemini/tmp/worktrees/gemini_<sanitized-feature-name> --force
      git worktree prune
      ```
+
 
 
 
