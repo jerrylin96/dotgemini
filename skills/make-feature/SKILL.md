@@ -75,12 +75,12 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
        - *Human Review Attention Points* (edge cases, potential risks, or recommendations for signoff)
 
 4. **Phase 4 (Human Signoff & Primary Branch Merge)**:
-   - **Goal**: Human engineer reviews post-review audit report artifact and manually merges feature branch to the primary integration branch (`main`, `master`, etc.).
+   - **Goal**: Human engineer reviews post-review audit report artifact and manually merges feature branch to the selected primary integration branch (`<base_branch>`).
    - **Step 8 (Human Review & Integration Gate)**: **PAUSE**. Present review report artifact, diff summary, and remote branch link to user.
    - **Primary Integration vs. Feature Branch Sync Rules**:
      > [!CAUTION]
-     > - **Human Ownership of Primary Branch Integration**: Integrating code *into* the primary target branch (`main`, `master`, etc.) is **ALWAYS performed manually by the human engineer** (e.g. via GitHub Pull Request UI or manual git merge). The AI agent is strictly forbidden from mutating or merging directly into the primary integration branch.
-     > - **Agent Permitted Feature Sync**: Inside its isolated feature worktree (`~/.gemini/tmp/worktrees/gemini_<feature-name>`), the AI agent IS permitted to rebase or pull upstream base branch changes (`git fetch origin && git rebase origin/<base_branch>`) to resolve drift and keep its feature branch clean for human review and merge.
+     > - **Human Ownership of Primary Branch Integration**: Integrating code *into* the selected target branch (`<base_branch>`, e.g., `main`, `develop`, `staging`, `release/*`, etc.) is **ALWAYS performed manually by the human engineer** (e.g. via GitHub Pull Request UI or manual git merge). The AI agent is strictly forbidden from mutating or merging directly into the primary integration branch.
+     > - **Agent Permitted Feature Sync**: Inside its isolated feature worktree (`~/.gemini/tmp/worktrees/gemini_<feature-name>`), the AI agent IS permitted to rebase or pull upstream changes from its designated base branch (`git fetch origin && git rebase origin/<base_branch>`) to resolve drift and keep its feature branch clean for human review and merge.
    - Recommended tools for user: [/explain-diff](../explain-diff/SKILL.md) and [/signoff](../signoff/SKILL.md).
    - Once merged manually by the user, remove the worktree:
      ```bash
