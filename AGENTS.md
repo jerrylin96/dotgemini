@@ -64,18 +64,19 @@ For any code modification, feature addition, refactor, or skill creation:
    - Before invoking any file modification tool (`replace_file_content`, `write_to_file`, etc.) on a git repository file, the agent MUST verify that `TargetFile` is inside `~/.gemini/tmp/worktrees/`.
    - Modifying files directly in the primary working tree is **STRICTLY PROHIBITED**. If `TargetFile` is in the primary workspace, HALT immediately and initiate Phase 1 (`/spec` & `/plan`).
 3. **Sequential Milestone Goals & Stop Gates**:
-   - **Phase 1 (Spec & Plan)**: Goal = User-approved `/spec` and `/plan`. The agent MUST pause after drafting `/spec` and `/plan` artifacts and receive explicit human confirmation before creating worktrees or writing code.
+   - **Phase 1 (Spec & Plan - Two-Stage Sequential Gate)**: Goal = Sequential user approval of `/spec` (Stage 1a) followed by `/plan` (Stage 1b). The agent MUST draft `/spec`, PAUSE for human approval, and ONLY AFTER `/spec` is approved proceed to draft `/plan`. Explicit human approval of both artifacts is required before creating worktrees or writing code.
    - **Phase 2 (Build & Worktree)**: Goal = Isolated worktree created, code edited, tested, and committed locally.
    - **Phase 3 (Push & Adversarial Review)**: Goal = Feature branch pushed to `origin` AND subagent review verdict `APPROVE` posted in chat.
      - *Subagent Delegation Mandate*: The parent agent is STRICTLY FORBIDDEN from running the review directly in its own context. The parent agent MUST call `invoke_subagent` (`TypeName: self`, `Role: Adversarial Code Reviewer`) to execute the isolated review loop until `APPROVE`.
-   - **Phase 4 (Human Signoff & Merge)**: Goal = User confirms merge; branch merged to integration branch.
-4. **Turn-Boundary & Merge Prohibition**:
-   - The agent is STRICTLY FORBIDDEN from executing `git merge`, `git rebase`, or main-branch integration within the same turn as `/build` or `/adversarial-review`.
-   - The agent MUST pause after posting the `/adversarial-review` report in chat and wait for an explicit user merge confirmation prompt before attempting any merge.
+   - **Phase 4 (Human Signoff & Primary Branch Merge)**: Goal = Human engineer reviews post-review audit report artifact and manually merges feature branch to the selected target branch (`<base_branch>`).
+4. **Primary Integration vs. Feature Sync Rules**:
+   - **Human Ownership of Primary Branch Integration**: Integrating code *into* the selected target branch (`<base_branch>`, e.g., `main`, `develop`, `staging`, `release/*`, etc.) is **ALWAYS performed manually by the human engineer** (e.g. via GitHub Pull Request UI or manual git merge). The AI agent is strictly forbidden from mutating or merging directly into the target integration branch.
+   - **Agent Feature Branch Sync**: Inside its isolated feature worktree, the AI agent IS permitted to rebase or pull upstream base branch changes (`git fetch origin && git rebase origin/<base_branch>`) to resolve drift and keep its feature branch clean for human review and merge.
 5. **Isolated Worktree Mandate**: Strict prohibition against primary working tree mutations. All edits MUST take place inside a feature branch worktree (`gemini/<feature-name>`).
 6. **Ponytail Gate**: Apply YAGNI / Senior Dev ladder check before adding any new lines of code.
 
 ### Core Operating Behaviors
+* **Empirical Grounding (Zero Hallucinated Claims):** Prohibit declaring success, test passes, function existence, or schema validity without empirical execution output or line-numbered `view_file` citations present in the context window.
 * **Surface Assumptions:** Before writing any non-trivial code, explicitly list assumptions:
   ```markdown
   ASSUMPTIONS I'M MAKING:
