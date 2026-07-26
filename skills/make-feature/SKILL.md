@@ -28,36 +28,52 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
    - **Goal**: User-approved `/spec` and `/plan`.
    - **Step 1 (Resolve Branch)**: Identify target base branch (`<base_branch>`) and feature branch (`gemini/<feature-name>`).
    - **Step 2 (Draft `/spec`)**: Automatically create/update `/spec` artifact ([spec-driven-development](../spec-driven-development/SKILL.md)). **PAUSE** for explicit human approval.
-   - **Step 3 (Draft `/plan`)**: Automatically create/update `/plan` artifact ([planning-and-task-breakdown](../planning-and-task-breakdown/SKILL.md)). **PAUSE** for explicit human approval.
+   - **Step 3 (Draft `/plan`)**: Automatically create/update `/plan` artifact ([planning-and-task-breakdown](../planning-and-task-breakdown/SKILL.md)). Every task item MUST include explicit TDD `RED Test Spec`, `GREEN Implementation Target`, and `Verify Command`. **PAUSE** for explicit human approval.
    - *Gate Enforcement*: The agent MUST NOT create worktrees, edit code, or advance to Phase 2 until Phase 1 is fully user-approved.
 
 2. **Phase 2 (Build & Worktree)**:
-   - **Goal**: Isolated worktree created, code edited, tested, and committed locally.
-   - **Step 4 (Add Git Worktree & Develop `/build` & `/test`)**: Sync latest changes (`git fetch origin`) and create git worktree off `origin/<base_branch>`:
+   - **Goal**: Isolated worktree created, TDD cycle executed, code edited, tested, committed locally, and review manifest approved by user.
+   - **Step 4 (Add Git Worktree & Develop via TDD)**: Sync latest changes (`git fetch origin`) and create git worktree off `origin/<base_branch>`:
      ```bash
      git worktree add -b gemini/<feature-name> ~/.gemini/tmp/worktrees/gemini_<sanitized-feature-name> origin/<base_branch>
      ```
-     Perform all file edits inside isolated worktree directory and verify using virtual environment wrappers (`run_in_env.py` for linters and tests).
+     Perform all file edits inside isolated worktree directory following strict TDD order (write RED test first, then GREEN implementation). Verify using virtual environment wrappers (`run_in_env.py` for linters and tests).
+     > [!IMPORTANT]
+     > **Empirical Grounding Directive**: Prohibit declaring success, test passes, or schema validity without empirical execution output present in the context window.
+   - **Step 4b (Builder Pre-Review Quality Check & Manifest Creation)**:
+     - Run `python3 ~/.gemini/scripts/run_in_env.py <worktree_path> pytest` and `ruff check .` inside worktree and verify 100% pass rate.
+     - Create `<worktree_path>/REVIEW_MANIFEST.md` detailing:
+       - *Summary & Rationale*: Concise explanation of changes and Ponytail YAGNI justification.
+       - *TDD Proof*: List of test cases added/modified and empirical pass log snippet.
+       - *High-Risk Areas*: Key files or edge cases for reviewer focus.
+   - **Step 4c (HARD GATE: Human Approval of Review Manifest)**:
+     - **PAUSE**. Present `<worktree_path>/REVIEW_MANIFEST.md` to user in chat.
+     - *Gate Enforcement*: The agent MUST receive explicit user approval of the review manifest before pushing to remote origin or launching Phase 3 subagent review.
    - **Step 5 (Stage & Commit)**: Stage modified files and commit on the feature branch inside the worktree:
      ```bash
-     git add <modified_files>
+     git add <modified_files> REVIEW_MANIFEST.md
      git commit -m "<descriptive commit message>"
      ```
 
 3. **Phase 3 (Push & Adversarial Review)**:
-   - **Goal**: Feature branch pushed to `origin` AND `/adversarial-review` report posted by subagent in chat.
+   - **Goal**: Feature branch pushed to `origin`, subagent `/adversarial-review` executed using review manifest, and post-review report artifact created.
    - **Step 6 (Push to Remote)**: Push feature branch to remote origin:
      ```bash
      git push origin gemini/<feature-name>
      ```
    - **Step 7 (Subagent Adversarial Review Loop)**:
-     - *Mandatory Subagent Delegation*: The parent agent MUST NOT run the review in its own context. The parent agent MUST execute `invoke_subagent` (`TypeName: self`, `Role: Adversarial Code Reviewer`, `Workspace: inherit`).
-     - The subagent runs isolated review on the worktree. Repeat fix-commit-push loop until verdict is `APPROVE` with zero open `[CRITICAL]` findings. Post review report in chat.
+     - *Mandatory Subagent Delegation*: The parent agent MUST NOT run the review in its own context. The parent agent MUST execute `invoke_subagent` (`TypeName: self`, `Role: Adversarial Code Reviewer`, `Workspace: inherit`). Prompt MUST specify `<worktree_path>/REVIEW_MANIFEST.md` path.
+     - The subagent runs isolated review on the worktree, reading `REVIEW_MANIFEST.md` first to target diff inspection. Repeat fix-commit-push loop until verdict is `APPROVE` with zero open `[CRITICAL]` findings. Post review report in chat.
      - *Subagent Lifecycle Cleanup*: Once the subagent finishes and posts its review report, the parent agent MUST kill the dangling subagent instance using `manage_subagents` (`Action: "kill"`, `ConversationIds: [<subagent_conversation_id>]`).
+   - **Step 7b (Post-Review Audit Report Artifact)**:
+     - Generate formal `review_report_<feature>.md` artifact detailing:
+       - *What was checked* (empirical test runner logs, linter results, static diff analysis)
+       - *What was changed* (file diff breakdown and architectural decisions)
+       - *Human Review Attention Points* (edge cases, potential risks, or recommendations for signoff)
 
 4. **Phase 4 (Human Signoff & Merge)**:
    - **Goal**: User confirms merge; branch merged to integration branch.
-   - **Step 8 (Human Review & Signoff Gate)**: **PAUSE**. Present review report, diff summary, and remote branch link to user.
+   - **Step 8 (Human Review & Signoff Gate)**: **PAUSE**. Present review report artifact, diff summary, and remote branch link to user.
    - **Turn-Boundary & Merge Prohibition**:
      > [!CAUTION]
      > - Strictly forbid executing `git merge`, `git rebase`, or main-branch integration within the same turn as `/build` or `/adversarial-review`.
@@ -69,3 +85,4 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
      git worktree prune
      ```
      *Note: If the worktree contains untracked or uncommitted changes and you want to discard them, add `--force` to the removal command.*
+

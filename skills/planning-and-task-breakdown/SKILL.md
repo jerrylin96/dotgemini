@@ -33,10 +33,14 @@ Operate in **read-only** mode:
 > [!TIP]
 > Use a `research` subagent for codebase exploration. This keeps the main agent's context clean for planning decisions.
 
-### Step 2: Decomposition
+### Step 2: Decomposition & TDD Task Design
 
 - Break objective into atomic tasks
 - **The "5-File" Rule**: each task touches ~5 files or fewer
+- **TDD Task Schema**: Every task item MUST explicitly specify:
+  1. **RED Test Spec**: The target test file and failing test assertion to write *before* touching feature code.
+  2. **GREEN Implementation Target**: Minimal code to make the test pass.
+  3. **Verify Command**: Exact empirical test runner command (e.g. `python3 ~/.gemini/scripts/run_in_env.py <worktree> pytest ...`).
 - If a task can't be described in a few bullet points, break it down further
 - Identify and sequence dependencies
 
@@ -46,7 +50,7 @@ Operate in **read-only** mode:
 ### Step 3: Output
 
 - Create the plan as a reviewable document with a checklist for tracking progress
-- Every task must include acceptance criteria and a verify step
+- Every task must include TDD RED/GREEN specifications and an empirical verify step (prohibiting unverified claims).
 
 > [!TIP]
 > Store the plan as an artifact with `RequestFeedback: true` in `<appDataDir>/brain/<conversation-id>/`.
@@ -66,16 +70,17 @@ Operate in **read-only** mode:
 
 - Implementing code before plan is finalized
 - Vague task definitions ("Implement feature") instead of verifiable units
+- Tasks missing explicit RED test specs or empirical verification commands
 - Plan ignores existing codebase patterns
-- Tasks lack acceptance criteria
 
 ## Verification
 
 - [ ] Plan exists (artifact, or repo document such as `tasks/plan.md`) and covers full scope
 - [ ] Tasks are clear, atomic, and ordered
-- [ ] Acceptance criteria defined for every task
-- [ ] Every task has verification step
+- [ ] TDD RED test spec and GREEN implementation target defined for every task
+- [ ] Every task has exact empirical verification command
 - [ ] Dependencies identified and ordered
 - [ ] No task touches >5 files
 - [ ] Checkpoints between major phases
 - [ ] Plan reviewed and explicitly approved by human engineer (`make-feature` Step 3 pause)
+

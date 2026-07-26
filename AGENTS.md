@@ -76,6 +76,7 @@ For any code modification, feature addition, refactor, or skill creation:
 6. **Ponytail Gate**: Apply YAGNI / Senior Dev ladder check before adding any new lines of code.
 
 ### Core Operating Behaviors
+* **Empirical Grounding (Zero Hallucinated Claims):** Prohibit declaring success, test passes, function existence, or schema validity without empirical execution output or line-numbered `view_file` citations present in the context window.
 * **Surface Assumptions:** Before writing any non-trivial code, explicitly list assumptions:
   ```markdown
   ASSUMPTIONS I'M MAKING:

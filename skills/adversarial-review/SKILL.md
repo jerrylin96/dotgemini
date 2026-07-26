@@ -108,7 +108,11 @@ The script returns JSON on stdout. The schema depends on the outcome:
 
 ## Execution Steps
 
-1. **Get the Diff Safely**: To prevent terminal command output truncation (which silently trims long diff outputs or lines), do NOT read the raw output of `git diff` directly from the terminal tool. Instead, use the resolved `reference_commit_hash` and the explicit feature branch `commit_hash` returned by the branch resolution script (which is more robust than using a branch name directly, as it avoids stale local tracking branch issues).
+1. **Read Review Manifest First (Fast Targeted Review)**:
+   - Check if `<worktree_path>/REVIEW_MANIFEST.md` exists. If present, view it using `view_file` to understand the builder's summary, TDD test proof, and identified high-risk areas.
+   - Use the manifest to target diff inspection directly at changed logic and high-risk modules, cutting unnecessary exploratory turns.
+
+2. **Get the Diff Safely**: To prevent terminal command output truncation (which silently trims long diff outputs or lines), do NOT read the raw output of `git diff` directly from the terminal tool. Instead, use the resolved `reference_commit_hash` and the explicit feature branch `commit_hash` returned by the branch resolution script (which is more robust than using a branch name directly, as it avoids stale local tracking branch issues).
    a. Run `git diff "<reference_commit_hash>...<commit_hash>" --stat > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_stat.txt"` (using `--merge-base` or `...` syntax) to see all changed files.
    b. Save the complete target diff to a temporary file under the conversation's scratch directory:
       `git diff "<reference_commit_hash>...<commit_hash>" > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_all.txt"`
@@ -123,12 +127,12 @@ The script returns JSON on stdout. The schema depends on the outcome:
    - **Omit Binary Files**: Skip text diffs for binary files; report their changes in the summary. *Reason: Prevents binary content corruption.*
    - **Clean Up Safely**: Delete only temporary files when done. *Reason: Leaves repository and worktree untouched.*
    - **Reference Guide**: For full detail on tools compatibility, EOF edge cases, and path safety, see [robustness_guide.md](resources/robustness_guide.md).
-2. **Note on Worktree**:
+3. **Note on Worktree**:
    - The review worktree is created at `worktree_path` to allow running tests or inspecting files without disrupting the user's active working tree. Note that the worktree at `worktree_path` is checked out to the feature branch (the target being reviewed), while the active workspace's current branch is treated as the reference branch (baseline). If you need to run tests, execute linters, or view/run code, `cd` into `worktree_path` first.
    - Paths under `~/.gemini/tmp/worktrees/` are disposable cache and may be force-removed or recreated at any time; do not use them for long-lived uncommitted work.
    - The file lock only serializes concurrent `resolve_branches.py` runs. Do not run git worktree commands against `~/.gemini/tmp/worktrees/` manually while a review is in progress.
    - Note: Git fetches are best-effort. If network resolution fails, the review may run against stale local tracking references.
-3. **Subagent Execution & Environment Setup**:
+4. **Subagent Execution & Environment Setup**:
    - The main agent should delegate the review execution to a background subagent (`invoke_subagent`) to keep its context clean and eliminate author bias.
      - **Subagent Selection**: Use `TypeName: self` with `Workspace: inherit` inside `<worktree_path>` (since `self` possesses the necessary write/execution tools to run environment setup and tests). Use `research` subagent ONLY for read-only static analysis.
      - **Recursion Prevention**: If you are already running as the invoked review subagent, execute the steps below directly without spawning further subagents.
@@ -147,7 +151,8 @@ The script returns JSON on stdout. The schema depends on the outcome:
         python3 ~/.gemini/scripts/run_in_env.py <worktree_path> ruff check .
         ```
 
-4. **Perform Adversarial Review**:
+5. **Perform Adversarial Review**:
+   - **Empirical Anti-Hallucination Grounding**: All findings MUST quote byte-for-byte exact line numbers, code snippets, and actual test runner execution output. Hypothetical, speculative, or ungrounded bug claims are strictly forbidden.
    - Analyze the diff and perform an adversarial review focusing on:
      - **Technical Bugs** (Unconditional): Logical errors, performance issues, security vulnerabilities, regression risks, and code design.
      - **Writing Quality** (Unconditional): Clarity and accuracy of documentation, comments, markdown, and precision of language.
@@ -158,6 +163,7 @@ The script returns JSON on stdout. The schema depends on the outcome:
      - **HPC / Scientific Check** (Conditional): If the diff touches HPC job scripts or scientific/numerical code, additionally check:
        - **HPC Constraints**: Do not expect intermediate compute files from HPC jobs or attempt running scripts requiring HPC-level resources.
        - **Scientific & Interpretation Errors**: Formula correctness, numerical stability, incorrect statistical assumptions, data leakage, and misinterpretation of data/metrics.
-5. **Output Report & Terminate Turn**:
+6. **Output Report & Terminate Turn**:
    - Output the final review report directly into the chat. Do not save to file unless requested.
    - **Turn Termination**: Immediately upon posting the review report, the subagent MUST stop calling tools to conclude its turn. Do not execute further steps or linger in an idle loop.
+

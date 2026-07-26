@@ -93,24 +93,7 @@ If Slice 1 fails, you discover it before investing in Slices 2 and 3.
 
 ## Implementation Rules
 
-### Rule 0: Simplicity First
+### Rule 0: Simplicity First (Ponytail Ladder)
 
-Before writing any code, ask: "What is the simplest thing that could work?"
+Before writing any code, apply YAGNI and the Lazy Senior Dev Ladder defined in [ponytail](../ponytail/SKILL.md). Write only the minimum code needed to satisfy the current slice.
 
-After writing code, review it against these checks:
-- Can this be done in fewer lines?
-- Are these abstractions earning their complexity?
-- Would a staff engineer look at this and say "why didn't you just..."?
-- Am I building for hypothetical future requirements, or the current task?
-
-```
-SIMPLICITY CHECK:
-✗ Generic EventBus with middleware pipeline for one notification
-✓ Simple function call
-
-✗ Abstract factory pattern for two similar components
-✓ Two straightforward components with shared utilities
-
-✗ Config-driven form builder for three forms
-✓ Three form components
-```
