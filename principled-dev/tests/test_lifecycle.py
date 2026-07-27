@@ -142,6 +142,7 @@ def test_push_requires_fresh_approve_for_exact_head(project):
         base_branch="main",
     )
     assert restored.remote_sha == commit
+    assert restored.review_digest == review.digest()
 
 
 def test_new_commit_invalidates_review_and_blocks_push(project):

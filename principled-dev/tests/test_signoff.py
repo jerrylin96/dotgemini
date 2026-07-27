@@ -8,6 +8,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
+from principled_dev.review import ReviewRecord, record_review
 from principled_dev.signoff import create_attestation, export_session_digest
 
 
@@ -38,7 +39,7 @@ def repo(tmp_path):
 def approved(repo):
     commit = git(repo, "rev-parse", "HEAD")
     tree = git(repo, "rev-parse", "HEAD^{tree}")
-    return {"base_sha": commit, "commit_sha": commit, "tree_sha": tree}
+    return record_review(commit, commit, tree)
 
 
 def test_signoff_requires_human_review(repo):
@@ -50,13 +51,13 @@ def test_signoff_rejects_dirty_or_staged_repository(repo):
     record = approved(repo)
     (repo / "file.txt").write_text("dirty\n", encoding="utf-8")
     with pytest.raises(ValueError, match="dirty"):
-        create_attestation(repo, record, human_reviewed=True, identity="human")
+        create_attestation(repo, record, human_reviewed=True, identity="human", expected_review_digest=record.digest())
 
     git(repo, "restore", "file.txt")
     (repo / "new.txt").write_text("staged\n", encoding="utf-8")
     git(repo, "add", "new.txt")
     with pytest.raises(ValueError, match="dirty"):
-        create_attestation(repo, record, human_reviewed=True, identity="human")
+        create_attestation(repo, record, human_reviewed=True, identity="human", expected_review_digest=record.digest())
 
 
 def test_signoff_rejects_moved_head_or_wrong_tree(repo):
@@ -65,12 +66,55 @@ def test_signoff_rejects_moved_head_or_wrong_tree(repo):
     git(repo, "add", "second.txt")
     git(repo, "commit", "-qm", "second")
     with pytest.raises(ValueError, match="HEAD"):
-        create_attestation(repo, record, human_reviewed=True, identity="human")
+        create_attestation(repo, record, human_reviewed=True, identity="human", expected_review_digest=record.digest())
 
     fresh = approved(repo)
-    fresh["tree_sha"] = "d" * 40
+    wrong_tree = ReviewRecord(
+        fresh.verdict,
+        fresh.base_sha,
+        fresh.commit_sha,
+        "d" * 40,
+    )
     with pytest.raises(ValueError, match="tree"):
-        create_attestation(repo, fresh, human_reviewed=True, identity="human")
+        create_attestation(repo, wrong_tree, human_reviewed=True, identity="human", expected_review_digest=wrong_tree.digest())
+
+
+def test_signoff_rejects_non_approve_and_arbitrary_mapping(repo):
+    valid = approved(repo)
+    changes = ReviewRecord(
+        "REQUEST_CHANGES", valid.base_sha, valid.commit_sha, valid.tree_sha
+    )
+    with pytest.raises(ValueError, match="APPROVE"):
+        create_attestation(repo, changes, human_reviewed=True, identity="human")
+    with pytest.raises(TypeError, match="ReviewRecord"):
+        create_attestation(
+            repo,
+            valid.to_dict(),
+            human_reviewed=True,
+            identity="human",
+        )
+
+
+def test_signoff_requires_matching_review_digest(repo):
+    valid = approved(repo)
+    with pytest.raises(ValueError, match="persisted review digest"):
+        create_attestation(repo, valid, human_reviewed=True, identity="human")
+    with pytest.raises(ValueError, match="digest"):
+        create_attestation(
+            repo,
+            valid,
+            human_reviewed=True,
+            identity="human",
+            expected_review_digest="0" * 64,
+        )
+    result = create_attestation(
+        repo,
+        valid,
+        human_reviewed=True,
+        identity="human",
+        expected_review_digest=valid.digest(),
+    )
+    assert result["review_digest"] == valid.digest()
 
 
 def test_signoff_rejects_remote_mismatch(repo):
@@ -82,6 +126,7 @@ def test_signoff_rejects_remote_mismatch(repo):
             human_reviewed=True,
             identity="human",
             remote_sha="d" * 40,
+            expected_review_digest=record.digest(),
         )
 
 
@@ -92,18 +137,19 @@ def test_successful_report_only_attestation(repo):
         record,
         human_reviewed=True,
         identity="human@example.invalid",
-        remote_sha=record["commit_sha"],
+        remote_sha=record.commit_sha,
         tradeoffs=("POSIX only",),
         risks=("Hook policy fails open",),
         session_id="session-1",
         session_digest="sha256:" + "e" * 64,
+        expected_review_digest=record.digest(),
     )
     assert attestation["status"] == "VERIFIED_BY_HUMAN"
-    assert attestation["commit_sha"] == record["commit_sha"]
-    assert attestation["tree_sha"] == record["tree_sha"]
+    assert attestation["commit_sha"] == record.commit_sha
+    assert attestation["tree_sha"] == record.tree_sha
     assert attestation["identity"] == "human@example.invalid"
     assert attestation["tradeoffs"] == ["POSIX only"]
-    assert git(repo, "rev-parse", "HEAD") == record["commit_sha"]
+    assert git(repo, "rev-parse", "HEAD") == record.commit_sha
 
 
 def test_export_session_digest_uses_exact_export_bytes(tmp_path):

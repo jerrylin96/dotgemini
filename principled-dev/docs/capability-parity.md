@@ -33,7 +33,7 @@ This document compares the source lifecycle represented by this repository's glo
 | `/adversarial-review`, `/explain-diff`, `/signoff` | Adapted | Implemented as recipes plus absolute-path custom slash mappings. Recipes are not automatically registered by plugin installation. |
 | Skill discovery | Adapted | Global Open Plugin skills are namespaced `principled-dev:<name>`; project fallback copies unnamespaced skills to `.agents/skills/`. |
 | Persistent global guide/guardrails | Adapted | `GOOSE_MOIM_MESSAGE_FILE` injects `config/guardrails.md` each turn. This is model context, not a hard policy boundary. |
-| Pre-write/integration guardrail | Adapted | `PreToolUse` hook checks goose developer write/edit paths and selected direct shell commands. goose hook errors and timeouts fail open. |
+| Pre-write/integration guardrail | Adapted | `PreToolUse` hook denies direct developer write/edit paths outside resolved feature worktree, denies shell calls launched elsewhere, and recognizes selected direct integration commands. Wrappers/indirect mutations may evade checks; hook errors and timeouts fail open. |
 | Per-workspace Python environment isolation | Adapted | Existing repository wrappers use path-hashed environments; they are not bundled as a goose plugin primitive and are not a security sandbox. |
 | Fresh specialized subagent type/workspace selection | Adapted | goose internal subagents provide fresh context and extension selection, but do not reproduce Antigravity `TypeName` and `Workspace` controls exactly. |
 | Agent-created PR | Unavailable | Intentionally prohibited by this lifecycle; human owns PR creation. |

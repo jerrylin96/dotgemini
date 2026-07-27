@@ -125,7 +125,7 @@ export PRINCIPLED_DEV_FEATURE_WORKTREE="/absolute/path/to/durable/feature/worktr
 export PRINCIPLED_DEV_BASE_BRANCH="main"
 ```
 
-The feature variable is intentionally not a broad cache root. It must name the one writable durable feature worktree for that session. Symlink-resolved writes outside it are blocked. Shell checks also block directly parsed `git merge`, `gh pr create`, and pushes whose refspec targets the configured base branch; they are not a complete shell sandbox.
+The feature variable is intentionally not a broad cache root. It names the intended writable feature worktree. When hook executes successfully, direct write/edit tool calls outside that path and shell calls launched elsewhere are denied. Commands launched inside it can still use absolute paths, wrappers, scripts, redirections, or other tools to mutate outside state. Direct integration-command recognition is advisory, not filesystem or Git enforcement.
 
 Helper entry point after global installation:
 

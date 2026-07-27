@@ -106,12 +106,13 @@ def test_complete_local_lifecycle_keeps_primary_checkout_untouched(tmp_path):
 
     attestation = create_attestation(
         feature,
-        approval.to_dict(),
+        approval,
         human_reviewed=True,
         identity="human@example.invalid",
         remote_sha=second,
         tradeoffs=("POSIX-only initial release",),
         risks=("Policy hook is not a sandbox",),
+        expected_review_digest=approval.digest(),
     )
     assert attestation["status"] == "VERIFIED_BY_HUMAN"
 

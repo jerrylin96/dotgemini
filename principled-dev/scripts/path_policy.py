@@ -80,10 +80,16 @@ def decide(payload):
             return block("repository edits must stay inside configured feature worktree")
 
     if tool == "developer__shell":
+        if not feature_root:
+            return block("principled-dev feature worktree is not configured")
+        working_dir = Path(payload.get("working_dir") or os.getcwd()).resolve(strict=False)
+        root = Path(feature_root).expanduser().resolve(strict=False)
+        if working_dir != root and not _inside(working_dir, root):
+            return block("advisory shell boundary requires feature-worktree working directory")
         command = payload.get("tool_input", {}).get("command", "")
         base = os.environ.get("PRINCIPLED_DEV_BASE_BRANCH", "main")
         if _integration_command(command, base):
-            return block("PR creation and integration-branch mutation are human-owned")
+            return block("advisory check: PR creation and integration mutation are human-owned")
     return None
 
 

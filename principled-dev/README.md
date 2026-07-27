@@ -12,7 +12,7 @@ This directory is source code, not evidence of a published plugin or release. Re
 4. Build and verify in that feature worktree, then bind the manifest to exact base, commit, tree, and artifact values.
 5. Review the exact commit in a different, detached disposable worktree and fresh reviewer context.
 6. Publish only the independently approved SHA to the feature branch.
-7. Human reviews, completes Socratic signoff, creates the PR, and merges. The agent never creates the PR or mutates the integration branch.
+7. Workflow policy assigns PR creation and integration to human. Hooks provide advisory checks, not complete enforcement.
 
 Review and build locations are intentionally not interchangeable:
 
@@ -74,7 +74,7 @@ export PRINCIPLED_DEV_FEATURE_WORKTREE="/absolute/path/to/the/durable/feature/wo
 export PRINCIPLED_DEV_BASE_BRANCH="main"
 ```
 
-Without `PRINCIPLED_DEV_FEATURE_WORKTREE`, matched `developer__write` and `developer__edit` calls are blocked. `GOOSE_MOIM_MESSAGE_FILE` should also point to `config/guardrails.md` so guardrails are injected every turn; see installation docs. Environment isolation, Git worktree isolation, and hook policy are separate controls. None is a security sandbox.
+When hook executes successfully, matched `developer__write` and `developer__edit` calls are denied without resolved feature-worktree state. Shell calls are denied when launched outside resolved feature worktree, but wrappers and indirect mutations can evade command recognition. `GOOSE_MOIM_MESSAGE_FILE` should also point to `config/guardrails.md`; see installation docs. Hooks fail open and none of these controls is a security sandbox.
 
 ## Verify source checkout
 

@@ -1,3 +1,5 @@
+import hashlib
+import json
 from dataclasses import asdict, dataclass, field
 
 
@@ -51,6 +53,12 @@ class ReviewRecord:
             commit_sha,
             tree_sha,
         )
+
+    def digest(self):
+        canonical = json.dumps(
+            self.to_dict(), sort_keys=True, separators=(",", ":")
+        ).encode()
+        return hashlib.sha256(canonical).hexdigest()
 
     def to_dict(self):
         data = asdict(self)

@@ -5,5 +5,5 @@
 - Use a separate detached disposable worktree for independent review.
 - Bind manifests, review verdicts, publication, and signoff to exact Git SHAs.
 - Never claim tests, builds, or checks passed without current empirical output.
-- Never create a PR or merge/push into integration branch; human owns integration.
+- Workflow policy assigns PR creation and integration-branch mutation to human; hooks are advisory, not enforcement.
 - Never force-remove a dirty feature worktree.

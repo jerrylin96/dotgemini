@@ -77,9 +77,26 @@ def test_human_owned_integration_commands_are_blocked(paths, command):
     assert "human-owned" in decision["reason"]
 
 
-def test_read_only_shell_command_allowed(paths):
+def test_read_only_shell_command_allowed_inside_feature_worktree(paths):
     _, worktree = paths
     assert decide(payload("developer__shell", worktree, command="git diff main...HEAD")) is None
+
+
+def test_shell_outside_feature_worktree_is_blocked(paths):
+    repo, _ = paths
+    decision = decide(payload("developer__shell", repo, command="git status"))
+    assert decision["decision"] == "block"
+    assert "advisory shell boundary" in decision["reason"]
+
+
+def test_shell_without_feature_state_is_blocked(tmp_path, monkeypatch):
+    monkeypatch.delenv("PRINCIPLED_DEV_FEATURE_WORKTREE", raising=False)
+    monkeypatch.delenv("PRINCIPLED_DEV_REPOSITORY_ID", raising=False)
+    monkeypatch.delenv("PRINCIPLED_DEV_FEATURE_BRANCH", raising=False)
+    monkeypatch.setenv("PRINCIPLED_DEV_STATE_ROOT", str(tmp_path / "missing-state"))
+    decision = decide(payload("developer__shell", tmp_path, command="git status"))
+    assert decision["decision"] == "block"
+    assert "not configured" in decision["reason"]
 
 
 def test_missing_feature_state_blocks_repository_edits(tmp_path, monkeypatch):

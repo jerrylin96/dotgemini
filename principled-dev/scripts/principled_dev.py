@@ -123,12 +123,13 @@ def main(argv=None):
         output(
             create_attestation(
                 args.repo,
-                review.to_dict(),
+                review,
                 human_reviewed=args.human_reviewed,
                 identity=args.identity,
                 remote_sha=args.remote_sha,
                 session_id=args.session_id or os.environ.get("AGENT_SESSION_ID", "unavailable"),
                 session_digest=digest,
+                expected_review_digest=item.review_digest,
             )
         )
 

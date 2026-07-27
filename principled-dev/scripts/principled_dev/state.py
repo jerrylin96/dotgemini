@@ -11,7 +11,7 @@ from pathlib import Path
 STATE_VERSION = 1
 GATES = ("spec", "plan", "build")
 _METADATA_SHA_KEYS = {"base_sha", "manifest_commit_sha", "manifest_tree_sha", "remote_sha"}
-_METADATA_DIGEST_KEYS = {"manifest_diff_digest"}
+_METADATA_DIGEST_KEYS = {"manifest_diff_digest", "review_digest"}
 _METADATA_TEXT_KEYS = {"base_branch", "feature_branch"}
 _METADATA_PATH_KEYS = {"feature_worktree"}
 _METADATA_KEYS = _METADATA_SHA_KEYS | _METADATA_DIGEST_KEYS | _METADATA_TEXT_KEYS | _METADATA_PATH_KEYS
@@ -223,6 +223,7 @@ class StateStore:
         if manifest_changed:
             record["approvals"].pop("build", None)
             metadata.pop("remote_sha", None)
+            metadata.pop("review_digest", None)
         self._save(document)
         self._document = document
         return dict(metadata)
