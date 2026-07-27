@@ -31,6 +31,7 @@ Dirty feature worktrees are preserved and never force-removed. A managed review 
 - [Project-local installation](docs/project-local.md): copy skills to `.agents/skills/` and recipes to `.goose/recipes/`; includes the goose 1.44 project-plugin observation.
 - [Capability parity](docs/capability-parity.md): `Equivalent`, `Adapted`, `Deferred`, and `Unavailable` status for each ported surface.
 - [Known limitations](docs/known-limitations.md): hooks, subagents, POSIX locking, worktree boundaries, and other safety limits.
+- [Development status and roadmap](docs/development-status.md): durable handoff, current evidence, bounded review policy, remaining gates, and multi-model orchestration roadmap.
 
 ## Installed skill names
 
