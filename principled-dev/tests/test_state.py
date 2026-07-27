@@ -150,6 +150,28 @@ def test_lifecycle_metadata_is_validated_atomically_persisted_and_reloadable(
     assert state.StateStore(path).get_metadata("repo", "agent/topic") == metadata
 
 
+@pytest.mark.parametrize("changed_gate", ("spec", "plan", "build"))
+def test_artifact_change_invalidates_publication_tuple(tmp_path, changed_gate):
+    store = state.StateStore(tmp_path / f"{changed_gate}.json")
+    for gate, content in (("spec", "spec"), ("plan", "plan"), ("build", "build")):
+        store.set_artifact("repo", "agent/topic", gate, content)
+        store.approve("repo", "agent/topic", gate)
+    store.set_metadata(
+        "repo",
+        "agent/topic",
+        remote_sha="2" * 40,
+        published_remote="origin",
+        review_digest="8" * 64,
+    )
+
+    store.set_artifact("repo", "agent/topic", changed_gate, f"changed {changed_gate}")
+
+    metadata = store.get_metadata("repo", "agent/topic")
+    assert "remote_sha" not in metadata
+    assert "published_remote" not in metadata
+    assert "review_digest" not in metadata
+
+
 def test_manifest_metadata_change_invalidates_build_approval_and_remote_sha(tmp_path):
     store = state.StateStore(tmp_path / "state.json")
     context = {

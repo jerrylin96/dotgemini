@@ -71,6 +71,8 @@ def test_symlink_escape_is_blocked(paths, tmp_path):
         "git push origin refs/heads/main",
         "git push origin +HEAD:refs/heads/main",
         "git push origin :refs/heads/main",
+        "git push origin refs/heads/*:refs/heads/*",
+        "git push origin +refs/heads/*:refs/heads/*",
         "gh pr create --base main --head agent/x",
     ),
 )

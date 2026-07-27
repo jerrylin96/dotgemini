@@ -178,6 +178,10 @@ class StateStore:
         changed_index = GATES.index(gate)
         for invalidated_gate in GATES[changed_index:]:
             record["approvals"].pop(invalidated_gate, None)
+        metadata = record.setdefault("metadata", {})
+        metadata.pop("remote_sha", None)
+        metadata.pop("published_remote", None)
+        metadata.pop("review_digest", None)
         self._save(document)
         self._document = document
         return digest

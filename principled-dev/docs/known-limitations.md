@@ -29,7 +29,7 @@ Consequences:
 
 The current matcher covers `developer__write`, `developer__edit`, and `developer__shell`. Other extensions, renamed tools, direct filesystem APIs, external agents, or commands that mutate files indirectly may fall outside path checks.
 
-When hook state resolves successfully, shell calls launched outside the active feature worktree are denied. Inside it, policy recognizes directly parsed commands beginning with `git merge`, `gh pr ... create`, or short/fully-qualified/forced/deletion `git push` refspecs targeting the configured base branch. This working-directory boundary does not constrain absolute paths used by a command. Shell wrappers, compound scripts, aliases, redirections, scripts, alternative Git clients, push options without explicit refspecs, and indirect filesystem mutations can evade recognition. Never describe this as filesystem or Git enforcement.
+When hook state resolves successfully, shell calls launched outside the active feature worktree are denied. Inside it, policy recognizes directly parsed commands beginning with `git merge`, `gh pr ... create`, and short/fully-qualified/forced/deletion `git push` refspecs targeting the configured base branch; wildcard push refspecs are conservatively denied. This working-directory boundary does not constrain absolute paths used by a command. Shell wrappers, compound scripts, aliases, redirections, scripts, alternative Git clients, push options without explicit refspecs, and indirect filesystem mutations can evade recognition. Never describe this as filesystem or Git enforcement.
 
 ## No sandbox
 

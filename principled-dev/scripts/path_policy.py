@@ -49,7 +49,7 @@ def _integration_command(command, base):
         for ref in refs:
             ref = ref.removeprefix("+")
             destination = ref.split(":", 1)[-1]
-            if destination in protected:
+            if "*" in ref or destination in protected:
                 return True
         return False
     return False
