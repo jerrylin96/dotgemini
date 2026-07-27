@@ -102,6 +102,19 @@ def test_cli_resumes_lifecycle_across_processes(tmp_path):
     published = run_cli(repo, env, *identity, "publish", str(review_path))
     assert published["pushed_sha"] == commit
 
+    signed = run_cli(
+        repo,
+        env,
+        *identity,
+        "signoff",
+        str(review_path),
+        "--identity",
+        "human@example.invalid",
+        "--human-reviewed",
+    )
+    assert signed["commit_sha"] == commit
+    assert git(repo, "rev-parse", "HEAD") == base
+
     state_text = (tmp_path / "state" / "lifecycle.json").read_text(encoding="utf-8")
     for excluded in (
         str(repo),

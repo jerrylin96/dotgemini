@@ -45,7 +45,13 @@ def _integration_command(command, base):
         return True
     if len(words) >= 3 and words[:2] == ["git", "push"]:
         refs = words[3:] if len(words) > 3 else ()
-        return any(ref == base or ref.endswith(f":{base}") for ref in refs)
+        protected = {base, f"refs/heads/{base}"}
+        for ref in refs:
+            ref = ref.removeprefix("+")
+            destination = ref.split(":", 1)[-1]
+            if destination in protected:
+                return True
+        return False
     return False
 
 

@@ -115,13 +115,18 @@ def main(argv=None):
         output(item.publish(review, remote=args.remote))
     elif args.command == "signoff":
         review = ReviewRecord.from_dict(json.loads(Path(args.review_json).read_text(encoding="utf-8")))
+        if not item.feature_worktree or not Path(item.feature_worktree).is_dir():
+            parser.error("persisted feature worktree is unavailable")
+        feature_branch = item._feature_git().symbolic_branch()
+        if feature_branch != f"refs/heads/{item.feature_branch}":
+            parser.error("persisted feature worktree is not attached to expected branch")
         digest = "unavailable"
         if args.digest_session:
             session = export_session_digest(args.session_id or os.environ.get("AGENT_SESSION_ID"))
             digest = "sha256:" + session["sha256"]
         output(
             create_attestation(
-                args.repo,
+                item.feature_worktree,
                 review,
                 human_reviewed=args.human_reviewed,
                 identity=args.identity,

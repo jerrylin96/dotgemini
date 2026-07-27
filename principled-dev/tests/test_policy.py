@@ -67,6 +67,10 @@ def test_symlink_escape_is_blocked(paths, tmp_path):
         "git merge feature",
         "git push origin HEAD:main",
         "git push origin main",
+        "git push origin HEAD:refs/heads/main",
+        "git push origin refs/heads/main",
+        "git push origin +HEAD:refs/heads/main",
+        "git push origin :refs/heads/main",
         "gh pr create --base main --head agent/x",
     ),
 )
