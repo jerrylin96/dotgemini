@@ -282,6 +282,221 @@ def test_every_failure_after_push_reports_partial_success(project, monkeypatch, 
     assert git(feature, "ls-remote", "origin", "refs/heads/agent/topic").split()[0] == commit
 
 
+def test_review_digest_failure_happens_before_push(project, monkeypatch):
+    _, _, lifecycle = project
+    approve_plan(lifecycle)
+    feature = lifecycle.create_feature("main")
+    commit = commit_feature(feature)
+    manifest = lifecycle.bind_manifest("summary")
+    lifecycle.approve_manifest(manifest)
+    review = record_review(
+        lifecycle.base_sha,
+        commit,
+        git(feature, "rev-parse", "HEAD^{tree}"),
+    )
+
+    class FailingDigestReview:
+        verdict = review.verdict
+
+        def is_fresh(self, *args):
+            return review.is_fresh(*args)
+
+        def digest(self):
+            raise UnicodeError("digest failed")
+
+    with pytest.raises(LifecycleError, match="digest"):
+        lifecycle.publish(FailingDigestReview())
+
+    assert git(feature, "ls-remote", "origin", "refs/heads/agent/topic") == ""
+
+
+@pytest.mark.parametrize("phase", ("remote_verification", "local_state_persistence"))
+@pytest.mark.parametrize("exception_type", (OSError, UnicodeError))
+def test_non_git_exceptions_after_push_report_partial_success(
+    project, monkeypatch, phase, exception_type
+):
+    _, _, lifecycle = project
+    approve_plan(lifecycle)
+    feature = lifecycle.create_feature("main")
+    commit = commit_feature(feature)
+    manifest = lifecycle.bind_manifest("summary")
+    lifecycle.approve_manifest(manifest)
+    review = record_review(
+        lifecycle.base_sha,
+        commit,
+        git(feature, "rev-parse", "HEAD^{tree}"),
+    )
+    feature_git = lifecycle._feature_git()
+
+    if phase == "remote_verification":
+        class FailingVerificationGit:
+            def __getattr__(self, name):
+                return getattr(feature_git, name)
+
+            def run(self, *args, **kwargs):
+                if args[0] == "ls-remote":
+                    raise exception_type("verification failed")
+                return feature_git.run(*args, **kwargs)
+
+        monkeypatch.setattr(lifecycle, "_feature_git", lambda: FailingVerificationGit())
+    else:
+        monkeypatch.setattr(
+            lifecycle.state,
+            "set_metadata",
+            lambda *args, **kwargs: (_ for _ in ()).throw(
+                exception_type("persistence failed")
+            ),
+        )
+
+    with pytest.raises(PublicationPartialSuccess) as raised:
+        lifecycle.publish(review)
+
+    assert raised.value.phase == phase
+    assert raised.value.cause == (
+        "verification failed" if phase == "remote_verification" else "persistence failed"
+    )
+    assert git(feature, "ls-remote", "origin", "refs/heads/agent/topic").split()[0] == commit
+
+
+@pytest.mark.parametrize(
+    "remote",
+    (
+        "https://alice:remote-secret@example.invalid/owner/repo.git?token=query-secret",
+        "team/origin",
+        "unknown",
+    ),
+)
+def test_publish_rejects_non_alias_remote_before_push(
+    project, monkeypatch, capsys, remote
+):
+    _, remote_path, lifecycle = project
+    approve_plan(lifecycle)
+    feature = lifecycle.create_feature("main")
+    commit = commit_feature(feature)
+    manifest = lifecycle.bind_manifest("summary")
+    lifecycle.approve_manifest(manifest)
+    review = record_review(
+        lifecycle.base_sha,
+        commit,
+        git(feature, "rev-parse", "HEAD^{tree}"),
+    )
+    feature_git = lifecycle._feature_git()
+    pushed = []
+
+    class TrackingGit:
+        def __getattr__(self, name):
+            return getattr(feature_git, name)
+
+        def run(self, *args, **kwargs):
+            if args[0] == "push":
+                pushed.append(args)
+            return feature_git.run(*args, **kwargs)
+
+    monkeypatch.setattr(lifecycle, "_feature_git", lambda: TrackingGit())
+
+    with pytest.raises(LifecycleError) as raised:
+        lifecycle.publish(review, remote=remote)
+
+    print(raised.value)
+    captured = capsys.readouterr()
+    for exposed in (str(raised.value), captured.out, captured.err):
+        assert "remote-secret" not in exposed
+        assert "query-secret" not in exposed
+    assert pushed == []
+    assert git(feature, "ls-remote", "origin", "refs/heads/agent/topic") == ""
+    state_text = lifecycle.state.path.read_text(encoding="utf-8")
+    assert "remote-secret" not in state_text
+    assert "query-secret" not in state_text
+    if "://" in remote:
+        assert git(feature, "remote", "get-url", "origin") == str(remote_path)
+
+
+def test_credentialed_remote_persists_and_returns_alias_only(project, monkeypatch):
+    _, _, lifecycle = project
+    approve_plan(lifecycle)
+    feature = lifecycle.create_feature("main")
+    commit = commit_feature(feature)
+    manifest = lifecycle.bind_manifest("summary")
+    lifecycle.approve_manifest(manifest)
+    review = record_review(
+        lifecycle.base_sha,
+        commit,
+        git(feature, "rev-parse", "HEAD^{tree}"),
+    )
+    remote = "credentialed"
+    credential_url = "https://alice:remote-secret@example.invalid/repo.git?token=query-secret"
+    git(feature, "remote", "add", remote, credential_url)
+    feature_git = lifecycle._feature_git()
+
+    class CredentialedAliasGit:
+        def __getattr__(self, name):
+            return getattr(feature_git, name)
+
+        def run(self, *args, **kwargs):
+            if args[0] in ("push", "ls-remote") and args[1] == remote:
+                args = (args[0], "origin", *args[2:])
+            return feature_git.run(*args, **kwargs)
+
+    monkeypatch.setattr(lifecycle, "_feature_git", lambda: CredentialedAliasGit())
+
+    result = lifecycle.publish(review, remote=remote)
+
+    assert result["remote"] == remote
+    metadata = StateStore(lifecycle.state.path).get_metadata(
+        lifecycle.repository_id, lifecycle.feature_branch
+    )
+    assert metadata["published_remote"] == remote
+    exposed = f"{result}\n{metadata}\n{lifecycle.state.path.read_text(encoding='utf-8')}"
+    for secret in (credential_url, "alice", "remote-secret", "query-secret"):
+        assert secret not in exposed
+
+
+def test_credentialed_remote_url_is_never_exposed_after_push(project, monkeypatch):
+    _, _, lifecycle = project
+    approve_plan(lifecycle)
+    feature = lifecycle.create_feature("main")
+    commit = commit_feature(feature)
+    manifest = lifecycle.bind_manifest("summary")
+    lifecycle.approve_manifest(manifest)
+    review = record_review(
+        lifecycle.base_sha,
+        commit,
+        git(feature, "rev-parse", "HEAD^{tree}"),
+    )
+    remote = "credentialed"
+    credential_url = (
+        "https://alice:remote-secret@example.invalid/owner/repo.git"
+        "?token=query-secret&password=password-secret"
+    )
+    git(feature, "remote", "add", remote, credential_url)
+    feature_git = lifecycle._feature_git()
+
+    class FailingCredentialedGit:
+        def __getattr__(self, name):
+            return getattr(feature_git, name)
+
+        def run(self, *args, **kwargs):
+            if args[0] == "push" and args[1] == remote:
+                return feature_git.run("push", "origin", *args[2:], **kwargs)
+            if args[0] == "ls-remote":
+                raise OSError(f"cannot verify {credential_url}")
+            return feature_git.run(*args, **kwargs)
+
+    monkeypatch.setattr(lifecycle, "_feature_git", lambda: FailingCredentialedGit())
+
+    with pytest.raises(PublicationPartialSuccess) as raised:
+        lifecycle.publish(review, remote=remote)
+
+    error = raised.value
+    assert error.remote == remote
+    assert error.phase == "remote_verification"
+    exposed = f"{error}\n{error.cause}\n{error.remote}"
+    for secret in ("alice", "remote-secret", "query-secret", "password-secret"):
+        assert secret not in exposed
+    assert credential_url not in lifecycle.state.path.read_text(encoding="utf-8")
+    assert git(feature, "ls-remote", "origin", "refs/heads/agent/topic").split()[0] == commit
+
+
 def prepare_publication(lifecycle):
     approve_plan(lifecycle)
     feature = lifecycle.create_feature("main")

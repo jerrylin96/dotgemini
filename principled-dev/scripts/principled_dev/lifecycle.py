@@ -1,10 +1,25 @@
 import hashlib
+import re
 from pathlib import Path
 
 from .git import Git, GitError, repository_id
 from .signoff import create_attestation
 from .state import GateError, StateConflict
 from .worktrees import WorktreeManager
+
+
+_URL_USERINFO = re.compile(r"([A-Za-z][A-Za-z0-9+.-]*://)[^/@\s]+@")
+_QUERY_SECRET = re.compile(
+    r"([?&][^=&#\s]*(?:token|password|passwd|pwd|secret|api[_-]?key)[^=&#\s]*=)[^&#\s]*",
+    re.IGNORECASE,
+)
+
+
+def _redact(value):
+    if value is None:
+        return None
+    value = _URL_USERINFO.sub(r"\1[REDACTED]@", str(value))
+    return _QUERY_SECRET.sub(r"\1[REDACTED]", value)
 
 
 class LifecycleError(RuntimeError):
@@ -15,15 +30,16 @@ class PublicationPartialSuccess(LifecycleError):
     """Remote publication succeeded but local state compare-and-swap failed."""
 
     def __init__(self, remote, branch, pushed_sha, *, phase="local_state_persistence", observed_sha=None, cause=None):
-        self.remote = remote
-        self.branch = branch
+        self.remote = _redact(remote)
+        self.branch = _redact(branch)
         self.pushed_sha = pushed_sha
         self.phase = phase
-        self.observed_sha = observed_sha
-        self.cause = cause
+        self.observed_sha = _redact(observed_sha)
+        self.cause = _redact(cause)
         super().__init__(
-            f"publication succeeded on remote {remote} branch {branch} at intended SHA {pushed_sha}, "
-            f"but {phase} failed" + (f": {cause}" if cause else "")
+            f"publication succeeded on remote {self.remote} branch {self.branch} "
+            f"at intended SHA {pushed_sha}, but {phase} failed"
+            + (f": {self.cause}" if self.cause else "")
         )
 
 
@@ -178,6 +194,13 @@ class Lifecycle:
         remote = remote or feature.run(
             "config", "--get", f"branch.{self.base_branch}.remote", check=False
         ).stdout.strip() or "origin"
+        configured_remotes = set(feature.run("remote").stdout.splitlines())
+        if "/" in remote or remote not in configured_remotes:
+            raise LifecycleError("configured remote alias is required")
+        try:
+            review_digest = review.digest()
+        except Exception as error:
+            raise LifecycleError("review digest cannot be computed") from error
         refspec = f"{head}:refs/heads/{self.feature_branch}"
         try:
             expected_token = self.state.require_approved_and_token(
@@ -197,7 +220,18 @@ class Lifecycle:
                 "ls-remote", remote, f"refs/heads/{self.feature_branch}"
             ).stdout.split()
             remote_sha = fields[0]
-        except (GitError, IndexError) as error:
+            if remote_sha != head:
+                raise PublicationPartialSuccess(
+                    remote,
+                    self.feature_branch,
+                    head,
+                    phase="remote_mismatch",
+                    observed_sha=remote_sha,
+                    cause=f"observed {remote_sha}",
+                )
+        except PublicationPartialSuccess:
+            raise
+        except Exception as error:
             raise PublicationPartialSuccess(
                 remote,
                 self.feature_branch,
@@ -205,16 +239,6 @@ class Lifecycle:
                 phase="remote_verification",
                 cause=str(error),
             ) from error
-        if remote_sha != head:
-            raise PublicationPartialSuccess(
-                remote,
-                self.feature_branch,
-                head,
-                phase="remote_mismatch",
-                observed_sha=remote_sha,
-                cause=f"observed {remote_sha}",
-            )
-        review_digest = review.digest()
         try:
             self.state.set_metadata(
                 self.repository_id,

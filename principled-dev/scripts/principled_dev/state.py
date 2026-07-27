@@ -32,7 +32,24 @@ class StateConflict(StateError):
 
 
 _HELD_LOCKS = set()
+_ACTIVE_LOCK_FILES = set()
 _HELD_LOCKS_GUARD = threading.Lock()
+
+
+def _reset_locks_after_fork():
+    """Drop inherited lock descriptors without altering the parent's flock."""
+    global _ACTIVE_LOCK_FILES, _HELD_LOCKS, _HELD_LOCKS_GUARD
+    for lock_file in _ACTIVE_LOCK_FILES:
+        try:
+            lock_file.close()
+        except OSError:
+            pass
+    _ACTIVE_LOCK_FILES = set()
+    _HELD_LOCKS = set()
+    _HELD_LOCKS_GUARD = threading.Lock()
+
+
+os.register_at_fork(after_in_child=_reset_locks_after_fork)
 
 
 class FileLock:
@@ -51,9 +68,13 @@ class FileLock:
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             self._file = self.path.open("a+")
+            with _HELD_LOCKS_GUARD:
+                _ACTIVE_LOCK_FILES.add(self._file)
             fcntl.flock(self._file.fileno(), fcntl.LOCK_EX)
         except OSError as error:
             if self._file is not None:
+                with _HELD_LOCKS_GUARD:
+                    _ACTIVE_LOCK_FILES.discard(self._file)
                 self._file.close()
                 self._file = None
             with _HELD_LOCKS_GUARD:
@@ -68,9 +89,10 @@ class FileLock:
         except OSError as error:
             raise StateError("state lock cannot be released") from error
         finally:
-            self._file = None
             with _HELD_LOCKS_GUARD:
+                _ACTIVE_LOCK_FILES.discard(self._file)
                 _HELD_LOCKS.discard(self.path)
+            self._file = None
 
 
 def content_digest(content):
