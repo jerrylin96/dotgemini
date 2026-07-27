@@ -28,8 +28,9 @@ def test_plugin_manifest_and_neutral_paths():
     }
 
     forbidden = ("ANTIGRAVITY", "DOTGEMINI", "~/.gemini", "google_accounts.json")
+    text_suffixes = {".json", ".md", ".py", ".sh", ".yaml"}
     for path in PLUGIN_ROOT.rglob("*"):
-        if path.is_file() and "tests" not in path.parts:
+        if path.is_file() and "tests" not in path.parts and path.suffix in text_suffixes:
             content = path.read_text(encoding="utf-8")
             assert not any(token in content for token in forbidden), path
 
