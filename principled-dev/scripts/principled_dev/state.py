@@ -10,6 +10,12 @@ from pathlib import Path
 
 STATE_VERSION = 1
 GATES = ("spec", "plan", "build")
+_METADATA_SHA_KEYS = {"base_sha", "manifest_commit_sha", "manifest_tree_sha", "remote_sha"}
+_METADATA_DIGEST_KEYS = {"manifest_diff_digest"}
+_METADATA_TEXT_KEYS = {"base_branch", "feature_branch"}
+_METADATA_PATH_KEYS = {"feature_worktree"}
+_METADATA_KEYS = _METADATA_SHA_KEYS | _METADATA_DIGEST_KEYS | _METADATA_TEXT_KEYS | _METADATA_PATH_KEYS
+_MANIFEST_KEYS = {"manifest_commit_sha", "manifest_tree_sha", "manifest_diff_digest"}
 
 
 class StateError(RuntimeError):
@@ -46,6 +52,14 @@ def _is_digest(value):
     )
 
 
+def _is_object_id(value):
+    return (
+        isinstance(value, str)
+        and 40 <= len(value) <= 64
+        and all(character in "0123456789abcdef" for character in value)
+    )
+
+
 def _validate_document(document):
     if not isinstance(document, dict) or set(document) != {"version", "records"}:
         raise StateError("malformed state document")
@@ -58,16 +72,33 @@ def _validate_document(document):
     for key, record in records.items():
         if not _is_digest(key):
             raise StateError("malformed state record key")
-        if not isinstance(record, dict) or set(record) != {"artifacts", "approvals"}:
+        if not isinstance(record, dict) or set(record) not in (
+            {"artifacts", "approvals"},
+            {"artifacts", "approvals", "metadata"},
+        ):
             raise StateError("malformed state record")
         artifacts = record["artifacts"]
         approvals = record["approvals"]
+        metadata = record.get("metadata", {})
         if not isinstance(artifacts, dict) or not isinstance(approvals, dict):
             raise StateError("malformed artifact or approval state")
         if any(gate not in GATES or not _is_digest(digest) for gate, digest in artifacts.items()):
             raise StateError("malformed artifact state")
         if any(gate not in GATES or not _is_digest(digest) for gate, digest in approvals.items()):
             raise StateError("malformed approval state")
+        if not isinstance(metadata, dict) or any(key not in _METADATA_KEYS for key in metadata):
+            raise StateError("malformed metadata")
+        for key, value in metadata.items():
+            if key in _METADATA_SHA_KEYS and not _is_object_id(value):
+                raise StateError("malformed metadata SHA")
+            if key in _METADATA_DIGEST_KEYS and not _is_digest(value):
+                raise StateError("malformed metadata digest")
+            if key in _METADATA_TEXT_KEYS and (not isinstance(value, str) or not value):
+                raise StateError("malformed metadata text")
+            if key in _METADATA_PATH_KEYS and (
+                not isinstance(value, str) or not value or not Path(value).is_absolute()
+            ):
+                raise StateError("malformed metadata path")
 
         for index, gate in enumerate(GATES):
             if gate not in approvals:
@@ -136,7 +167,10 @@ class StateStore:
         key = _record_key(repository, feature)
         digest = content_digest(content)
         document = copy.deepcopy(self._document)
-        record = document["records"].setdefault(key, {"artifacts": {}, "approvals": {}})
+        record = document["records"].setdefault(
+            key, {"artifacts": {}, "approvals": {}, "metadata": {}}
+        )
+        record.setdefault("metadata", {})
         if record["artifacts"].get(gate) == digest:
             return digest
 
@@ -171,6 +205,31 @@ class StateStore:
         self._save(document)
         self._document = document
         return digest
+
+    def set_metadata(self, repository, feature, **values):
+        unknown = set(values) - _METADATA_KEYS
+        if unknown:
+            raise StateError(f"unknown metadata: {sorted(unknown)}")
+        key = _record_key(repository, feature)
+        document = copy.deepcopy(self._document)
+        record = document["records"].setdefault(
+            key, {"artifacts": {}, "approvals": {}, "metadata": {}}
+        )
+        metadata = record.setdefault("metadata", {})
+        manifest_changed = any(
+            name in values and metadata.get(name) != values[name] for name in _MANIFEST_KEYS
+        )
+        metadata.update(values)
+        if manifest_changed:
+            record["approvals"].pop("build", None)
+            metadata.pop("remote_sha", None)
+        self._save(document)
+        self._document = document
+        return dict(metadata)
+
+    def get_metadata(self, repository, feature):
+        record = self._document["records"].get(_record_key(repository, feature), {})
+        return dict(record.get("metadata", {}))
 
     def is_approved(self, repository, feature, gate, content=None):
         """Return whether gate approval matches current and optional supplied content."""

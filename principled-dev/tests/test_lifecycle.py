@@ -72,6 +72,30 @@ def test_feature_starts_at_exact_base_sha(project):
     assert git(feature, "symbolic-ref", "HEAD") == "refs/heads/agent/topic"
 
 
+def test_constructor_restores_feature_and_manifest_context(project):
+    repo, _, lifecycle = project
+    approve_plan(lifecycle)
+    base = git(repo, "rev-parse", "main")
+    feature = lifecycle.create_feature(base)
+    commit_feature(feature)
+    manifest = lifecycle.bind_manifest("not persisted")
+
+    restored = Lifecycle(
+        repo,
+        lifecycle.worktrees.root.parent,
+        lifecycle.state,
+        feature_branch="agent/topic",
+        base_branch="wrong-default",
+    )
+
+    assert restored.base_branch == "main"
+    assert restored.base_sha == base
+    assert restored.feature_branch == "agent/topic"
+    assert restored.feature_worktree == feature
+    assert restored.manifest_is_fresh()
+    assert restored.bind_manifest("new output summary")["commit_sha"] == manifest["commit_sha"]
+
+
 def test_manifest_binds_commit_tree_and_diff_and_stales_on_change(project):
     _, _, lifecycle = project
     approve_plan(lifecycle)
@@ -83,6 +107,9 @@ def test_manifest_binds_commit_tree_and_diff_and_stales_on_change(project):
     assert len(manifest["diff_digest"]) == 64
     lifecycle.approve_manifest(manifest)
     assert lifecycle.manifest_is_fresh()
+    assert lifecycle.state.is_approved(
+        lifecycle.repository_id, lifecycle.feature_branch, "build"
+    )
 
     (feature / "app.txt").write_text("dirty\n", encoding="utf-8")
     assert not lifecycle.manifest_is_fresh()
@@ -107,6 +134,14 @@ def test_push_requires_fresh_approve_for_exact_head(project):
     result = lifecycle.publish(review)
     assert result["pushed_sha"] == commit
     assert git(feature, "ls-remote", "origin", "refs/heads/agent/topic").split()[0] == commit
+    restored = Lifecycle(
+        lifecycle.repository,
+        lifecycle.worktrees.root.parent,
+        StateStore(lifecycle.state.path),
+        feature_branch="agent/topic",
+        base_branch="main",
+    )
+    assert restored.remote_sha == commit
 
 
 def test_new_commit_invalidates_review_and_blocks_push(project):

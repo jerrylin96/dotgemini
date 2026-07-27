@@ -118,6 +118,70 @@ def test_state_excludes_artifacts_credentials_and_transcripts(tmp_path):
     assert state.content_digest(artifact + transcript) in persisted
 
 
+def test_lifecycle_metadata_is_validated_atomically_persisted_and_reloadable(
+    tmp_path, monkeypatch
+):
+    path = tmp_path / "state.json"
+    replacements = []
+    real_replace = state.os.replace
+
+    def observe_replace(source, destination):
+        replacements.append((Path(source), Path(destination)))
+        real_replace(source, destination)
+
+    monkeypatch.setattr(state.os, "replace", observe_replace)
+    store = state.StateStore(path)
+    metadata = {
+        "base_branch": "main",
+        "base_sha": "1" * 40,
+        "feature_branch": "agent/topic",
+        "feature_worktree": str((tmp_path / "worktrees" / "topic").resolve()),
+        "manifest_commit_sha": "2" * 40,
+        "manifest_tree_sha": "3" * 40,
+        "manifest_diff_digest": "4" * 64,
+    }
+
+    store.set_metadata("repo", "agent/topic", **metadata)
+
+    assert state.StateStore(path).get_metadata("repo", "agent/topic") == metadata
+    assert replacements and all(destination == path for _, destination in replacements)
+    with pytest.raises(state.StateError, match="metadata"):
+        store.set_metadata("repo", "agent/topic", base_sha="not-a-sha")
+    assert state.StateStore(path).get_metadata("repo", "agent/topic") == metadata
+
+
+def test_manifest_metadata_change_invalidates_build_approval_and_remote_sha(tmp_path):
+    store = state.StateStore(tmp_path / "state.json")
+    context = {
+        "base_branch": "main",
+        "base_sha": "1" * 40,
+        "feature_branch": "agent/topic",
+        "feature_worktree": str((tmp_path / "feature").resolve()),
+        "manifest_commit_sha": "2" * 40,
+        "manifest_tree_sha": "3" * 40,
+        "manifest_diff_digest": "4" * 64,
+    }
+    store.set_artifact("repo", "agent/topic", "spec", "spec")
+    store.approve("repo", "agent/topic", "spec")
+    store.set_artifact("repo", "agent/topic", "plan", "plan")
+    store.approve("repo", "agent/topic", "plan")
+    store.set_metadata("repo", "agent/topic", **context)
+    store.set_artifact("repo", "agent/topic", "build", "manifest")
+    store.approve("repo", "agent/topic", "build")
+    store.set_metadata("repo", "agent/topic", remote_sha="2" * 40)
+
+    store.set_metadata(
+        "repo",
+        "agent/topic",
+        manifest_commit_sha="5" * 40,
+        manifest_tree_sha="6" * 40,
+        manifest_diff_digest="7" * 64,
+    )
+
+    assert not store.is_approved("repo", "agent/topic", "build")
+    assert "remote_sha" not in store.get_metadata("repo", "agent/topic")
+
+
 def test_malformed_and_unknown_state_versions_fail_closed(tmp_path):
     cases = (
         "not json",
