@@ -8,9 +8,10 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
+from principled_dev.git import GitError
 from principled_dev.lifecycle import Lifecycle, LifecycleError, PublicationPartialSuccess
 from principled_dev.review import record_review
-from principled_dev.state import StateStore
+from principled_dev.state import StateError, StateStore
 
 
 def git(cwd, *args, check=True):
@@ -233,6 +234,52 @@ def test_publish_rejects_stale_state_without_restoring_publication(project, monk
     assert lifecycle.remote_sha is None
     assert lifecycle.published_remote is None
     assert lifecycle.review_digest is None
+
+
+@pytest.mark.parametrize("phase", ("remote_verification", "remote_mismatch", "local_state_persistence"))
+def test_every_failure_after_push_reports_partial_success(project, monkeypatch, phase):
+    _, _, lifecycle = project
+    approve_plan(lifecycle)
+    feature = lifecycle.create_feature("main")
+    commit = commit_feature(feature)
+    manifest = lifecycle.bind_manifest("summary")
+    lifecycle.approve_manifest(manifest)
+    review = record_review(
+        lifecycle.base_sha,
+        commit,
+        git(feature, "rev-parse", "HEAD^{tree}"),
+    )
+    feature_git = lifecycle._feature_git()
+
+    class FailingAfterPushGit:
+        def __getattr__(self, name):
+            return getattr(feature_git, name)
+
+        def run(self, *args, **kwargs):
+            if args[0] == "ls-remote":
+                if phase == "remote_verification":
+                    raise GitError("network failed")
+                if phase == "remote_mismatch":
+                    result = feature_git.run(*args, **kwargs)
+                    return type(result)(result.args, result.returncode, "f" * 40 + "\tref\n", result.stderr)
+            return feature_git.run(*args, **kwargs)
+
+    monkeypatch.setattr(lifecycle, "_feature_git", lambda: FailingAfterPushGit())
+    if phase == "local_state_persistence":
+        monkeypatch.setattr(
+            lifecycle.state,
+            "set_metadata",
+            lambda *args, **kwargs: (_ for _ in ()).throw(StateError("disk failed")),
+        )
+
+    with pytest.raises(PublicationPartialSuccess) as raised:
+        lifecycle.publish(review)
+    error = raised.value
+    assert error.remote == "origin"
+    assert error.branch == "agent/topic"
+    assert error.pushed_sha == commit
+    assert error.phase == phase
+    assert git(feature, "ls-remote", "origin", "refs/heads/agent/topic").split()[0] == commit
 
 
 def prepare_publication(lifecycle):

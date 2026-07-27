@@ -207,6 +207,24 @@ def test_require_approved_and_publication_snapshot_are_atomic(tmp_path):
         store.require_approved_and_token("repo", "agent/topic", "build", "changed")
 
 
+@pytest.mark.parametrize("separate_instance", (False, True))
+def test_with_valid_token_reentrant_state_access_fails_fast(tmp_path, separate_instance):
+    path = tmp_path / "state.json"
+    store = state.StateStore(path)
+    store.set_artifact("repo", "agent/topic", "spec", "spec")
+    token = store.record_token("repo", "agent/topic")
+    nested = state.StateStore(path) if separate_instance else store
+
+    with pytest.raises(state.StateError, match="reentrant"):
+        store.with_valid_token(
+            "repo",
+            "agent/topic",
+            token,
+            lambda: nested.record_token("repo", "agent/topic"),
+        )
+    assert store.record_token("repo", "agent/topic") == token
+
+
 def test_with_valid_token_returns_callback_result_and_rejects_stale_token(tmp_path):
     store = state.StateStore(tmp_path / "state.json")
     store.set_artifact("repo", "agent/topic", "spec", "spec")

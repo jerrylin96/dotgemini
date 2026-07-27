@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import tempfile
+import threading
 from pathlib import Path
 
 
@@ -30,6 +31,10 @@ class StateConflict(StateError):
     """State changed after a caller captured its expected record token."""
 
 
+_HELD_LOCKS = set()
+_HELD_LOCKS_GUARD = threading.Lock()
+
+
 class FileLock:
     """Exclusive POSIX advisory lock backed by a sidecar file."""
 
@@ -38,6 +43,11 @@ class FileLock:
         self._file = None
 
     def __enter__(self):
+        self.path = self.path.resolve(strict=False)
+        with _HELD_LOCKS_GUARD:
+            if self.path in _HELD_LOCKS:
+                raise StateError(f"reentrant state lock: {self.path}")
+            _HELD_LOCKS.add(self.path)
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             self._file = self.path.open("a+")
@@ -46,6 +56,8 @@ class FileLock:
             if self._file is not None:
                 self._file.close()
                 self._file = None
+            with _HELD_LOCKS_GUARD:
+                _HELD_LOCKS.discard(self.path)
             raise StateError("state lock cannot be acquired") from error
         return self
 
@@ -57,6 +69,8 @@ class FileLock:
             raise StateError("state lock cannot be released") from error
         finally:
             self._file = None
+            with _HELD_LOCKS_GUARD:
+                _HELD_LOCKS.discard(self.path)
 
 
 def content_digest(content):
@@ -307,7 +321,12 @@ class StateStore:
             self._document = self._load()
             if self._record_token(self._document, key) != expected_token:
                 raise StateConflict("state record changed")
-            return callback()
+            try:
+                return callback()
+            except RuntimeError as error:
+                if "reentrant file lock" in str(error):
+                    raise StateError("reentrant state access from locked callback") from error
+                raise
 
     def set_metadata(self, repository, feature, *, expected_token=None, **values):
         unknown = set(values) - _METADATA_KEYS

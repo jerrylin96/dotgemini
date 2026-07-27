@@ -126,6 +126,9 @@ def main(argv=None):
                     "remote": error.remote,
                     "branch": error.branch,
                     "pushed_sha": error.pushed_sha,
+                    "phase": error.phase,
+                    "observed_sha": error.observed_sha,
+                    "cause": error.cause,
                 }
             )
             return 1

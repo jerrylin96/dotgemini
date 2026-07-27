@@ -84,12 +84,15 @@ def test_cli_reports_publication_partial_success_as_structured_stderr(
     assert json.loads(captured.err) == {
         "error": "publication_partial_success",
         "message": (
-            "publication succeeded on remote origin branch agent/topic at "
-            f"{'2' * 40}, but local lifecycle state changed"
+            "publication succeeded on remote origin branch agent/topic at intended SHA "
+            f"{'2' * 40}, but local_state_persistence failed"
         ),
         "remote": "origin",
         "branch": "agent/topic",
         "pushed_sha": "2" * 40,
+        "phase": "local_state_persistence",
+        "observed_sha": None,
+        "cause": None,
     }
 
 

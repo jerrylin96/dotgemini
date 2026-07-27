@@ -14,13 +14,16 @@ class LifecycleError(RuntimeError):
 class PublicationPartialSuccess(LifecycleError):
     """Remote publication succeeded but local state compare-and-swap failed."""
 
-    def __init__(self, remote, branch, pushed_sha):
+    def __init__(self, remote, branch, pushed_sha, *, phase="local_state_persistence", observed_sha=None, cause=None):
         self.remote = remote
         self.branch = branch
         self.pushed_sha = pushed_sha
+        self.phase = phase
+        self.observed_sha = observed_sha
+        self.cause = cause
         super().__init__(
-            f"publication succeeded on remote {remote} branch {branch} at {pushed_sha}, "
-            "but local lifecycle state changed"
+            f"publication succeeded on remote {remote} branch {branch} at intended SHA {pushed_sha}, "
+            f"but {phase} failed" + (f": {cause}" if cause else "")
         )
 
 
@@ -187,13 +190,30 @@ class Lifecycle:
             raise LifecycleError("approved fresh manifest is required before publication") from error
         try:
             feature.run("push", remote, refspec)
-            remote_sha = feature.run(
+        except GitError as error:
+            raise LifecycleError("publication failed before remote accepted push") from error
+        try:
+            fields = feature.run(
                 "ls-remote", remote, f"refs/heads/{self.feature_branch}"
-            ).stdout.split()[0]
+            ).stdout.split()
+            remote_sha = fields[0]
         except (GitError, IndexError) as error:
-            raise LifecycleError("publication or remote verification failed") from error
+            raise PublicationPartialSuccess(
+                remote,
+                self.feature_branch,
+                head,
+                phase="remote_verification",
+                cause=str(error),
+            ) from error
         if remote_sha != head:
-            raise LifecycleError("remote SHA differs from approved SHA")
+            raise PublicationPartialSuccess(
+                remote,
+                self.feature_branch,
+                head,
+                phase="remote_mismatch",
+                observed_sha=remote_sha,
+                cause=f"observed {remote_sha}",
+            )
         review_digest = review.digest()
         try:
             self.state.set_metadata(
@@ -204,9 +224,14 @@ class Lifecycle:
                 published_remote=remote,
                 review_digest=review_digest,
             )
-        except StateConflict as error:
+        except Exception as error:
             raise PublicationPartialSuccess(
-                remote, self.feature_branch, remote_sha
+                remote,
+                self.feature_branch,
+                remote_sha,
+                phase="local_state_persistence",
+                observed_sha=remote_sha,
+                cause=str(error),
             ) from error
         self.remote_sha = remote_sha
         self.published_remote = remote
