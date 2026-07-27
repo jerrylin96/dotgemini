@@ -1,0 +1,13 @@
+version: "1.0.0"
+title: "Adversarial Review"
+description: "Review an exact Git changeset independently for blocking defects"
+instructions: |
+  Load and follow the installed principled-dev:adversarial-review skill. If that namespaced skill is unavailable, load and follow the project-local adversarial-review skill. Never self-approve when independent review is unavailable.
+parameters:
+  - key: request
+    input_type: string
+    requirement: optional
+    default: "Resolve the target interactively."
+    description: "Branch, PR/MR, commit, range, or review context"
+prompt: |
+  Perform adversarial review for: {{ request }}

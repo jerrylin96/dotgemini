@@ -1,0 +1,13 @@
+version: "1.0.0"
+title: "Explain Diff"
+description: "Interactively explain an exact Git changeset without judging it"
+instructions: |
+  Load and follow the installed principled-dev:explain-diff skill. If that namespaced skill is unavailable, load and follow the project-local explain-diff skill. Remain source-read-only and neutral.
+parameters:
+  - key: request
+    input_type: string
+    requirement: optional
+    default: "Resolve the target interactively."
+    description: "Branch, PR/MR, commit, range, or explanation context"
+prompt: |
+  Explain the diff for: {{ request }}

@@ -1,0 +1,13 @@
+version: "1.0.0"
+title: "Make Feature"
+description: "Run the gated principled-dev feature lifecycle in an isolated Git worktree"
+instructions: |
+  Load and follow the installed principled-dev:make-feature skill. If that namespaced skill is unavailable, load and follow the project-local make-feature skill. Preserve every human approval pause.
+parameters:
+  - key: request
+    input_type: string
+    requirement: optional
+    default: "Use the current conversation request."
+    description: "Feature request or additional context"
+prompt: |
+  Start or resume make-feature for: {{ request }}

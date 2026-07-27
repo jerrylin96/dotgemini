@@ -1,0 +1,13 @@
+version: "1.0.0"
+title: "Signoff"
+description: "Verify human comprehension and record stale-safe risk acceptance"
+instructions: |
+  Load and follow the installed principled-dev:signoff skill. If that namespaced skill is unavailable, load and follow the project-local signoff skill. Produce report-only attestation; never mutate Git history.
+parameters:
+  - key: request
+    input_type: string
+    requirement: optional
+    default: "Use the current approved changeset."
+    description: "Signoff depth or target context"
+prompt: |
+  Start signoff for: {{ request }}

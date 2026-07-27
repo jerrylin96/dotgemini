@@ -1,0 +1,9 @@
+slash_commands:
+  - command: "make-feature"
+    recipe_path: "/absolute/path/to/principled-dev/recipes/make-feature.yaml"
+  - command: "adversarial-review"
+    recipe_path: "/absolute/path/to/principled-dev/recipes/adversarial-review.yaml"
+  - command: "explain-diff"
+    recipe_path: "/absolute/path/to/principled-dev/recipes/explain-diff.yaml"
+  - command: "signoff"
+    recipe_path: "/absolute/path/to/principled-dev/recipes/signoff.yaml"
