@@ -1,4 +1,5 @@
 import multiprocessing
+import os
 import sys
 from pathlib import Path
 
@@ -101,6 +102,29 @@ def test_forked_child_drops_inherited_registry_and_waits_for_parent_lock(tmp_pat
     assert not state._HELD_LOCKS
     assert not state._ACTIVE_LOCK_FILES
     assert store.record_token("repo", "agent/topic") == token
+
+
+@pytest.mark.skipif(not hasattr(os, "fork"), reason="os.fork is unavailable")
+def test_raw_fork_unwinds_inherited_file_lock_context_safely(tmp_path):
+    lock = state.FileLock(tmp_path / "raw-fork.lock")
+    read_fd, write_fd = os.pipe()
+    with lock:
+        pid = os.fork()
+        if pid == 0:
+            os.close(read_fd)
+            try:
+                lock.__exit__(None, None, None)
+                os.write(write_fd, b"ok")
+                os._exit(0)
+            except BaseException as error:
+                os.write(write_fd, type(error).__name__.encode())
+                os._exit(1)
+        os.close(write_fd)
+        result = os.read(read_fd, 64)
+        _, status = os.waitpid(pid, 0)
+    os.close(read_fd)
+    assert os.waitstatus_to_exitcode(status) == 0
+    assert result == b"ok"
 
 
 def test_forked_child_replaces_inherited_locked_registry_guard(tmp_path):

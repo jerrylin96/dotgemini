@@ -58,6 +58,7 @@ class FileLock:
     def __init__(self, path):
         self.path = Path(path)
         self._file = None
+        self._owner_pid = None
 
     def __enter__(self):
         self.path = self.path.resolve(strict=False)
@@ -71,6 +72,7 @@ class FileLock:
             with _HELD_LOCKS_GUARD:
                 _ACTIVE_LOCK_FILES.add(self._file)
             fcntl.flock(self._file.fileno(), fcntl.LOCK_EX)
+            self._owner_pid = os.getpid()
         except OSError as error:
             if self._file is not None:
                 with _HELD_LOCKS_GUARD:
@@ -83,6 +85,10 @@ class FileLock:
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
+        if self._owner_pid != os.getpid():
+            self._file = None
+            self._owner_pid = None
+            return
         try:
             fcntl.flock(self._file.fileno(), fcntl.LOCK_UN)
             self._file.close()
@@ -93,6 +99,7 @@ class FileLock:
                 _ACTIVE_LOCK_FILES.discard(self._file)
                 _HELD_LOCKS.discard(self.path)
             self._file = None
+            self._owner_pid = None
 
 
 def content_digest(content):
