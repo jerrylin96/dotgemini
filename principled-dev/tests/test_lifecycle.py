@@ -1,3 +1,4 @@
+import multiprocessing
 import subprocess
 import sys
 from pathlib import Path
@@ -7,7 +8,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from principled_dev.lifecycle import Lifecycle, LifecycleError
+from principled_dev.lifecycle import Lifecycle, LifecycleError, PublicationPartialSuccess
 from principled_dev.review import record_review
 from principled_dev.state import StateStore
 
@@ -41,6 +42,14 @@ def project(tmp_path):
         base_branch="main",
     )
     return repo, remote, lifecycle
+
+
+def invalidate(path, repository_id, feature_branch, started, attempted, completed):
+    if not started.wait(timeout=10):
+        return
+    attempted.set()
+    StateStore(path).set_artifact(repository_id, feature_branch, "build", "changed")
+    completed.set()
 
 
 def approve_plan(lifecycle):
@@ -206,9 +215,13 @@ def test_publish_rejects_stale_state_without_restoring_publication(project, monk
 
     monkeypatch.setattr(lifecycle, "_feature_git", lambda: InvalidatingGit())
 
-    with pytest.raises(LifecycleError, match="state changed"):
+    with pytest.raises(PublicationPartialSuccess, match="publication succeeded.*state") as raised:
         lifecycle.publish(review)
 
+    assert raised.value.remote == "origin"
+    assert raised.value.branch == "agent/topic"
+    assert raised.value.pushed_sha == commit
+    assert git(feature, "ls-remote", "origin", "refs/heads/agent/topic").split()[0] == commit
     refreshed = StateStore(lifecycle.state.path)
     assert not refreshed.is_approved(
         lifecycle.repository_id, lifecycle.feature_branch, "build"
@@ -222,8 +235,7 @@ def test_publish_rejects_stale_state_without_restoring_publication(project, monk
     assert lifecycle.review_digest is None
 
 
-def test_signoff_rejects_state_change_after_publication_snapshot(project, monkeypatch):
-    _, _, lifecycle = project
+def prepare_publication(lifecycle):
     approve_plan(lifecycle)
     feature = lifecycle.create_feature("main")
     commit = commit_feature(feature)
@@ -235,21 +247,74 @@ def test_signoff_rejects_state_change_after_publication_snapshot(project, monkey
         git(feature, "rev-parse", "HEAD^{tree}"),
     )
     lifecycle.publish(review)
-    original = lifecycle.state.assert_token
+    return review
 
-    def invalidate_then_assert(*args, **kwargs):
+
+def test_signoff_holds_process_lock_through_attestation_output(project):
+    _, _, lifecycle = project
+    review = prepare_publication(lifecycle)
+    context = multiprocessing.get_context("spawn")
+    callback_started = context.Event()
+    invalidation_attempted = context.Event()
+    invalidation_completed = context.Event()
+    process = context.Process(
+        target=invalidate,
+        args=(
+            lifecycle.state.path,
+            lifecycle.repository_id,
+            lifecycle.feature_branch,
+            callback_started,
+            invalidation_attempted,
+            invalidation_completed,
+        ),
+    )
+    process.start()
+    emitted = []
+
+    def emit(attestation):
+        callback_started.set()
+        assert invalidation_attempted.wait(timeout=10)
+        assert not invalidation_completed.wait(timeout=0.2)
+        emitted.append(attestation)
+
+    result = lifecycle.signoff(
+        review,
+        human_reviewed=True,
+        identity="human@example.invalid",
+        emitter=emit,
+    )
+
+    assert result is emitted[0]
+    assert len(emitted) == 1
+    assert invalidation_completed.wait(timeout=10)
+    process.join(timeout=10)
+    assert not process.is_alive()
+    assert process.exitcode == 0
+
+
+def test_signoff_emits_nothing_when_invalidation_wins_before_final_lock(
+    project, monkeypatch
+):
+    _, _, lifecycle = project
+    review = prepare_publication(lifecycle)
+    original = lifecycle.state.with_valid_token
+    emitted = []
+
+    def invalidate_then_validate(*args, **kwargs):
         StateStore(lifecycle.state.path).set_artifact(
             lifecycle.repository_id, lifecycle.feature_branch, "build", "changed"
         )
         return original(*args, **kwargs)
 
-    monkeypatch.setattr(lifecycle.state, "assert_token", invalidate_then_assert)
+    monkeypatch.setattr(lifecycle.state, "with_valid_token", invalidate_then_validate)
     with pytest.raises(LifecycleError, match="state changed during signoff"):
         lifecycle.signoff(
             review,
             human_reviewed=True,
             identity="human@example.invalid",
+            emitter=emitted.append,
         )
+    assert emitted == []
 
 
 def test_new_commit_invalidates_review_and_blocks_push(project):

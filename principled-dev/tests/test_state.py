@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import multiprocessing
 import sys
 from pathlib import Path
 
@@ -11,6 +12,14 @@ SPEC = importlib.util.spec_from_file_location("principled_dev_state", MODULE_PAT
 state = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = state
 SPEC.loader.exec_module(state)
+
+
+def _invalidate_while_callback_runs(path, callback_started, lock_attempted, invalidated):
+    if not callback_started.wait(timeout=10):
+        return
+    lock_attempted.set()
+    state.StateStore(path).set_artifact("repo", "agent/topic", "build", "changed")
+    invalidated.set()
 
 
 def test_state_is_keyed_by_repository_and_feature(tmp_path):
@@ -196,6 +205,63 @@ def test_require_approved_and_publication_snapshot_are_atomic(tmp_path):
         store.assert_token("repo", "agent/topic", snapshot_token)
     with pytest.raises(state.GateError):
         store.require_approved_and_token("repo", "agent/topic", "build", "changed")
+
+
+def test_with_valid_token_returns_callback_result_and_rejects_stale_token(tmp_path):
+    store = state.StateStore(tmp_path / "state.json")
+    store.set_artifact("repo", "agent/topic", "spec", "spec")
+    token = store.record_token("repo", "agent/topic")
+    calls = []
+
+    assert store.with_valid_token(
+        "repo", "agent/topic", token, lambda: calls.append("called") or "result"
+    ) == "result"
+    assert calls == ["called"]
+
+    store.set_artifact("repo", "agent/topic", "spec", "changed")
+    with pytest.raises(state.StateConflict, match="changed"):
+        store.with_valid_token(
+            "repo", "agent/topic", token, lambda: calls.append("stale")
+        )
+    assert calls == ["called"]
+
+
+@pytest.mark.parametrize("callback_raises", (False, True))
+def test_with_valid_token_holds_process_lock_until_callback_returns(
+    tmp_path, callback_raises
+):
+    path = tmp_path / "state.json"
+    store = state.StateStore(path)
+    store.set_artifact("repo", "agent/topic", "build", "build")
+    token = store.record_token("repo", "agent/topic")
+    context = multiprocessing.get_context("spawn")
+    callback_started = context.Event()
+    lock_attempted = context.Event()
+    invalidated = context.Event()
+    process = context.Process(
+        target=_invalidate_while_callback_runs,
+        args=(path, callback_started, lock_attempted, invalidated),
+    )
+    process.start()
+
+    def callback():
+        callback_started.set()
+        assert lock_attempted.wait(timeout=10)
+        assert not invalidated.wait(timeout=0.2)
+        if callback_raises:
+            raise RuntimeError("callback failed")
+        return "attested"
+
+    if callback_raises:
+        with pytest.raises(RuntimeError, match="callback failed"):
+            store.with_valid_token("repo", "agent/topic", token, callback)
+    else:
+        assert store.with_valid_token("repo", "agent/topic", token, callback) == "attested"
+
+    assert invalidated.wait(timeout=10)
+    process.join(timeout=10)
+    assert not process.is_alive()
+    assert process.exitcode == 0
 
 
 def test_manifest_metadata_change_invalidates_build_approval_and_remote_sha(tmp_path):

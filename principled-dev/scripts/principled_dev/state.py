@@ -298,6 +298,17 @@ class StateStore:
         if self.record_token(repository, feature) != expected_token:
             raise StateConflict("state record changed")
 
+    def with_valid_token(self, repository, feature, expected_token, callback):
+        """Run callback while holding lock if current record matches expected token."""
+        if not _is_digest(expected_token):
+            raise StateError("malformed expected state token")
+        key = _record_key(repository, feature)
+        with FileLock(self.lock_path):
+            self._document = self._load()
+            if self._record_token(self._document, key) != expected_token:
+                raise StateConflict("state record changed")
+            return callback()
+
     def set_metadata(self, repository, feature, *, expected_token=None, **values):
         unknown = set(values) - _METADATA_KEYS
         if unknown:

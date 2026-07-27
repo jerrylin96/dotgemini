@@ -1,3 +1,5 @@
+import configparser
+import importlib.util
 import json
 import os
 import subprocess
@@ -6,7 +8,15 @@ from pathlib import Path
 
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
+REPOSITORY_ROOT = PLUGIN_ROOT.parent
 CLI = PLUGIN_ROOT / "scripts" / "principled_dev.py"
+
+
+def load_cli_module():
+    spec = importlib.util.spec_from_file_location("principled_dev_cli", CLI)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def git(cwd, *args):
@@ -24,6 +34,63 @@ def run_cli(repo, env, *args):
         text=True,
     )
     return json.loads(result.stdout)
+
+
+def test_pytest_default_collection_includes_plugin_suite():
+    config = configparser.ConfigParser()
+    config.read(REPOSITORY_ROOT / "pytest.ini")
+    testpaths = config["pytest"]["testpaths"].split()
+
+    assert "principled-dev/tests" in testpaths
+    workflow = (REPOSITORY_ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    assert "python3 scripts/run_in_env.py . pytest" in workflow
+
+
+def test_cli_reports_publication_partial_success_as_structured_stderr(
+    tmp_path, monkeypatch, capsys
+):
+    cli = load_cli_module()
+    review_path = tmp_path / "review.json"
+    review_path.write_text(
+        json.dumps(
+            {
+                "verdict": "APPROVE",
+                "base_sha": "1" * 40,
+                "commit_sha": "2" * 40,
+                "tree_sha": "3" * 40,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    class PartiallyPublishingLifecycle:
+        def publish(self, review, remote=None):
+            raise cli.PublicationPartialSuccess("origin", "agent/topic", "2" * 40)
+
+    monkeypatch.setattr(cli, "make_lifecycle", lambda args: PartiallyPublishingLifecycle())
+
+    assert cli.main(
+        [
+            "--repo",
+            str(tmp_path),
+            "--feature",
+            "agent/topic",
+            "publish",
+            str(review_path),
+        ]
+    ) == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert json.loads(captured.err) == {
+        "error": "publication_partial_success",
+        "message": (
+            "publication succeeded on remote origin branch agent/topic at "
+            f"{'2' * 40}, but local lifecycle state changed"
+        ),
+        "remote": "origin",
+        "branch": "agent/topic",
+        "pushed_sha": "2" * 40,
+    }
 
 
 def test_cli_resumes_lifecycle_across_processes(tmp_path):

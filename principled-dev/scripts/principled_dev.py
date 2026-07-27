@@ -10,7 +10,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from principled_dev.config import roots
-from principled_dev.lifecycle import Lifecycle
+from principled_dev.lifecycle import Lifecycle, PublicationPartialSuccess
 from principled_dev.resolver import Resolver
 from principled_dev.review import ReviewRecord
 from principled_dev.signoff import export_session_digest
@@ -22,6 +22,10 @@ def output(value, path=None):
     if path:
         Path(path).write_text(text, encoding="utf-8")
     print(text, end="")
+
+
+def output_error(value):
+    print(json.dumps(value, indent=2, sort_keys=True, default=str), file=sys.stderr)
 
 
 def make_lifecycle(args):
@@ -112,7 +116,19 @@ def main(argv=None):
         output({"worktree_path": item.worktrees.create_review(item._manifest["commit_sha"])})
     elif args.command == "publish":
         review = ReviewRecord.from_dict(json.loads(Path(args.review_json).read_text(encoding="utf-8")))
-        output(item.publish(review, remote=args.remote))
+        try:
+            output(item.publish(review, remote=args.remote))
+        except PublicationPartialSuccess as error:
+            output_error(
+                {
+                    "error": "publication_partial_success",
+                    "message": str(error),
+                    "remote": error.remote,
+                    "branch": error.branch,
+                    "pushed_sha": error.pushed_sha,
+                }
+            )
+            return 1
     elif args.command == "signoff":
         review = ReviewRecord.from_dict(json.loads(Path(args.review_json).read_text(encoding="utf-8")))
         if not item.feature_worktree or not Path(item.feature_worktree).is_dir():
@@ -124,16 +140,15 @@ def main(argv=None):
         if args.digest_session:
             session = export_session_digest(args.session_id or os.environ.get("AGENT_SESSION_ID"))
             digest = "sha256:" + session["sha256"]
-        output(
-            item.signoff(
-                review,
-                human_reviewed=args.human_reviewed,
-                identity=args.identity,
-                session_id=args.session_id or os.environ.get("AGENT_SESSION_ID", "unavailable"),
-                session_digest=digest,
-            )
+        item.signoff(
+            review,
+            human_reviewed=args.human_reviewed,
+            identity=args.identity,
+            emitter=output,
+            session_id=args.session_id or os.environ.get("AGENT_SESSION_ID", "unavailable"),
+            session_digest=digest,
         )
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

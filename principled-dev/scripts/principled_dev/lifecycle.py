@@ -11,6 +11,19 @@ class LifecycleError(RuntimeError):
     pass
 
 
+class PublicationPartialSuccess(LifecycleError):
+    """Remote publication succeeded but local state compare-and-swap failed."""
+
+    def __init__(self, remote, branch, pushed_sha):
+        self.remote = remote
+        self.branch = branch
+        self.pushed_sha = pushed_sha
+        super().__init__(
+            f"publication succeeded on remote {remote} branch {branch} at {pushed_sha}, "
+            "but local lifecycle state changed"
+        )
+
+
 class Lifecycle:
     def __init__(
         self,
@@ -192,7 +205,9 @@ class Lifecycle:
                 review_digest=review_digest,
             )
         except StateConflict as error:
-            raise LifecycleError("state changed during publication") from error
+            raise PublicationPartialSuccess(
+                remote, self.feature_branch, remote_sha
+            ) from error
         self.remote_sha = remote_sha
         self.published_remote = remote
         self.review_digest = review_digest
@@ -203,23 +218,33 @@ class Lifecycle:
             "review_digest": review_digest,
         }
 
-    def signoff(self, review, *, human_reviewed, identity, **details):
+    def signoff(self, review, *, human_reviewed, identity, emitter=None, **details):
         try:
             metadata, token = self.state.publication_snapshot(
                 self.repository_id, self.feature_branch
             )
-            attestation = create_attestation(
-                self.feature_worktree,
-                review,
-                human_reviewed=human_reviewed,
-                identity=identity,
-                published_remote=metadata["published_remote"],
-                published_branch=self.feature_branch,
-                published_sha=metadata["remote_sha"],
-                expected_review_digest=metadata["review_digest"],
-                **details,
+
+            def attest_and_emit():
+                attestation = create_attestation(
+                    self.feature_worktree,
+                    review,
+                    human_reviewed=human_reviewed,
+                    identity=identity,
+                    published_remote=metadata["published_remote"],
+                    published_branch=self.feature_branch,
+                    published_sha=metadata["remote_sha"],
+                    expected_review_digest=metadata["review_digest"],
+                    **details,
+                )
+                if emitter is not None:
+                    emitter(attestation)
+                return attestation
+
+            return self.state.with_valid_token(
+                self.repository_id,
+                self.feature_branch,
+                token,
+                attest_and_emit,
             )
-            self.state.assert_token(self.repository_id, self.feature_branch, token)
-            return attestation
         except StateConflict as error:
             raise LifecycleError("state changed during signoff") from error
