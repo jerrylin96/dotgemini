@@ -47,26 +47,28 @@ def test_signoff_requires_human_review(repo):
         create_attestation(repo, approved(repo), human_reviewed=False, identity="human")
 
 
-def test_signoff_rejects_dirty_or_staged_repository(repo):
+def test_signoff_rejects_dirty_or_staged_repository(repo, tmp_path):
     record = approved(repo)
+    branch = publish_to_local_remote(repo, record, tmp_path)
     (repo / "file.txt").write_text("dirty\n", encoding="utf-8")
     with pytest.raises(ValueError, match="dirty"):
-        create_attestation(repo, record, human_reviewed=True, identity="human", expected_review_digest=record.digest())
+        create_attestation(repo, record, human_reviewed=True, identity="human", expected_review_digest=record.digest(), published_remote="origin", published_branch=branch, published_sha=record.commit_sha)
 
     git(repo, "restore", "file.txt")
     (repo / "new.txt").write_text("staged\n", encoding="utf-8")
     git(repo, "add", "new.txt")
     with pytest.raises(ValueError, match="dirty"):
-        create_attestation(repo, record, human_reviewed=True, identity="human", expected_review_digest=record.digest())
+        create_attestation(repo, record, human_reviewed=True, identity="human", expected_review_digest=record.digest(), published_remote="origin", published_branch=branch, published_sha=record.commit_sha)
 
 
-def test_signoff_rejects_moved_head_or_wrong_tree(repo):
+def test_signoff_rejects_moved_head_or_wrong_tree(repo, tmp_path):
     record = approved(repo)
+    branch = publish_to_local_remote(repo, record, tmp_path)
     (repo / "second.txt").write_text("next\n", encoding="utf-8")
     git(repo, "add", "second.txt")
     git(repo, "commit", "-qm", "second")
     with pytest.raises(ValueError, match="HEAD"):
-        create_attestation(repo, record, human_reviewed=True, identity="human", expected_review_digest=record.digest())
+        create_attestation(repo, record, human_reviewed=True, identity="human", expected_review_digest=record.digest(), published_remote="origin", published_branch=branch, published_sha=record.commit_sha)
 
     fresh = approved(repo)
     wrong_tree = ReviewRecord(
@@ -76,7 +78,16 @@ def test_signoff_rejects_moved_head_or_wrong_tree(repo):
         "d" * 40,
     )
     with pytest.raises(ValueError, match="tree"):
-        create_attestation(repo, wrong_tree, human_reviewed=True, identity="human", expected_review_digest=wrong_tree.digest())
+        create_attestation(
+            repo,
+            wrong_tree,
+            human_reviewed=True,
+            identity="human",
+            expected_review_digest=wrong_tree.digest(),
+            published_remote="origin",
+            published_branch=branch,
+            published_sha=fresh.commit_sha,
+        )
 
 
 def test_signoff_rejects_non_approve_and_arbitrary_mapping(repo):
@@ -95,8 +106,9 @@ def test_signoff_rejects_non_approve_and_arbitrary_mapping(repo):
         )
 
 
-def test_signoff_requires_matching_review_digest(repo):
+def test_signoff_requires_matching_review_digest(repo, tmp_path):
     valid = approved(repo)
+    branch = publish_to_local_remote(repo, valid, tmp_path)
     with pytest.raises(ValueError, match="persisted review digest"):
         create_attestation(repo, valid, human_reviewed=True, identity="human")
     with pytest.raises(ValueError, match="digest"):
@@ -113,31 +125,83 @@ def test_signoff_requires_matching_review_digest(repo):
         human_reviewed=True,
         identity="human",
         expected_review_digest=valid.digest(),
+        published_remote="origin",
+        published_branch=branch,
+        published_sha=valid.commit_sha,
     )
     assert result["review_digest"] == valid.digest()
 
 
-def test_signoff_rejects_remote_mismatch(repo):
+def publish_to_local_remote(repo, record, tmp_path, branch="agent/topic"):
+    remote = tmp_path / "remote.git"
+    git(tmp_path, "init", "-q", "--bare", str(remote))
+    git(repo, "remote", "add", "origin", str(remote))
+    git(repo, "push", "-q", "origin", f"{record.commit_sha}:refs/heads/{branch}")
+    return branch
+
+
+def test_signoff_rejects_missing_deleted_or_mismatched_remote(repo, tmp_path):
     record = approved(repo)
-    with pytest.raises(ValueError, match="remote"):
+    branch = publish_to_local_remote(repo, record, tmp_path)
+    git(repo, "push", "-q", "origin", "--delete", branch)
+    with pytest.raises(ValueError, match="missing"):
         create_attestation(
             repo,
             record,
             human_reviewed=True,
             identity="human",
-            remote_sha="d" * 40,
             expected_review_digest=record.digest(),
+            published_remote="origin",
+            published_branch=branch,
+            published_sha=record.commit_sha,
         )
 
 
-def test_successful_report_only_attestation(repo):
+def test_signoff_rejects_live_remote_and_persisted_publication_mismatch(repo, tmp_path):
     record = approved(repo)
+    branch = publish_to_local_remote(repo, record, tmp_path)
+    with pytest.raises(ValueError, match="persisted publication"):
+        create_attestation(
+            repo,
+            record,
+            human_reviewed=True,
+            identity="human",
+            expected_review_digest=record.digest(),
+            published_remote="origin",
+            published_branch=branch,
+            published_sha="d" * 40,
+        )
+
+    (repo / "next.txt").write_text("next\n", encoding="utf-8")
+    git(repo, "add", "next.txt")
+    git(repo, "commit", "-qm", "next")
+    moved = git(repo, "rev-parse", "HEAD")
+    git(repo, "push", "-q", "--force", "origin", f"{moved}:refs/heads/{branch}")
+    git(repo, "reset", "-q", "--hard", record.commit_sha)
+    with pytest.raises(ValueError, match="live remote"):
+        create_attestation(
+            repo,
+            record,
+            human_reviewed=True,
+            identity="human",
+            expected_review_digest=record.digest(),
+            published_remote="origin",
+            published_branch=branch,
+            published_sha=record.commit_sha,
+        )
+
+
+def test_successful_report_only_attestation(repo, tmp_path):
+    record = approved(repo)
+    branch = publish_to_local_remote(repo, record, tmp_path)
     attestation = create_attestation(
         repo,
         record,
         human_reviewed=True,
         identity="human@example.invalid",
-        remote_sha=record.commit_sha,
+        published_remote="origin",
+        published_branch=branch,
+        published_sha=record.commit_sha,
         tradeoffs=("POSIX only",),
         risks=("Hook policy fails open",),
         session_id="session-1",
@@ -147,6 +211,8 @@ def test_successful_report_only_attestation(repo):
     assert attestation["status"] == "VERIFIED_BY_HUMAN"
     assert attestation["commit_sha"] == record.commit_sha
     assert attestation["tree_sha"] == record.tree_sha
+    assert attestation["remote"] == "origin"
+    assert attestation["branch"] == branch
     assert attestation["identity"] == "human@example.invalid"
     assert attestation["tradeoffs"] == ["POSIX only"]
     assert git(repo, "rev-parse", "HEAD") == record.commit_sha

@@ -79,7 +79,6 @@ def main(argv=None):
     signoff.add_argument("review_json")
     signoff.add_argument("--identity", required=True)
     signoff.add_argument("--human-reviewed", action="store_true")
-    signoff.add_argument("--remote-sha")
     signoff.add_argument("--session-id")
     signoff.add_argument("--digest-session", action="store_true")
 
@@ -126,7 +125,9 @@ def main(argv=None):
                 review,
                 human_reviewed=args.human_reviewed,
                 identity=args.identity,
-                remote_sha=args.remote_sha,
+                published_remote=item.published_remote,
+                published_branch=item.feature_branch,
+                published_sha=item.remote_sha,
                 session_id=args.session_id or os.environ.get("AGENT_SESSION_ID", "unavailable"),
                 session_digest=digest,
                 expected_review_digest=item.review_digest,

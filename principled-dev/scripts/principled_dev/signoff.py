@@ -36,7 +36,9 @@ def create_attestation(
     *,
     human_reviewed,
     identity,
-    remote_sha=None,
+    published_remote=None,
+    published_branch=None,
+    published_sha=None,
     tradeoffs=(),
     risks=(),
     session_id="unavailable",
@@ -56,6 +58,8 @@ def create_attestation(
         raise SignoffError("persisted review digest is required before signoff")
     if expected_review_digest != review_digest:
         raise SignoffError("review digest does not match persisted approval")
+    if not published_remote or not published_branch or not published_sha:
+        raise SignoffError("persisted publication state is required before signoff")
     _require_clean(repo)
 
     head = _git(repo, "rev-parse", "HEAD^{commit}")
@@ -64,8 +68,22 @@ def create_attestation(
     tree = _git(repo, "rev-parse", "HEAD^{tree}")
     if tree != approved_review.tree_sha:
         raise SignoffError("tree no longer matches approved review")
-    if remote_sha is not None and remote_sha != head:
-        raise SignoffError("remote SHA no longer matches approved review")
+    if published_sha != head:
+        raise SignoffError("persisted publication SHA no longer matches reviewed HEAD")
+    result = subprocess.run(
+        ("git", "ls-remote", "--heads", published_remote, f"refs/heads/{published_branch}"),
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode:
+        raise SignoffError("live remote query failed")
+    fields = result.stdout.split()
+    if not fields:
+        raise SignoffError("published remote branch is missing")
+    if fields[0] != head:
+        raise SignoffError("live remote branch no longer matches reviewed HEAD")
 
     return {
         "status": "VERIFIED_BY_HUMAN",
@@ -74,6 +92,8 @@ def create_attestation(
         "commit_sha": head,
         "tree_sha": tree,
         "review_digest": review_digest,
+        "remote": published_remote,
+        "branch": published_branch,
         "session_id": session_id,
         "session_digest": session_digest,
         "tradeoffs": list(tradeoffs),

@@ -29,6 +29,7 @@ class Lifecycle:
         self.feature_worktree = None
         self.base_sha = None
         self.remote_sha = None
+        self.published_remote = None
         self.review_digest = None
         self._manifest = None
         metadata = self.state.get_metadata(self.repository_id, self.feature_branch)
@@ -36,6 +37,7 @@ class Lifecycle:
             self.base_branch = metadata.get("base_branch", self.base_branch)
             self.base_sha = metadata.get("base_sha")
             self.remote_sha = metadata.get("remote_sha")
+            self.published_remote = metadata.get("published_remote")
             self.review_digest = metadata.get("review_digest")
             if metadata.get("feature_worktree"):
                 self.feature_worktree = Path(metadata["feature_worktree"])
@@ -171,11 +173,13 @@ class Lifecycle:
         if remote_sha != head:
             raise LifecycleError("remote SHA differs from approved SHA")
         self.remote_sha = remote_sha
+        self.published_remote = remote
         self.review_digest = review.digest()
         self.state.set_metadata(
             self.repository_id,
             self.feature_branch,
             remote_sha=remote_sha,
+            published_remote=remote,
             review_digest=self.review_digest,
         )
         return {

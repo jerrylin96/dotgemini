@@ -169,7 +169,11 @@ def test_manifest_metadata_change_invalidates_build_approval_and_remote_sha(tmp_
     store.set_artifact("repo", "agent/topic", "build", "manifest")
     store.approve("repo", "agent/topic", "build")
     store.set_metadata(
-        "repo", "agent/topic", remote_sha="2" * 40, review_digest="8" * 64
+        "repo",
+        "agent/topic",
+        remote_sha="2" * 40,
+        published_remote="origin",
+        review_digest="8" * 64,
     )
 
     store.set_metadata(
@@ -184,6 +188,7 @@ def test_manifest_metadata_change_invalidates_build_approval_and_remote_sha(tmp_
     metadata = store.get_metadata("repo", "agent/topic")
     assert "remote_sha" not in metadata
     assert "review_digest" not in metadata
+    assert "published_remote" in metadata
 
 
 def test_malformed_and_unknown_state_versions_fail_closed(tmp_path):

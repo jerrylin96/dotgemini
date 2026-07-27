@@ -67,7 +67,7 @@ The default worktree root is `${XDG_CACHE_HOME:-$HOME/.cache}/principled-dev/wor
 
 Default state is `${XDG_STATE_HOME:-$HOME/.local/state}/principled-dev/lifecycle.json`, overridable with `PRINCIPLED_DEV_STATE_ROOT`. Approval digests and exact SHAs detect staleness in represented state; they do not authenticate the human, prevent manual file edits, or provide tamper-evident remote storage.
 
-A session SHA-256 digest is correlation data only. `identity` in signoff is human-confirmed text, not cryptographic identity proof. Signoff is report-only and intentionally does not amend commits.
+A session SHA-256 digest is correlation data only. `identity` in signoff is human-confirmed text, not cryptographic identity proof. Signoff is report-only and intentionally does not amend commits. It fails closed unless persisted publication state exists and a live `git ls-remote` query confirms the feature ref still equals reviewed local HEAD and persisted published SHA; network/auth failures therefore block signoff.
 
 ## Fetch and forge limitations
 
