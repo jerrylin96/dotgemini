@@ -1,6 +1,6 @@
 """Persistent approval state for the principled development lifecycle."""
 
-import copy
+import fcntl
 import hashlib
 import json
 import os
@@ -24,6 +24,39 @@ class StateError(RuntimeError):
 
 class GateError(StateError):
     """A lifecycle gate operation is invalid."""
+
+
+class StateConflict(StateError):
+    """State changed after a caller captured its expected record token."""
+
+
+class FileLock:
+    """Exclusive POSIX advisory lock backed by a sidecar file."""
+
+    def __init__(self, path):
+        self.path = Path(path)
+        self._file = None
+
+    def __enter__(self):
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self._file = self.path.open("a+")
+            fcntl.flock(self._file.fileno(), fcntl.LOCK_EX)
+        except OSError as error:
+            if self._file is not None:
+                self._file.close()
+                self._file = None
+            raise StateError("state lock cannot be acquired") from error
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        try:
+            fcntl.flock(self._file.fileno(), fcntl.LOCK_UN)
+            self._file.close()
+        except OSError as error:
+            raise StateError("state lock cannot be released") from error
+        finally:
+            self._file = None
 
 
 def content_digest(content):
@@ -117,7 +150,9 @@ class StateStore:
 
     def __init__(self, path):
         self.path = Path(path)
-        self._document = self._load()
+        self.lock_path = self.path.with_name(f"{self.path.name}.lock")
+        with FileLock(self.lock_path):
+            self._document = self._load()
 
     def _load(self):
         if not self.path.exists():
@@ -166,100 +201,131 @@ class StateStore:
         gate = self._gate(gate)
         key = _record_key(repository, feature)
         digest = content_digest(content)
-        document = copy.deepcopy(self._document)
-        record = document["records"].setdefault(
-            key, {"artifacts": {}, "approvals": {}, "metadata": {}}
-        )
-        record.setdefault("metadata", {})
-        if record["artifacts"].get(gate) == digest:
-            return digest
+        with FileLock(self.lock_path):
+            document = self._load()
+            record = document["records"].setdefault(
+                key, {"artifacts": {}, "approvals": {}, "metadata": {}}
+            )
+            record.setdefault("metadata", {})
+            if record["artifacts"].get(gate) == digest:
+                self._document = document
+                return digest
 
-        record["artifacts"][gate] = digest
-        changed_index = GATES.index(gate)
-        for invalidated_gate in GATES[changed_index:]:
-            record["approvals"].pop(invalidated_gate, None)
-        metadata = record.setdefault("metadata", {})
-        metadata.pop("remote_sha", None)
-        metadata.pop("published_remote", None)
-        metadata.pop("review_digest", None)
-        self._save(document)
-        self._document = document
-        return digest
+            record["artifacts"][gate] = digest
+            changed_index = GATES.index(gate)
+            for invalidated_gate in GATES[changed_index:]:
+                record["approvals"].pop(invalidated_gate, None)
+            metadata = record.setdefault("metadata", {})
+            metadata.pop("remote_sha", None)
+            metadata.pop("published_remote", None)
+            metadata.pop("review_digest", None)
+            self._save(document)
+            self._document = document
+            return digest
 
     def approve(self, repository, feature, gate):
         """Approve current artifact digest if predecessor gate is approved."""
         gate = self._gate(gate)
         key = _record_key(repository, feature)
-        document = copy.deepcopy(self._document)
-        record = document["records"].get(key)
-        if record is None or gate not in record["artifacts"]:
-            raise GateError(f"{gate} artifact is not recorded")
+        with FileLock(self.lock_path):
+            document = self._load()
+            record = document["records"].get(key)
+            if record is None or gate not in record["artifacts"]:
+                raise GateError(f"{gate} artifact is not recorded")
 
-        gate_index = GATES.index(gate)
-        if gate_index:
-            predecessor = GATES[gate_index - 1]
-            predecessor_digest = record["artifacts"].get(predecessor)
-            if predecessor_digest is None or record["approvals"].get(predecessor) != predecessor_digest:
-                raise GateError(f"{predecessor} approval is required before {gate}")
+            gate_index = GATES.index(gate)
+            if gate_index:
+                predecessor = GATES[gate_index - 1]
+                predecessor_digest = record["artifacts"].get(predecessor)
+                if predecessor_digest is None or record["approvals"].get(predecessor) != predecessor_digest:
+                    raise GateError(f"{predecessor} approval is required before {gate}")
 
-        digest = record["artifacts"][gate]
-        if record["approvals"].get(gate) == digest:
+            digest = record["artifacts"][gate]
+            if record["approvals"].get(gate) == digest:
+                self._document = document
+                return digest
+            record["approvals"][gate] = digest
+            self._save(document)
+            self._document = document
             return digest
-        record["approvals"][gate] = digest
-        self._save(document)
-        self._document = document
-        return digest
 
-    def set_metadata(self, repository, feature, **values):
+    @staticmethod
+    def _record_token(document, key):
+        record = document["records"].get(key)
+        canonical = json.dumps(
+            record, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        )
+        return content_digest(canonical)
+
+    def record_token(self, repository, feature):
+        """Return canonical SHA-256 token for current record, refreshing from disk."""
+        key = _record_key(repository, feature)
+        with FileLock(self.lock_path):
+            self._document = self._load()
+            return self._record_token(self._document, key)
+
+    def set_metadata(self, repository, feature, *, expected_token=None, **values):
         unknown = set(values) - _METADATA_KEYS
         if unknown:
             raise StateError(f"unknown metadata: {sorted(unknown)}")
+        if expected_token is not None and not _is_digest(expected_token):
+            raise StateError("malformed expected state token")
         key = _record_key(repository, feature)
-        document = copy.deepcopy(self._document)
-        record = document["records"].setdefault(
-            key, {"artifacts": {}, "approvals": {}, "metadata": {}}
-        )
-        metadata = record.setdefault("metadata", {})
-        manifest_changed = any(
-            name in values and metadata.get(name) != values[name] for name in _MANIFEST_KEYS
-        )
-        metadata.update(values)
-        if manifest_changed:
-            record["approvals"].pop("build", None)
-            metadata.pop("remote_sha", None)
-            metadata.pop("review_digest", None)
-        self._save(document)
-        self._document = document
-        return dict(metadata)
+        with FileLock(self.lock_path):
+            document = self._load()
+            if expected_token is not None and self._record_token(document, key) != expected_token:
+                self._document = document
+                raise StateConflict("state record changed")
+            record = document["records"].setdefault(
+                key, {"artifacts": {}, "approvals": {}, "metadata": {}}
+            )
+            metadata = record.setdefault("metadata", {})
+            manifest_changed = any(
+                name in values and metadata.get(name) != values[name] for name in _MANIFEST_KEYS
+            )
+            metadata.update(values)
+            if manifest_changed:
+                record["approvals"].pop("build", None)
+                metadata.pop("remote_sha", None)
+                metadata.pop("review_digest", None)
+            self._save(document)
+            self._document = document
+            return dict(metadata)
 
     def get_metadata(self, repository, feature):
-        record = self._document["records"].get(_record_key(repository, feature), {})
-        return dict(record.get("metadata", {}))
+        with FileLock(self.lock_path):
+            self._document = self._load()
+            record = self._document["records"].get(_record_key(repository, feature), {})
+            return dict(record.get("metadata", {}))
 
     def find_metadata_for_path(self, path):
         target = Path(path).resolve(strict=False)
         matches = []
-        for record in self._document["records"].values():
-            metadata = record.get("metadata", {})
-            raw = metadata.get("feature_worktree")
-            if not raw:
-                continue
-            root = Path(raw).resolve(strict=False)
-            try:
-                target.relative_to(root)
-                matches.append((len(root.parts), metadata))
-            except ValueError:
-                pass
+        with FileLock(self.lock_path):
+            self._document = self._load()
+            for record in self._document["records"].values():
+                metadata = record.get("metadata", {})
+                raw = metadata.get("feature_worktree")
+                if not raw:
+                    continue
+                root = Path(raw).resolve(strict=False)
+                try:
+                    target.relative_to(root)
+                    matches.append((len(root.parts), metadata))
+                except ValueError:
+                    pass
         return dict(max(matches, key=lambda item: item[0])[1]) if matches else {}
 
     def is_approved(self, repository, feature, gate, content=None):
         """Return whether gate approval matches current and optional supplied content."""
         gate = self._gate(gate)
         key = _record_key(repository, feature)
-        record = self._document["records"].get(key)
-        if record is None:
-            return False
-        artifact_digest = record["artifacts"].get(gate)
-        if artifact_digest is None or record["approvals"].get(gate) != artifact_digest:
-            return False
-        return content is None or content_digest(content) == artifact_digest
+        with FileLock(self.lock_path):
+            self._document = self._load()
+            record = self._document["records"].get(key)
+            if record is None:
+                return False
+            artifact_digest = record["artifacts"].get(gate)
+            if artifact_digest is None or record["approvals"].get(gate) != artifact_digest:
+                return False
+            return content is None or content_digest(content) == artifact_digest

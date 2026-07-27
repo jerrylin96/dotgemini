@@ -213,6 +213,33 @@ def test_manifest_metadata_change_invalidates_build_approval_and_remote_sha(tmp_
     assert "published_remote" in metadata
 
 
+def test_record_token_is_canonical_and_set_metadata_compares_and_swaps(tmp_path):
+    path = tmp_path / "state.json"
+    store = state.StateStore(path)
+    store.set_artifact("repo", "agent/topic", "spec", "spec")
+    token = store.record_token("repo", "agent/topic")
+
+    document = json.loads(path.read_text(encoding="utf-8"))
+    path.write_text(json.dumps(document, indent=2), encoding="utf-8")
+    assert state.StateStore(path).record_token("repo", "agent/topic") == token
+
+    state.StateStore(path).set_artifact("repo", "agent/topic", "spec", "changed")
+    with pytest.raises(state.StateConflict, match="changed"):
+        store.set_metadata(
+            "repo",
+            "agent/topic",
+            expected_token=token,
+            remote_sha="2" * 40,
+            published_remote="origin",
+            review_digest="8" * 64,
+        )
+
+    metadata = state.StateStore(path).get_metadata("repo", "agent/topic")
+    assert "remote_sha" not in metadata
+    assert "published_remote" not in metadata
+    assert "review_digest" not in metadata
+
+
 def test_malformed_and_unknown_state_versions_fail_closed(tmp_path):
     cases = (
         "not json",

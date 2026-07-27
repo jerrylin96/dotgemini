@@ -146,6 +146,52 @@ def test_push_requires_fresh_approve_for_exact_head(project):
     assert restored.review_digest == review.digest()
 
 
+def test_publish_rejects_stale_state_without_restoring_publication(project, monkeypatch):
+    _, _, lifecycle = project
+    approve_plan(lifecycle)
+    feature = lifecycle.create_feature("main")
+    commit = commit_feature(feature)
+    manifest = lifecycle.bind_manifest("summary")
+    lifecycle.approve_manifest(manifest)
+    review = record_review(
+        lifecycle.base_sha,
+        commit,
+        git(feature, "rev-parse", "HEAD^{tree}"),
+    )
+    feature_git = lifecycle._feature_git()
+
+    class InvalidatingGit:
+        def __getattr__(self, name):
+            return getattr(feature_git, name)
+
+        def run(self, *args, **kwargs):
+            if args[0] == "push":
+                StateStore(lifecycle.state.path).set_artifact(
+                    lifecycle.repository_id,
+                    lifecycle.feature_branch,
+                    "build",
+                    "concurrent changed build",
+                )
+            return feature_git.run(*args, **kwargs)
+
+    monkeypatch.setattr(lifecycle, "_feature_git", lambda: InvalidatingGit())
+
+    with pytest.raises(LifecycleError, match="state changed"):
+        lifecycle.publish(review)
+
+    refreshed = StateStore(lifecycle.state.path)
+    assert not refreshed.is_approved(
+        lifecycle.repository_id, lifecycle.feature_branch, "build"
+    )
+    metadata = refreshed.get_metadata(lifecycle.repository_id, lifecycle.feature_branch)
+    assert "remote_sha" not in metadata
+    assert "published_remote" not in metadata
+    assert "review_digest" not in metadata
+    assert lifecycle.remote_sha is None
+    assert lifecycle.published_remote is None
+    assert lifecycle.review_digest is None
+
+
 def test_new_commit_invalidates_review_and_blocks_push(project):
     _, _, lifecycle = project
     approve_plan(lifecycle)

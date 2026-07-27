@@ -2,6 +2,7 @@ import hashlib
 from pathlib import Path
 
 from .git import Git, GitError, repository_id
+from .state import StateConflict
 from .worktrees import WorktreeManager
 
 
@@ -163,6 +164,9 @@ class Lifecycle:
             "config", "--get", f"branch.{self.base_branch}.remote", check=False
         ).stdout.strip() or "origin"
         refspec = f"{head}:refs/heads/{self.feature_branch}"
+        expected_token = self.state.record_token(
+            self.repository_id, self.feature_branch
+        )
         try:
             feature.run("push", remote, refspec)
             remote_sha = feature.run(
@@ -172,19 +176,24 @@ class Lifecycle:
             raise LifecycleError("publication or remote verification failed") from error
         if remote_sha != head:
             raise LifecycleError("remote SHA differs from approved SHA")
+        review_digest = review.digest()
+        try:
+            self.state.set_metadata(
+                self.repository_id,
+                self.feature_branch,
+                expected_token=expected_token,
+                remote_sha=remote_sha,
+                published_remote=remote,
+                review_digest=review_digest,
+            )
+        except StateConflict as error:
+            raise LifecycleError("state changed during publication") from error
         self.remote_sha = remote_sha
         self.published_remote = remote
-        self.review_digest = review.digest()
-        self.state.set_metadata(
-            self.repository_id,
-            self.feature_branch,
-            remote_sha=remote_sha,
-            published_remote=remote,
-            review_digest=self.review_digest,
-        )
+        self.review_digest = review_digest
         return {
             "remote": remote,
             "branch": self.feature_branch,
             "pushed_sha": head,
-            "review_digest": self.review_digest,
+            "review_digest": review_digest,
         }
