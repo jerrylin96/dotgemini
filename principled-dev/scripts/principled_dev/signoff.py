@@ -14,11 +14,7 @@ class SignoffError(ValueError):
 
 def _git(repo, *args):
     result = subprocess.run(
-        ("git", *args),
-        cwd=repo,
-        capture_output=True,
-        text=True,
-        check=False,
+        ("git", *args), cwd=repo, capture_output=True, text=True, check=False
     )
     if result.returncode:
         raise SignoffError(result.stderr.strip() or f"git {' '.join(args)} failed")

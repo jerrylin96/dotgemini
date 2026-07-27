@@ -172,6 +172,32 @@ def test_artifact_change_invalidates_publication_tuple(tmp_path, changed_gate):
     assert "review_digest" not in metadata
 
 
+def test_require_approved_and_publication_snapshot_are_atomic(tmp_path):
+    store = state.StateStore(tmp_path / "atomic.json")
+    for gate, content in (("spec", "spec"), ("plan", "plan"), ("build", "build")):
+        store.set_artifact("repo", "agent/topic", gate, content)
+        store.approve("repo", "agent/topic", gate)
+    token = store.require_approved_and_token("repo", "agent/topic", "build", "build")
+    assert token == store.record_token("repo", "agent/topic")
+    store.set_metadata(
+        "repo",
+        "agent/topic",
+        expected_token=token,
+        remote_sha="2" * 40,
+        published_remote="origin",
+        review_digest="8" * 64,
+    )
+    metadata, snapshot_token = store.publication_snapshot("repo", "agent/topic")
+    assert metadata["remote_sha"] == "2" * 40
+    assert snapshot_token == store.record_token("repo", "agent/topic")
+    store.assert_token("repo", "agent/topic", snapshot_token)
+    store.set_artifact("repo", "agent/topic", "build", "changed")
+    with pytest.raises(state.StateConflict):
+        store.assert_token("repo", "agent/topic", snapshot_token)
+    with pytest.raises(state.GateError):
+        store.require_approved_and_token("repo", "agent/topic", "build", "changed")
+
+
 def test_manifest_metadata_change_invalidates_build_approval_and_remote_sha(tmp_path):
     store = state.StateStore(tmp_path / "state.json")
     context = {

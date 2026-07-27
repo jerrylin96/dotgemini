@@ -264,6 +264,40 @@ class StateStore:
             self._document = self._load()
             return self._record_token(self._document, key)
 
+    def require_approved_and_token(self, repository, feature, gate, content=None):
+        """Atomically verify gate approval and return token for that exact record."""
+        gate = self._gate(gate)
+        key = _record_key(repository, feature)
+        with FileLock(self.lock_path):
+            self._document = self._load()
+            record = self._document["records"].get(key)
+            digest = record and record["artifacts"].get(gate)
+            if (
+                not digest
+                or record["approvals"].get(gate) != digest
+                or (content is not None and content_digest(content) != digest)
+            ):
+                raise GateError(f"{gate} approval is required")
+            return self._record_token(self._document, key)
+
+    def publication_snapshot(self, repository, feature):
+        """Atomically return publication metadata and its exact record token."""
+        key = _record_key(repository, feature)
+        with FileLock(self.lock_path):
+            self._document = self._load()
+            record = self._document["records"].get(key)
+            metadata = dict((record or {}).get("metadata", {}))
+            required = ("remote_sha", "published_remote", "review_digest")
+            if not record or any(not metadata.get(name) for name in required):
+                raise StateError("persisted publication state is required")
+            return metadata, self._record_token(self._document, key)
+
+    def assert_token(self, repository, feature, expected_token):
+        if not _is_digest(expected_token):
+            raise StateError("malformed expected state token")
+        if self.record_token(repository, feature) != expected_token:
+            raise StateConflict("state record changed")
+
     def set_metadata(self, repository, feature, *, expected_token=None, **values):
         unknown = set(values) - _METADATA_KEYS
         if unknown:

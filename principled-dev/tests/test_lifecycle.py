@@ -146,6 +146,36 @@ def test_push_requires_fresh_approve_for_exact_head(project):
     assert restored.review_digest == review.digest()
 
 
+def test_publish_rejects_invalidation_before_atomic_token_capture(project, monkeypatch):
+    _, _, lifecycle = project
+    approve_plan(lifecycle)
+    feature = lifecycle.create_feature("main")
+    commit = commit_feature(feature)
+    manifest = lifecycle.bind_manifest("summary")
+    lifecycle.approve_manifest(manifest)
+    review = record_review(
+        lifecycle.base_sha,
+        commit,
+        git(feature, "rev-parse", "HEAD^{tree}"),
+    )
+    original = lifecycle.state.require_approved_and_token
+
+    def invalidate_then_require(*args, **kwargs):
+        StateStore(lifecycle.state.path).set_artifact(
+            lifecycle.repository_id,
+            lifecycle.feature_branch,
+            "build",
+            "concurrent changed build",
+        )
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(lifecycle.state, "require_approved_and_token", invalidate_then_require)
+    with pytest.raises(LifecycleError, match="approved fresh manifest"):
+        lifecycle.publish(review)
+    remote = git(feature, "ls-remote", "origin", "refs/heads/agent/topic")
+    assert remote == ""
+
+
 def test_publish_rejects_stale_state_without_restoring_publication(project, monkeypatch):
     _, _, lifecycle = project
     approve_plan(lifecycle)
@@ -190,6 +220,36 @@ def test_publish_rejects_stale_state_without_restoring_publication(project, monk
     assert lifecycle.remote_sha is None
     assert lifecycle.published_remote is None
     assert lifecycle.review_digest is None
+
+
+def test_signoff_rejects_state_change_after_publication_snapshot(project, monkeypatch):
+    _, _, lifecycle = project
+    approve_plan(lifecycle)
+    feature = lifecycle.create_feature("main")
+    commit = commit_feature(feature)
+    manifest = lifecycle.bind_manifest("summary")
+    lifecycle.approve_manifest(manifest)
+    review = record_review(
+        lifecycle.base_sha,
+        commit,
+        git(feature, "rev-parse", "HEAD^{tree}"),
+    )
+    lifecycle.publish(review)
+    original = lifecycle.state.assert_token
+
+    def invalidate_then_assert(*args, **kwargs):
+        StateStore(lifecycle.state.path).set_artifact(
+            lifecycle.repository_id, lifecycle.feature_branch, "build", "changed"
+        )
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(lifecycle.state, "assert_token", invalidate_then_assert)
+    with pytest.raises(LifecycleError, match="state changed during signoff"):
+        lifecycle.signoff(
+            review,
+            human_reviewed=True,
+            identity="human@example.invalid",
+        )
 
 
 def test_new_commit_invalidates_review_and_blocks_push(project):

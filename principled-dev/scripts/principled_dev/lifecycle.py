@@ -2,7 +2,8 @@ import hashlib
 from pathlib import Path
 
 from .git import Git, GitError, repository_id
-from .state import StateConflict
+from .signoff import create_attestation
+from .state import GateError, StateConflict
 from .worktrees import WorktreeManager
 
 
@@ -154,9 +155,7 @@ class Lifecycle:
         tree = feature.run("rev-parse", "HEAD^{tree}").stdout.strip()
         if not review.is_fresh(self.base_sha, head, tree):
             raise LifecycleError("reviewed SHA is stale")
-        if not self.state.is_approved(
-            self.repository_id, self.feature_branch, "build", self._manifest_bytes()
-        ) or not self.manifest_is_fresh():
+        if not self.manifest_is_fresh():
             raise LifecycleError("approved fresh manifest is required before publication")
         if feature.is_dirty():
             raise LifecycleError("feature worktree is dirty")
@@ -164,9 +163,15 @@ class Lifecycle:
             "config", "--get", f"branch.{self.base_branch}.remote", check=False
         ).stdout.strip() or "origin"
         refspec = f"{head}:refs/heads/{self.feature_branch}"
-        expected_token = self.state.record_token(
-            self.repository_id, self.feature_branch
-        )
+        try:
+            expected_token = self.state.require_approved_and_token(
+                self.repository_id,
+                self.feature_branch,
+                "build",
+                self._manifest_bytes(),
+            )
+        except GateError as error:
+            raise LifecycleError("approved fresh manifest is required before publication") from error
         try:
             feature.run("push", remote, refspec)
             remote_sha = feature.run(
@@ -197,3 +202,24 @@ class Lifecycle:
             "pushed_sha": head,
             "review_digest": review_digest,
         }
+
+    def signoff(self, review, *, human_reviewed, identity, **details):
+        try:
+            metadata, token = self.state.publication_snapshot(
+                self.repository_id, self.feature_branch
+            )
+            attestation = create_attestation(
+                self.feature_worktree,
+                review,
+                human_reviewed=human_reviewed,
+                identity=identity,
+                published_remote=metadata["published_remote"],
+                published_branch=self.feature_branch,
+                published_sha=metadata["remote_sha"],
+                expected_review_digest=metadata["review_digest"],
+                **details,
+            )
+            self.state.assert_token(self.repository_id, self.feature_branch, token)
+            return attestation
+        except StateConflict as error:
+            raise LifecycleError("state changed during signoff") from error

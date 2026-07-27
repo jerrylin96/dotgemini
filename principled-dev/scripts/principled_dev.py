@@ -13,7 +13,7 @@ from principled_dev.config import roots
 from principled_dev.lifecycle import Lifecycle
 from principled_dev.resolver import Resolver
 from principled_dev.review import ReviewRecord
-from principled_dev.signoff import create_attestation, export_session_digest
+from principled_dev.signoff import export_session_digest
 from principled_dev.state import StateStore
 
 
@@ -125,17 +125,12 @@ def main(argv=None):
             session = export_session_digest(args.session_id or os.environ.get("AGENT_SESSION_ID"))
             digest = "sha256:" + session["sha256"]
         output(
-            create_attestation(
-                item.feature_worktree,
+            item.signoff(
                 review,
                 human_reviewed=args.human_reviewed,
                 identity=args.identity,
-                published_remote=item.published_remote,
-                published_branch=item.feature_branch,
-                published_sha=item.remote_sha,
                 session_id=args.session_id or os.environ.get("AGENT_SESSION_ID", "unavailable"),
                 session_digest=digest,
-                expected_review_digest=item.review_digest,
             )
         )
 
