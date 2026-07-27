@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 import shutil
 from pathlib import Path
@@ -29,9 +30,13 @@ class WorktreeManager:
         self.lock_path = self.root / "worktrees.lock"
 
     def feature_path(self, branch: str) -> Path:
-        if not _SAFE_NAME.fullmatch(branch):
-            raise ValueError("feature branch must be one safe path component")
-        path = self.feature_root / branch
+        if not branch or branch.startswith("-"):
+            raise ValueError("feature branch is required")
+        slug = re.sub(r"[^A-Za-z0-9._-]+", "_", branch).strip("._-")
+        if not slug:
+            raise ValueError("feature branch has no safe path characters")
+        suffix = hashlib.sha256(branch.encode()).hexdigest()[:8]
+        path = self.feature_root / f"{slug}-{suffix}"
         self._require_managed(path, self.feature_root)
         return path
 
