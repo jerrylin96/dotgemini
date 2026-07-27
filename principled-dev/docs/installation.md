@@ -116,7 +116,9 @@ export PRINCIPLED_DEV_WORKTREE_ROOT="/absolute/cache/path/principled-dev/worktre
 export PRINCIPLED_DEV_STATE_ROOT="/absolute/state/path/principled-dev"
 ```
 
-When a durable feature worktree has been created, launch or resume goose with the exact values used by the path-policy hook:
+When a durable feature worktree has been created, start or resume goose from that worktree. The path-policy hook resolves the matching worktree from lifecycle state using the session working directory. `PRINCIPLED_DEV_STATE_ROOT` must match the root used during feature creation.
+
+You may instead provide an explicit override before launching goose:
 
 ```sh
 export PRINCIPLED_DEV_FEATURE_WORKTREE="/absolute/path/to/durable/feature/worktree"
