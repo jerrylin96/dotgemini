@@ -231,6 +231,22 @@ class StateStore:
         record = self._document["records"].get(_record_key(repository, feature), {})
         return dict(record.get("metadata", {}))
 
+    def find_metadata_for_path(self, path):
+        target = Path(path).resolve(strict=False)
+        matches = []
+        for record in self._document["records"].values():
+            metadata = record.get("metadata", {})
+            raw = metadata.get("feature_worktree")
+            if not raw:
+                continue
+            root = Path(raw).resolve(strict=False)
+            try:
+                target.relative_to(root)
+                matches.append((len(root.parts), metadata))
+            except ValueError:
+                pass
+        return dict(max(matches, key=lambda item: item[0])[1]) if matches else {}
+
     def is_approved(self, repository, feature, gate, content=None):
         """Return whether gate approval matches current and optional supplied content."""
         gate = self._gate(gate)

@@ -104,8 +104,8 @@ def test_hook_loads_feature_worktree_from_persisted_state(tmp_path, monkeypatch)
     )
     monkeypatch.delenv("PRINCIPLED_DEV_FEATURE_WORKTREE", raising=False)
     monkeypatch.setenv("PRINCIPLED_DEV_STATE_ROOT", str(state_root))
-    monkeypatch.setenv("PRINCIPLED_DEV_REPOSITORY_ID", "repo-id")
-    monkeypatch.setenv("PRINCIPLED_DEV_FEATURE_BRANCH", "agent/topic")
+    monkeypatch.delenv("PRINCIPLED_DEV_REPOSITORY_ID", raising=False)
+    monkeypatch.delenv("PRINCIPLED_DEV_FEATURE_BRANCH", raising=False)
     assert decide(payload("developer__write", feature, path="new.py")) is None
     decision = decide(payload("developer__write", repo, path="file.py"))
     assert decision["decision"] == "block"

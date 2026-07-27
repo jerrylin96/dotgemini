@@ -49,26 +49,27 @@ def _integration_command(command, base):
     return False
 
 
-def _feature_root():
+def _feature_root(working_dir=None):
     configured = os.environ.get("PRINCIPLED_DEV_FEATURE_WORKTREE", "").strip()
     if configured:
         return configured
     repository = os.environ.get("PRINCIPLED_DEV_REPOSITORY_ID", "").strip()
     feature = os.environ.get("PRINCIPLED_DEV_FEATURE_BRANCH", "").strip()
-    if not repository or not feature:
-        return ""
     _, state_root = roots()
     try:
-        return StateStore(state_root / "lifecycle.json").get_metadata(
-            repository, feature
-        ).get("feature_worktree", "")
+        store = StateStore(state_root / "lifecycle.json")
+        if repository and feature:
+            metadata = store.get_metadata(repository, feature)
+        else:
+            metadata = store.find_metadata_for_path(working_dir or os.getcwd())
+        return metadata.get("feature_worktree", "")
     except Exception:
         return ""
 
 
 def decide(payload):
     tool = payload.get("tool_name", "")
-    feature_root = _feature_root()
+    feature_root = _feature_root(payload.get("working_dir"))
 
     if tool in WRITE_TOOLS:
         if not feature_root:
