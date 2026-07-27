@@ -5,6 +5,9 @@ import shlex
 import sys
 from pathlib import Path
 
+from principled_dev.config import roots
+from principled_dev.state import StateStore
+
 
 WRITE_TOOLS = {"developer__write", "developer__edit"}
 
@@ -46,9 +49,26 @@ def _integration_command(command, base):
     return False
 
 
+def _feature_root():
+    configured = os.environ.get("PRINCIPLED_DEV_FEATURE_WORKTREE", "").strip()
+    if configured:
+        return configured
+    repository = os.environ.get("PRINCIPLED_DEV_REPOSITORY_ID", "").strip()
+    feature = os.environ.get("PRINCIPLED_DEV_FEATURE_BRANCH", "").strip()
+    if not repository or not feature:
+        return ""
+    _, state_root = roots()
+    try:
+        return StateStore(state_root / "lifecycle.json").get_metadata(
+            repository, feature
+        ).get("feature_worktree", "")
+    except Exception:
+        return ""
+
+
 def decide(payload):
     tool = payload.get("tool_name", "")
-    feature_root = os.environ.get("PRINCIPLED_DEV_FEATURE_WORKTREE", "").strip()
+    feature_root = _feature_root()
 
     if tool in WRITE_TOOLS:
         if not feature_root:

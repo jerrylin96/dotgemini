@@ -10,6 +10,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 from path_policy import decide
+from principled_dev.state import StateStore
 
 
 def payload(tool, working_dir, **tool_input):
@@ -86,6 +87,28 @@ def test_missing_feature_state_blocks_repository_edits(tmp_path, monkeypatch):
     decision = decide(payload("developer__write", tmp_path, path="file.py"))
     assert decision["decision"] == "block"
     assert "not configured" in decision["reason"]
+
+
+def test_hook_loads_feature_worktree_from_persisted_state(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    feature = tmp_path / "managed" / "feature"
+    repo.mkdir()
+    feature.mkdir(parents=True)
+    state_root = tmp_path / "state"
+    store = StateStore(state_root / "lifecycle.json")
+    store.set_metadata(
+        "repo-id",
+        "agent/topic",
+        feature_branch="agent/topic",
+        feature_worktree=str(feature.resolve()),
+    )
+    monkeypatch.delenv("PRINCIPLED_DEV_FEATURE_WORKTREE", raising=False)
+    monkeypatch.setenv("PRINCIPLED_DEV_STATE_ROOT", str(state_root))
+    monkeypatch.setenv("PRINCIPLED_DEV_REPOSITORY_ID", "repo-id")
+    monkeypatch.setenv("PRINCIPLED_DEV_FEATURE_BRANCH", "agent/topic")
+    assert decide(payload("developer__write", feature, path="new.py")) is None
+    decision = decide(payload("developer__write", repo, path="file.py"))
+    assert decision["decision"] == "block"
 
 
 def test_hook_cli_outputs_block_json(paths):
