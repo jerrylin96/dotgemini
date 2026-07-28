@@ -19,6 +19,20 @@ Use for every repository code or configuration change. Never modify the primary 
 8. **Signoff:** follow `signoff`; do not mutate Git history.
 9. **Integration:** human creates PR and merges. Remove clean feature worktree only after confirmed merge or explicit abandonment; prune disposable review cache separately.
 
+## Bootstrap From Primary Checkout
+
+Before the feature worktree exists, keep specification and plan files under the resolved `<state-root>/artifacts/` directory and use direct helper commands from the repository root to record and approve each gate, then create the worktree. Use absolute paths for the helper and artifact files. Global installations normally use `$HOME/.agents/plugins/principled-dev/scripts/principled_dev.py`; resolve `$HOME` before invoking the shell tool.
+
+```sh
+python3 /absolute/path/to/principled_dev.py --repo . --feature agent/<feature> record-artifact spec /absolute/state-root/artifacts/spec.md
+python3 /absolute/path/to/principled_dev.py --repo . --feature agent/<feature> approve spec
+python3 /absolute/path/to/principled_dev.py --repo . --feature agent/<feature> record-artifact plan /absolute/state-root/artifacts/plan.md
+python3 /absolute/path/to/principled_dev.py --repo . --feature agent/<feature> approve plan
+python3 /absolute/path/to/principled_dev.py --repo . feature agent/<feature> --base <base>
+```
+
+The hook denies primary-checkout edits, ordinary shell calls, wrappers, and compound commands during bootstrap. After feature creation, resume goose from the returned worktree path.
+
 ## Hard Rules
 
 - If independent review cannot run, status is `BLOCKED`, never self-approved.

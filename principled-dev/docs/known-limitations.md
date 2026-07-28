@@ -29,7 +29,9 @@ Consequences:
 
 The current matcher covers `developer__write`, `developer__edit`, and `developer__shell`. Other extensions, renamed tools, direct filesystem APIs, external agents, or commands that mutate files indirectly may fall outside path checks.
 
-When hook state resolves successfully, shell calls launched outside the active feature worktree are denied. Inside it, policy recognizes directly parsed commands beginning with `git merge`, `gh pr ... create`, and short/fully-qualified/forced/deletion `git push` refspecs targeting the configured base branch; wildcard push refspecs are conservatively denied. This working-directory boundary does not constrain absolute paths used by a command. Shell wrappers, compound scripts, aliases, redirections, scripts, alternative Git clients, push options without explicit refspecs, and indirect filesystem mutations can evade recognition. Never describe this as filesystem or Git enforcement.
+Before a feature worktree exists, the hook allows direct artifact writes below `<state-root>/artifacts/` and narrowly parsed direct lifecycle-helper calls needed to record or approve the specification/plan and create the managed `agent/<feature>` worktree. Primary-checkout edits and all other shell calls remain denied. Lifecycle state, not the hook parser, enforces gate order.
+
+After hook state resolves to a feature worktree, shell calls launched outside it are denied. Inside it, policy recognizes directly parsed commands beginning with `git merge`, `gh pr ... create`, and short/fully-qualified/forced/deletion `git push` refspecs targeting the configured base branch; wildcard push refspecs are conservatively denied. This working-directory boundary does not constrain absolute paths used by a command. Shell wrappers, compound scripts, aliases, redirections, scripts, alternative Git clients, push options without explicit refspecs, and indirect filesystem mutations can evade recognition. Never describe this as filesystem or Git enforcement.
 
 ## No sandbox
 

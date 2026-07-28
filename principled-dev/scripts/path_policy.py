@@ -10,6 +10,7 @@ from principled_dev.state import StateStore
 
 
 WRITE_TOOLS = {"developer__write", "developer__edit"}
+_LIFECYCLE_SCRIPT = Path(__file__).resolve().with_name("principled_dev.py")
 
 
 def block(reason):
@@ -55,6 +56,52 @@ def _integration_command(command, base):
     return False
 
 
+def _bootstrap_command(command, working_dir):
+    if any(char in command for char in "\n\r;&|<>`$(){}!*?[]~#"):
+        return False
+    try:
+        words = shlex.split(command)
+    except ValueError:
+        return False
+    if len(words) < 5 or words[0] != "python3":
+        return False
+    script = Path(words[1]).expanduser()
+    if not script.is_absolute():
+        script = working_dir / script
+    if script.resolve(strict=False) != _LIFECYCLE_SCRIPT:
+        return False
+    if words[2] != "--repo":
+        return False
+    repository = Path(words[3]).expanduser()
+    if not repository.is_absolute():
+        repository = working_dir / repository
+    if repository.resolve(strict=False) != working_dir:
+        return False
+
+    if words[4] == "feature":
+        return (
+            len(words) == 8
+            and words[5].startswith("agent/")
+            and len(words[5]) > len("agent/")
+            and words[6] == "--base"
+            and bool(words[7])
+        )
+
+    if len(words) < 8 or words[4] != "--feature":
+        return False
+    if not words[5].startswith("agent/") or len(words[5]) == len("agent/"):
+        return False
+    if words[6] == "approve":
+        return len(words) == 8 and words[7] in {"spec", "plan"}
+    if len(words) != 9 or words[6] != "record-artifact" or words[7] not in {"spec", "plan"}:
+        return False
+    artifact = Path(words[8]).expanduser()
+    if not artifact.is_absolute():
+        artifact = working_dir / artifact
+    _, state_root = roots()
+    return _inside(artifact.resolve(strict=False), (state_root / "artifacts").resolve(strict=False))
+
+
 def _feature_root(working_dir=None):
     configured = os.environ.get("PRINCIPLED_DEV_FEATURE_WORKTREE", "").strip()
     if configured:
@@ -78,21 +125,27 @@ def decide(payload):
     feature_root = _feature_root(payload.get("working_dir"))
 
     if tool in WRITE_TOOLS:
-        if not feature_root:
-            return block("principled-dev feature worktree is not configured")
         target = _resolved_target(payload)
+        if not feature_root:
+            _, state_root = roots()
+            artifact_root = (state_root / "artifacts").resolve(strict=False)
+            if target is not None and _inside(target, artifact_root):
+                return None
+            return block("principled-dev feature worktree is not configured")
         root = Path(feature_root).expanduser().resolve(strict=False)
         if target is None or not _inside(target, root):
             return block("repository edits must stay inside configured feature worktree")
 
     if tool == "developer__shell":
-        if not feature_root:
-            return block("principled-dev feature worktree is not configured")
         working_dir = Path(payload.get("working_dir") or os.getcwd()).resolve(strict=False)
+        command = payload.get("tool_input", {}).get("command", "")
+        if not feature_root:
+            if _bootstrap_command(command, working_dir):
+                return None
+            return block("principled-dev feature worktree is not configured")
         root = Path(feature_root).expanduser().resolve(strict=False)
         if working_dir != root and not _inside(working_dir, root):
             return block("advisory shell boundary requires feature-worktree working directory")
-        command = payload.get("tool_input", {}).get("command", "")
         base = os.environ.get("PRINCIPLED_DEV_BASE_BRANCH", "main")
         if _integration_command(command, base):
             return block("advisory check: PR creation and integration mutation are human-owned")

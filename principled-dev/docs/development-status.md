@@ -83,6 +83,8 @@ Each finding was reproduced, fixed with tests, validated, committed, and pushed.
 
 ### Bounded final-review policy
 
+The integrated review at `8020802` returned `REQUEST_CHANGES` because a healthy path-policy hook blocked the lifecycle commands needed to bootstrap the first feature worktree. The remediation permits only state-artifact writes and direct specification/plan/worktree lifecycle commands before feature creation; all other primary-checkout edits and shell calls remain denied. A fresh exact-tip review is still required after this implementation change.
+
 The next session must run **one** final independent review against the exact new branch tip.
 
 - Review implementation delta `70338f8..7962ff5` and confirm this document is accurate.
