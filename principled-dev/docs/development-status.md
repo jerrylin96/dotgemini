@@ -43,7 +43,7 @@ See:
 
 ## Evidence at implementation boundary
 
-Evidence recorded for `7962ff504f36aa7e3edd18007384f28a57620969`:
+Evidence recorded for `7962ff504f36aa7e3edd18007384f28a57620969` in an environment with the `goose` CLI on `PATH`:
 
 ```text
 default pytest: 235 passed
@@ -52,6 +52,8 @@ Goose recipe validation: 4 valid
 feature worktree: clean
 remote feature branch: exact SHA match
 ```
+
+Two packaging integration tests require the `goose` CLI. They run when it is available and skip with reason `requires goose CLI` when it is absent; a skip in a goose-less environment is not a regression.
 
 Earlier isolated packaging validation also proved:
 
@@ -301,7 +303,8 @@ Run one bounded final review:
 - implementation boundary 7962ff504f36aa7e3edd18007384f28a57620969;
 - inspect 70338f8..7962ff5 for latest code fix and later docs for accuracy;
 - max 20 reviewer turns, read-only, no nested delegation;
-- run default pytest, Ruff, and four recipe validations;
+- run default pytest and Ruff; two packaging tests require `goose` on `PATH` and skip when it is absent;
+- run four recipe validations when `goose` is available, otherwise record them as unverified;
 - only material supported-workflow CRITICAL/IMPORTANT findings block;
 - exotic residuals become known limitations;
 - if no material blocker, APPROVE and stop;
