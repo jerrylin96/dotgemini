@@ -190,9 +190,10 @@ repo going forward:
 
 ## Backlog checklist (checkable; nothing here expands scope)
 
-- [ ] P1: `skipif` on the two goose-binary packaging tests **or** goose
-      install step in `ci.yml` — required before any merge/extraction.
-- [ ] P1: runbook line in `development-status.md` documenting the goose
+- [x] P1: `skipif` on the two goose-binary packaging tests **or** goose
+      install step in `ci.yml` — resolved with `skipif`; goose-less default
+      pytest reports 233 passed and 2 skipped.
+- [x] P1: runbook line in `development-status.md` documenting the goose
       prerequisite for the default pytest count.
 - [ ] P2: record the deployment hardening profile as optional guidance
       (installation docs), explicitly marked external to this repo.
