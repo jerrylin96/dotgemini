@@ -1,6 +1,7 @@
 import glob
 import os
 import re
+import subprocess
 
 def parse_frontmatter_name(skill_md_path):
     """Parse name from YAML frontmatter without external YAML parser dependency."""
@@ -190,15 +191,30 @@ def test_retained_reasoning_and_compaction_rules_exist():
     assert literal_scratchpad_path in agents_content, f"Exact path '{literal_scratchpad_path}' missing from AGENTS.md"
     assert literal_scratchpad_path in make_feature_content, f"Exact path '{literal_scratchpad_path}' missing from make-feature SKILL.md"
 
-    # Assert that EVERY reference to scratchpad.md in tracked repo markdown files uses the exact canonical path
-    all_md_files = glob.glob(os.path.join(root_dir, "**/*.md"), recursive=True)
-    for md_path in all_md_files:
+    # Scan ONLY git-tracked markdown files to exclude untracked local noise or scratch directories
+    res = subprocess.run(
+        ["git", "ls-files", "*.md"],
+        cwd=root_dir,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    tracked_md_files = [
+        os.path.join(root_dir, line.strip())
+        for line in res.stdout.splitlines()
+        if line.strip()
+    ]
+
+    # Only assert when scratchpad.md is preceded by a path segment or slash
+    path_ref_pattern = re.compile(r"[\w~<>./-]+/scratchpad\.md")
+    for md_path in tracked_md_files:
         with open(md_path, "r", encoding="utf-8") as f:
             content = f.read()
-        if "scratchpad.md" in content:
-            for line in content.splitlines():
-                if "scratchpad.md" in line:
-                    assert literal_scratchpad_path in line, f"Non-canonical scratchpad path found in {md_path}: '{line.strip()}'"
+        matches = path_ref_pattern.findall(content)
+        for match in matches:
+            assert match == literal_scratchpad_path, (
+                f"Non-canonical scratchpad path reference '{match}' found in {md_path}"
+            )
 
     # Verify the 5 compaction fields are consistent across AGENTS.md and SKILL.md
     required_fields = [
