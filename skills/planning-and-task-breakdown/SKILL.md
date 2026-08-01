@@ -67,7 +67,7 @@ When Sequential Subagents strategy is selected:
 
 #### Strategy Triggers & Conventions:
 - **Auto-Recommendation**: Agent recommends `Sequential Subagents` if the task breakdown contains 5 or more complex multi-file slices.
-- **User Override Conventions**: If user prompt includes intent signals (`heavy`, `subagent per slice`, or external plan handoff) or command invocation conventions (`/plan heavy`, `/make-feature heavy`), agent selects `Sequential Subagents` directly.
+- **User Override Conventions**: If user prompt includes intent signals (`heavy`, `subagent per slice`, or external plan handoff) or command invocation conventions (`/plan heavy`, `/make-feature heavy`), agent proactively selects `Sequential Subagents` execution strategy.
 - **External Plan Handoff Definition**: An external plan handoff refers to a plan produced outside this repository's `/plan` process, including pre-architected plans imported from frontier models.
 
 ### Step 3: Output

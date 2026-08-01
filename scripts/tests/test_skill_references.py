@@ -265,3 +265,87 @@ def test_sequential_subagent_slicing_consistency():
 
     # Strategy selection checkbox assertion
     assert "ensuring exactly one strategy checkbox is selected" in plan_content, "Missing single strategy checkbox assertion in planning-and-task-breakdown"
+
+
+def test_catchmeup_skill_contract():
+    """Verify that catchmeup SKILL.md contains required presets, read-only exception, cleanup instructions, trailer parsing, and @skill references."""
+    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+    catchmeup_md = os.path.join(root_dir, "skills/catchmeup/SKILL.md")
+    readme_md = os.path.join(root_dir, "README.md")
+    agents_md = os.path.join(root_dir, "AGENTS.md")
+
+    assert os.path.exists(catchmeup_md), "skills/catchmeup/SKILL.md does not exist"
+
+    with open(catchmeup_md, "r", encoding="utf-8") as f:
+        catchmeup_content = f.read()
+    with open(readme_md, "r", encoding="utf-8") as f:
+        readme_content = f.read()
+    with open(agents_md, "r", encoding="utf-8") as f:
+        agents_content = f.read()
+
+    # Preset assertions
+    for preset in ["1d", "1w", "2w", "1mo"]:
+        assert preset in catchmeup_content, f"Preset '{preset}' missing from catchmeup SKILL.md"
+
+    # Read-only contract & ephemeral scratch file exception assertion
+    assert "Creating temporary, ephemeral scratch files under the conversation's scratch directory" in catchmeup_content, \
+        "Missing ephemeral scratch file read-only exception in catchmeup SKILL.md"
+    assert 'rm -- "<appDataDir>/brain/<conversation-id>/scratch/temp_catchmeup_' in catchmeup_content, \
+        "Missing explicit rm -- cleanup instruction in catchmeup SKILL.md"
+    assert "view_file" in catchmeup_content and "<=800-line" in catchmeup_content, \
+        "Missing view_file <=800-line reading instruction in catchmeup SKILL.md"
+
+    # Attestation parsing assertion (must use explicit keys, never broken glob %(trailers:key=Signoff-*)
+    assert "%(trailers:key=Signoff-*" not in catchmeup_content, \
+        "Broken trailer glob %(trailers:key=Signoff-*) found in catchmeup SKILL.md"
+    assert "%(trailers:key=Signoff-Reviewed-Commit-SHA" in catchmeup_content, \
+        "Missing explicit key %(trailers:key=Signoff-Reviewed-Commit-SHA... in catchmeup SKILL.md"
+    assert "VERIFIED_BY_HUMAN_NO_TRANSCRIPT_DIGEST" in catchmeup_content, \
+        "Missing VERIFIED_BY_HUMAN_NO_TRANSCRIPT_DIGEST handling in catchmeup SKILL.md"
+    assert "--invert-grep" in catchmeup_content, \
+        "Missing --invert-grep attestation exclusion filter in catchmeup SKILL.md"
+
+    # Dynamic duration grammar regex extraction test against advertised preset table values
+    grammar_match = re.search(r"- \*\*Accepted Grammar\*\*: `(.*?)`", catchmeup_content)
+    assert grammar_match, "Accepted Grammar pattern missing from catchmeup SKILL.md"
+    grammar_pattern = re.compile(grammar_match.group(1))
+    for table_arg in ["1d", "1 day", "1w", "1 week", "2w", "2 weeks", "1mo", "1 month"]:
+        assert grammar_pattern.match(table_arg), f"Extracted grammar regex failed to match table argument '{table_arg}'"
+
+    # Reference assertion
+    assert "@skill:explain-diff" in catchmeup_content, \
+        "Missing @skill:explain-diff reference in catchmeup SKILL.md"
+
+    # Registration assertion
+    assert "`catchmeup`" in readme_content, "Missing catchmeup registration in README.md"
+    assert "catchmeup/SKILL.md" in agents_content, "Missing catchmeup indexing in AGENTS.md"
+
+
+def test_heavy_mode_documented_consistently():
+    """Verify that /make-feature heavy is documented consistently across README.md, make-feature, planning-and-task-breakdown, and incremental-implementation."""
+    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+    readme_md = os.path.join(root_dir, "README.md")
+    make_feature_md = os.path.join(root_dir, "skills/make-feature/SKILL.md")
+    plan_md = os.path.join(root_dir, "skills/planning-and-task-breakdown/SKILL.md")
+    inc_md = os.path.join(root_dir, "skills/incremental-implementation/SKILL.md")
+
+    with open(readme_md, "r", encoding="utf-8") as f:
+        readme_content = f.read()
+    with open(make_feature_md, "r", encoding="utf-8") as f:
+        make_feature_content = f.read()
+    with open(plan_md, "r", encoding="utf-8") as f:
+        plan_content = f.read()
+    with open(inc_md, "r", encoding="utf-8") as f:
+        inc_content = f.read()
+
+    canonical_heavy_phrase = "proactively selects `Sequential Subagents` execution strategy"
+
+    assert "/make-feature heavy" in readme_content, "Missing /make-feature heavy in README.md"
+    assert "/make-feature heavy" in make_feature_content, "Missing /make-feature heavy in make-feature SKILL.md"
+    assert "/make-feature heavy" in plan_content, "Missing /make-feature heavy in planning-and-task-breakdown SKILL.md"
+    assert "/make-feature heavy" in inc_content, "Missing /make-feature heavy in incremental-implementation SKILL.md"
+
+    assert canonical_heavy_phrase in readme_content, "Canonical heavy phrase missing from README.md"
+    assert canonical_heavy_phrase in make_feature_content, "Canonical heavy phrase missing from make-feature SKILL.md"
+    assert canonical_heavy_phrase in plan_content, "Canonical heavy phrase missing from planning-and-task-breakdown SKILL.md"
+    assert canonical_heavy_phrase in inc_content, "Canonical heavy phrase missing from incremental-implementation SKILL.md"
