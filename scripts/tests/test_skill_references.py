@@ -175,7 +175,7 @@ def test_validation_quoted_valid_name(tmp_path):
 
 
 def test_retained_reasoning_and_compaction_rules_exist():
-    """Verify that AGENTS.md and make-feature SKILL.md contain retained reasoning & compaction rules."""
+    """Verify that AGENTS.md and make-feature SKILL.md contain retained reasoning & compaction rules with strict path safety."""
     root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
     agents_md = os.path.join(root_dir, "AGENTS.md")
     make_feature_md = os.path.join(root_dir, "skills/make-feature/SKILL.md")
@@ -186,7 +186,29 @@ def test_retained_reasoning_and_compaction_rules_exist():
     with open(make_feature_md, "r", encoding="utf-8") as f:
         make_feature_content = f.read()
 
-    assert "Reasoning State Retention" in agents_content
-    assert "Subagent Context Compaction" in agents_content
-    assert "Context Compaction Block" in make_feature_content
+    literal_scratchpad_path = "<appDataDir>/brain/<conversation-id>/scratch/scratchpad.md"
+    assert literal_scratchpad_path in agents_content, f"Exact path '{literal_scratchpad_path}' missing from AGENTS.md"
+    assert literal_scratchpad_path in make_feature_content, f"Exact path '{literal_scratchpad_path}' missing from make-feature SKILL.md"
 
+    # Negative assertion: Verify no markdown file references scratchpad.md under worktrees or bare workspace-root
+    all_md_files = glob.glob(os.path.join(root_dir, "**/*.md"), recursive=True)
+    for md_path in all_md_files:
+        if "/tmp/" in md_path or "/brain/" in md_path:
+            continue
+        with open(md_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        assert "tmp/worktrees/scratchpad.md" not in content, f"Worktree-relative scratchpad path found in {md_path}"
+        assert "workspace/scratchpad.md" not in content, f"Workspace-root scratchpad path found in {md_path}"
+        assert "artifact/scratchpad.md" not in content, f"Incorrect artifact path found in {md_path}"
+
+    # Verify the 5 compaction fields are consistent across AGENTS.md and SKILL.md
+    required_fields = [
+        "Feature Rationale",
+        "Key Architectural Decisions",
+        "Active Constraints",
+        "Prior Step Findings",
+        "Target Artifact Paths",
+    ]
+    for field in required_fields:
+        assert field in agents_content, f"Compaction field '{field}' missing from AGENTS.md"
+        assert field in make_feature_content, f"Compaction field '{field}' missing from make-feature SKILL.md"
