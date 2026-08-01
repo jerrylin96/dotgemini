@@ -112,6 +112,9 @@ Signoff-Agent: <Executing Agent Name> /signoff v1.0
 
 ### 4. Commit Execution & Integrity Verification
 
+> [!IMPORTANT]
+> **Worktree Target Mandate:** If signoff is performed on a feature branch (e.g. via `resolve_branches.py` or `/make-feature`), the empty attestation commit MUST be executed inside `worktree_path` directly on the feature branch before pushing to `origin` and merging. Creating attestation commits on the primary workspace branch (e.g. `main`) is strictly prohibited.
+
 Create an empty attestation commit (`git commit --allow-empty`) with the flat trailer block:
 ```bash
 SHORT_SHA=$(git rev-parse --short=7 "<reviewed-commit-sha>")

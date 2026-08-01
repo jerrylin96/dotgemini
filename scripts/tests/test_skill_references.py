@@ -383,4 +383,9 @@ def test_signoff_socratic_remediation_rule():
     assert "@skill:signoff" in math_content, "Missing @skill:signoff reference in math-proof-audit SKILL.md"
     assert "@skill:explain-diff" in math_content, "Missing @skill:explain-diff reference in math-proof-audit SKILL.md"
 
+    # Assert Section 4 Worktree Target Mandate
+    assert "Worktree Target Mandate" in signoff_content, "Missing Worktree Target Mandate in skills/signoff/SKILL.md"
+    assert "worktree_path" in signoff_content, "Missing 'worktree_path' in skills/signoff/SKILL.md Section 4"
+
+
 
