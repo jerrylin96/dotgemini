@@ -18,11 +18,10 @@ Intentional trade-offs (e.g. surrogates violating exact domain laws for speed) p
 
 ### 1. Context & Range Resolution
 1. Resolve reference commit (`<reference-commit>`) and target HEAD commit (`<reviewed-commit-sha>`) using the resolution protocol from **@skill:explain-diff**.
-2. Compute explicit merge-base, tree, and parent SHAs:
+2. Compute explicit merge-base and tree SHAs:
    ```bash
    BASE_SHA=$(git merge-base "<reference-commit>" "<reviewed-commit-sha>")
    TREE_SHA=$(git rev-parse "<reviewed-commit-sha>^{tree}")
-   PARENTS=$(git rev-parse "<reviewed-commit-sha>^@")
    ```
 3. Record `Base-SHA` (`$BASE_SHA`), `Reviewed-Commit-SHA` (`<reviewed-commit-sha>`), and `Reviewed-Tree-SHA` (`$TREE_SHA`) for the attestation record.
 4. Inspect range diff `git diff "$BASE_SHA...<reviewed-commit-sha>"` to analyze core mechanisms, contract deviations, and silent failure paths prior to starting the interview.
