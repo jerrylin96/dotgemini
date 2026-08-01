@@ -55,19 +55,20 @@ When Standard Single Agent is selected:
 ```markdown
 ## Execution Strategy
 - [x] Standard Single Agent (Fast, atomic tasks)
-- [ ] Sequential Subagents (`Workspace: inherit`) — *Recommended for 5 or more complex multi-file slices (>4) or external plan handoffs*
+- [ ] Sequential Subagents (`Workspace: inherit`) — *Recommended for 5 or more complex multi-file slices or external plan handoffs*
 ```
 
 When Sequential Subagents strategy is selected:
 ```markdown
 ## Execution Strategy
 - [ ] Standard Single Agent (Fast, atomic tasks)
-- [x] Sequential Subagents (`Workspace: inherit`) — *Recommended for 5 or more complex multi-file slices (>4) or external plan handoffs*
+- [x] Sequential Subagents (`Workspace: inherit`) — *Recommended for 5 or more complex multi-file slices or external plan handoffs*
 ```
 
 #### Strategy Triggers & Conventions:
-- **Auto-Recommendation**: Agent recommends `Sequential Subagents` if the task breakdown contains 5 or more complex multi-file slices (>4).
+- **Auto-Recommendation**: Agent recommends `Sequential Subagents` if the task breakdown contains 5 or more complex multi-file slices.
 - **User Override Conventions**: If user prompt includes intent signals (`heavy`, `subagent per slice`, or external plan handoff) or command invocation conventions (`/plan heavy`, `/make-feature heavy`), agent selects `Sequential Subagents` directly.
+- **External Plan Handoff Definition**: An external plan handoff refers to a plan produced outside this repository's `/plan` process, including pre-architected plans imported from frontier models.
 
 ### Step 3: Output
 

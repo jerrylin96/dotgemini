@@ -230,7 +230,7 @@ def test_retained_reasoning_and_compaction_rules_exist():
 
 
 def test_sequential_subagent_slicing_consistency():
-    """Verify that Sequential Subagent Slicing guidelines and triggers are consistent across all skill files."""
+    """Verify that Sequential Subagent Slicing guidelines, canonical thresholds, and safety rules are consistent across skill files."""
     root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
     inc_md = os.path.join(root_dir, "skills/incremental-implementation/SKILL.md")
     plan_md = os.path.join(root_dir, "skills/planning-and-task-breakdown/SKILL.md")
@@ -247,6 +247,19 @@ def test_sequential_subagent_slicing_consistency():
     assert "Execution Strategy" in plan_content, "Missing Execution Strategy in planning-and-task-breakdown"
     assert "Sequential Subagent Delegation" in make_feature_content, "Missing Sequential Subagent Delegation in make-feature"
 
-    # Threshold harmonization check across files
-    for content, path in [(inc_content, "incremental-implementation"), (plan_content, "planning-and-task-breakdown")]:
-        assert ">4" in content or "5 or more" in content, f"Missing slice threshold (>4 / 5 or more) in {path}"
+    # Precise threshold harmonization assertions
+    canonical_threshold = "5 or more complex multi-file slices"
+    assert canonical_threshold in inc_content, f"Canonical threshold '{canonical_threshold}' missing from incremental-implementation"
+    assert canonical_threshold in plan_content, f"Canonical threshold '{canonical_threshold}' missing from planning-and-task-breakdown"
+    assert ">5 heavy slices" not in inc_content, "Obsolete threshold '>5 heavy slices' found in incremental-implementation"
+    assert ">5 heavy slices" not in plan_content, "Obsolete threshold '>5 heavy slices' found in planning-and-task-breakdown"
+
+    # Execution safety and handoff rule assertions
+    assert "Single Active Writer" in inc_content, "Missing Single Active Writer rule in incremental-implementation"
+    assert "Pre-Dispatch Verification Gate" in inc_content, "Missing Pre-Dispatch Verification Gate in incremental-implementation"
+    assert "Failure Circuit Breaker" in inc_content, "Missing Failure Circuit Breaker in incremental-implementation"
+    assert "git add -- <intended-paths>" in inc_content, "Missing safe path-specific staging instruction in incremental-implementation"
+    assert "parent conversation ID" in inc_content, "Missing explicit parent conversation ID scratchpad reference in incremental-implementation"
+
+    # Strategy selection checkbox assertion
+    assert "ensuring exactly one strategy checkbox is selected" in plan_content, "Missing single strategy checkbox assertion in planning-and-task-breakdown"

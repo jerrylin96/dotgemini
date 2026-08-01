@@ -93,7 +93,7 @@ If Slice 1 fails, you discover it before investing in Slices 2 and 3.
 
 ### Sequential Subagent Slicing
 
-For high-complexity features (5 or more complex multi-file slices (>4), massive legacy refactors, or pre-architected plans imported from frontier models), delegate each slice sequentially to a fresh subagent with clean context while preserving git state:
+For high-complexity features (5 or more complex multi-file slices, massive legacy refactors, or pre-architected plans imported from frontier models), delegate each slice sequentially to a fresh subagent with clean context while preserving git state:
 
 ```
 Slice 0: Setup & Schema Contract (Parent Agent / Initial Subagent)
@@ -106,11 +106,11 @@ Slice 0: Setup & Schema Contract (Parent Agent / Initial Subagent)
 > **Sequential Subagent Execution Rules**:
 > 1. **Workspace Mode**: Must use `Workspace: inherit` (or target worktree path) so each subagent commits directly onto the shared feature branch (`gemini/<feature-name>`).
 > 2. **Single Active Writer**: Only one subagent writer may be active in the inherited worktree at a time. The parent agent must wait for Slice N to complete before launching Slice N+1.
-> 3. **Context Compaction Block**: Every child subagent prompt MUST include a compacted context block (≤30 lines / ~400 words) formatted into the 5 canonical fields defined in [make-feature](../make-feature/SKILL.md) and AGENTS.md: *Feature Rationale*, *Key Architectural Decisions*, *Active Constraints*, *Prior Step Findings* (completed slice outcomes & verification logs), and *Target Artifact Paths*. Never include secrets or raw logs.
-> 4. **Parent-Owned Scratchpad Handoff**: Subagents must run tests and lint checks (`pytest` / `ruff`), stage and commit changes locally (`git add . && git commit -m "sliceN: <description>"`), and update the shared parent scratchpad at `<appDataDir>/brain/<conversation-id>/scratch/scratchpad.md` (where `<conversation-id>` is the parent conversation ID passed explicitly in the prompt) with empirical test results and commit SHA before exiting.
+> 3. **Context Compaction Block**: Every child subagent prompt MUST include a compacted context block (≤30 lines / ~400 words) formatted into the 5 canonical fields defined in [make-feature](../make-feature/SKILL.md) and AGENTS.md: *Feature Rationale*, *Key Architectural Decisions*, *Active Constraints*, *Prior Step Findings* (completed slice outcomes & verification logs), and *Target Artifact Paths*. Child prompts must carry command name, exit status, and concise outcome summary (never raw logs). Full empirical output is recorded in the parent scratchpad.
+> 4. **Parent-Owned Scratchpad Handoff & Safe Staging**: Subagents must run validation using environment wrappers (`python3 ~/.gemini/scripts/run_in_env.py <worktree_path> pytest ...` and `ruff check .`), inspect `git status --short`, review diffs, stage only intended slice files (`git add -- <intended-paths>`), commit with a descriptive message, and verify worktree is clean afterward (`git status`). Unexpected modifications are a stop-and-triage condition. Update the shared parent scratchpad at `<appDataDir>/brain/<conversation-id>/scratch/scratchpad.md` (where `<conversation-id>` is the parent conversation ID passed explicitly in the prompt) with commit SHA and empirical summary before exiting.
 > 5. **Pre-Dispatch Verification Gate**: Before dispatching Slice N+1, the parent must verify Slice N committed clean work, left the worktree clean, recorded empirical proof in the shared scratchpad, and maintained schema contracts.
 > 6. **Failure Circuit Breaker**: If Slice N fails verification, cannot commit, or alters a contract unexpectedly, HALT execution immediately. Do not launch Slice N+1; return the issue to the parent agent/user for triage.
-> 7. **Operational Conventions & Triggers**: Recommended in `/plan` for 5 or more complex multi-file slices (>4), or selected when the user provides intent signals in prompts or command invocation conventions (`/plan heavy`, `/make-feature heavy`, or explicit handoff directives).
+> 7. **Operational Conventions & Triggers**: Recommended in `/plan` for 5 or more complex multi-file slices, or selected when the user provides intent signals in prompts or command invocation conventions (`/plan heavy`, `/make-feature heavy`, or explicit handoff directives).
 
 ## Implementation Rules
 
