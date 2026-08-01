@@ -60,7 +60,7 @@ git log <target_ref> --since="<duration>" --no-merges --invert-grep --grep="^Sig
 git log <target_ref> --since="<duration>" --no-merges --invert-grep --grep="^Signoff-Reviewed-Commit-SHA:" --name-only --format="" | sort -u > "<appDataDir>/brain/<conversation-id>/scratch/temp_catchmeup_files.txt"
 
 # Attestation commits carrying explicit Signoff-* trailers
-git log <target_ref> --since="<duration>" --grep="^Signoff-Reviewed-Commit-SHA:" --format="format:%H%n%(trailers:key=Signoff-Reviewed-Commit-SHA,only=true,valueonly=true)%n%(trailers:key=Signoff-Status,only=true,valueonly=true)%n---" > "<appDataDir>/brain/<conversation-id>/scratch/temp_catchmeup_attestations.txt"
+git log <target_ref> --since="<duration>" --grep="^Signoff-Reviewed-Commit-SHA:" --format="format:%H%n%(trailers:key=Signoff-Reviewed-Commit-SHA,only=true,valueonly=true)%(trailers:key=Signoff-Status,only=true,valueonly=true)---" > "<appDataDir>/brain/<conversation-id>/scratch/temp_catchmeup_attestations.txt"
 ```
 
 Read generated scratch files using `view_file` in chunks of `<=800-line` max to guarantee untruncated access.

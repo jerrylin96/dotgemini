@@ -305,10 +305,12 @@ def test_catchmeup_skill_contract():
     assert "--invert-grep" in catchmeup_content, \
         "Missing --invert-grep attestation exclusion filter in catchmeup SKILL.md"
 
-    # Duration grammar regex test against advertised preset table values
-    grammar_pattern = re.compile(r"^[0-9]+\s*(d|w|mo|day|days|week|weeks|month|months)$")
+    # Dynamic duration grammar regex extraction test against advertised preset table values
+    grammar_match = re.search(r"- \*\*Accepted Grammar\*\*: `(.*?)`", catchmeup_content)
+    assert grammar_match, "Accepted Grammar pattern missing from catchmeup SKILL.md"
+    grammar_pattern = re.compile(grammar_match.group(1))
     for table_arg in ["1d", "1 day", "1w", "1 week", "2w", "2 weeks", "1mo", "1 month"]:
-        assert grammar_pattern.match(table_arg), f"Grammar regex failed to match table argument '{table_arg}'"
+        assert grammar_pattern.match(table_arg), f"Extracted grammar regex failed to match table argument '{table_arg}'"
 
     # Reference assertion
     assert "@skill:explain-diff" in catchmeup_content, \
