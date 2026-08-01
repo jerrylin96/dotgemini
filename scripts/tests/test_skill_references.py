@@ -254,12 +254,14 @@ def test_sequential_subagent_slicing_consistency():
     assert ">5 heavy slices" not in inc_content, "Obsolete threshold '>5 heavy slices' found in incremental-implementation"
     assert ">5 heavy slices" not in plan_content, "Obsolete threshold '>5 heavy slices' found in planning-and-task-breakdown"
 
-    # Execution safety and handoff rule assertions
+    # Execution safety, environment wrapper, and handoff rule assertions
     assert "Single Active Writer" in inc_content, "Missing Single Active Writer rule in incremental-implementation"
     assert "Pre-Dispatch Verification Gate" in inc_content, "Missing Pre-Dispatch Verification Gate in incremental-implementation"
     assert "Failure Circuit Breaker" in inc_content, "Missing Failure Circuit Breaker in incremental-implementation"
     assert "git add -- <intended-paths>" in inc_content, "Missing safe path-specific staging instruction in incremental-implementation"
     assert "parent conversation ID" in inc_content, "Missing explicit parent conversation ID scratchpad reference in incremental-implementation"
+    assert "python3 ~/.gemini/scripts/run_in_env.py <worktree_path> pytest" in inc_content, "Missing environment wrapper pytest command in incremental-implementation"
+    assert "python3 ~/.gemini/scripts/run_in_env.py <worktree_path> ruff check ." in inc_content, "Missing environment wrapper ruff command in incremental-implementation"
 
     # Strategy selection checkbox assertion
     assert "ensuring exactly one strategy checkbox is selected" in plan_content, "Missing single strategy checkbox assertion in planning-and-task-breakdown"
