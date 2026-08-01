@@ -227,3 +227,26 @@ def test_retained_reasoning_and_compaction_rules_exist():
     for field in required_fields:
         assert field in agents_content, f"Compaction field '{field}' missing from AGENTS.md"
         assert field in make_feature_content, f"Compaction field '{field}' missing from make-feature SKILL.md"
+
+
+def test_sequential_subagent_slicing_consistency():
+    """Verify that Sequential Subagent Slicing guidelines and triggers are consistent across all skill files."""
+    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+    inc_md = os.path.join(root_dir, "skills/incremental-implementation/SKILL.md")
+    plan_md = os.path.join(root_dir, "skills/planning-and-task-breakdown/SKILL.md")
+    make_feature_md = os.path.join(root_dir, "skills/make-feature/SKILL.md")
+
+    with open(inc_md, "r", encoding="utf-8") as f:
+        inc_content = f.read()
+    with open(plan_md, "r", encoding="utf-8") as f:
+        plan_content = f.read()
+    with open(make_feature_md, "r", encoding="utf-8") as f:
+        make_feature_content = f.read()
+
+    assert "Sequential Subagent Slicing" in inc_content, "Missing Sequential Subagent Slicing in incremental-implementation"
+    assert "Execution Strategy" in plan_content, "Missing Execution Strategy in planning-and-task-breakdown"
+    assert "Sequential Subagent Delegation" in make_feature_content, "Missing Sequential Subagent Delegation in make-feature"
+
+    # Threshold harmonization check across files
+    for content, path in [(inc_content, "incremental-implementation"), (plan_content, "planning-and-task-breakdown")]:
+        assert ">4" in content or "5 or more" in content, f"Missing slice threshold (>4 / 5 or more) in {path}"

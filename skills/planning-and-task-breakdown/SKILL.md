@@ -49,17 +49,25 @@ Operate in **read-only** mode:
 
 ### Step 2b: Execution Strategy Recommendation
 
-Every `/plan` artifact must explicitly declare its execution strategy near the top:
+Every `/plan` artifact must explicitly declare its execution strategy near the top, ensuring exactly one strategy checkbox is selected:
 
+When Standard Single Agent is selected:
 ```markdown
 ## Execution Strategy
 - [x] Standard Single Agent (Fast, atomic tasks)
-- [ ] Sequential Subagents (`Workspace: inherit`) — *Recommended for >4 complex slices or external plan handoffs*
+- [ ] Sequential Subagents (`Workspace: inherit`) — *Recommended for 5 or more complex multi-file slices (>4) or external plan handoffs*
 ```
 
-#### Strategy Triggers:
-- **Auto-Recommendation**: Agent automatically recommends `Sequential Subagents` if the task breakdown contains >4 complex multi-file slices.
-- **User Override Modifiers**: If user prompt includes intent keywords (`heavy`, `subagent per slice`) or command modifiers (`/plan heavy`, `/make-feature heavy`), agent defaults to `Sequential Subagents` directly.
+When Sequential Subagents strategy is selected:
+```markdown
+## Execution Strategy
+- [ ] Standard Single Agent (Fast, atomic tasks)
+- [x] Sequential Subagents (`Workspace: inherit`) — *Recommended for 5 or more complex multi-file slices (>4) or external plan handoffs*
+```
+
+#### Strategy Triggers & Conventions:
+- **Auto-Recommendation**: Agent recommends `Sequential Subagents` if the task breakdown contains 5 or more complex multi-file slices (>4).
+- **User Override Conventions**: If user prompt includes intent signals (`heavy`, `subagent per slice`, or external plan handoff) or command invocation conventions (`/plan heavy`, `/make-feature heavy`), agent selects `Sequential Subagents` directly.
 
 ### Step 3: Output
 
