@@ -69,7 +69,7 @@ Read generated scratch files using `view_file` in chunks of `<=800-line` max to 
 
 #### Zero-Commit Handling
 If no commits exist in the time window, display:
-`"No commits found in the last <duration> on <target_ref> (resolved: <SHA>). Baseline commit: <SHA>."`
+`"No commits found in the last <duration> on <target_ref> (resolved target SHA: <sha>)."`
 
 #### Report Structure
 1. **Header & Context**:
