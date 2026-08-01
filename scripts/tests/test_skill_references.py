@@ -349,3 +349,30 @@ def test_heavy_mode_documented_consistently():
     assert canonical_heavy_phrase in make_feature_content, "Canonical heavy phrase missing from make-feature SKILL.md"
     assert canonical_heavy_phrase in plan_content, "Canonical heavy phrase missing from planning-and-task-breakdown SKILL.md"
     assert canonical_heavy_phrase in inc_content, "Canonical heavy phrase missing from incremental-implementation SKILL.md"
+
+
+def test_signoff_socratic_remediation_rule():
+    """Verify that skills/signoff/SKILL.md clarifies and hardens the single Socratic remediation rule for uncertainty and vague answers."""
+    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+    signoff_md = os.path.join(root_dir, "skills/signoff/SKILL.md")
+
+    assert os.path.exists(signoff_md), "skills/signoff/SKILL.md does not exist"
+
+    with open(signoff_md, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    assert "Evaluation & Remediation" in content, "Missing Evaluation & Remediation in skills/signoff/SKILL.md"
+
+    # Extract Evaluation & Remediation section
+    section_match = re.search(r"Evaluation & Remediation:\s*(.*?)(?=\n### |\n## |\Z)", content, re.DOTALL)
+    assert section_match, "Could not extract Evaluation & Remediation section from skills/signoff/SKILL.md"
+    remediation_text = section_match.group(1)
+
+    assert "not sure" in remediation_text, "Missing 'not sure' in remediation rule"
+    assert "don't know" in remediation_text, "Missing 'don't know' in remediation rule"
+    assert "vague" in remediation_text, "Missing 'vague' in remediation rule"
+    assert "hand-waving" in remediation_text, "Missing 'hand-waving' in remediation rule"
+    assert "pause signoff" in remediation_text, "Missing 'pause signoff' in remediation rule"
+    assert "@skill:explain-diff" in remediation_text, "Missing '@skill:explain-diff' in remediation rule"
+    assert "re-probe" in remediation_text, "Missing 're-probe' in remediation rule"
+
