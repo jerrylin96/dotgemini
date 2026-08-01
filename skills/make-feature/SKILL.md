@@ -7,9 +7,11 @@ description: Creates a feature branch (always prefixed with gemini/) and isolate
 
 Use this skill for **all codebase changes** — features, bug fixes, config edits, skill modifications. Changes are pushed to a remote feature branch without mutating the user's active branch checkout.
 
-## When to Use
+## When to Use & Invocation Variants
 
-- **Always.** This is the mandatory entry point for any file modification in a repository.
+- **Always.** Mandatory entry point for any file modification in a repository.
+- **Standard Invocation**: Trigger with `/make-feature` (or automatically whenever preparing to write or edit codebase files).
+- **Heavy Mode (`/make-feature heavy`)**: Recommended for complex multi-slice features. Instructs Phase 1 (`/plan`) to proactively select `Sequential Subagents` execution strategy across task slices.
 - The only exception: changes to Antigravity artifacts, scratch files, or non-repo files.
 
 ## Core Rules

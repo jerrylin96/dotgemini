@@ -96,7 +96,7 @@ This configuration is developed and tested on macOS and Linux (validated in CI).
   * **User Workflow**: Trigger with `/explain-diff`. Branch selection works exactly like `adversarial-review` (it reuses the same branch resolver and worktree cache). You then get an overall summary of the changeset and a numbered menu of changed files; pick one for a hunk-by-hunk explanation, ask follow-up questions, and return to the menu until done. Nothing is executed or modified — no tests, no linters.
 
 * `make-feature` — Git worktree-based isolated feature branch development engine and mandatory software lifecycle pipeline.
-  * **User Workflow**: Trigger with `/make-feature` (or automatically whenever preparing to write or edit codebase files).
+  * **User Workflow**: Trigger with `/make-feature` (or `/make-feature heavy` to proactively force sequential subagent execution per slice for complex multi-file tasks; or automatically whenever preparing to write or edit codebase files).
     1. **Phase 1 (Spec & Plan)**: Draft `/spec` and `/plan` artifacts. Antigravity pauses for explicit human approval before creating worktrees or writing code.
     2. **Phase 2 (Build & Worktree)**: Creates a feature branch prefixed with `gemini/` checked out to an isolated worktree under `~/.gemini/tmp/worktrees/`. Performs all file modifications and runs tests via isolated environment wrappers (`run_in_env.py`).
     3. **Phase 3 (Push & Subagent Review)**: Pushes the feature branch to `origin` and delegates an isolated background subagent (supplying a compacted context summary block) to execute an `/adversarial-review` loop until approved.
