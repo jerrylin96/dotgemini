@@ -65,7 +65,7 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
      git push origin gemini/<feature-name>
      ```
    - **Step 7 (Subagent Adversarial Review Loop)**:
-     - *Mandatory Subagent Delegation*: The parent agent MUST NOT run the review in its own context. The parent agent MUST execute `invoke_subagent` (`TypeName: self`, `Role: Adversarial Code Reviewer`, `Workspace: inherit`). Prompt MUST specify `<appDataDir>/brain/<conversation-id>/review_manifest_<feature>.md` path.
+     - *Mandatory Subagent Delegation*: The parent agent MUST NOT run the review in its own context. The parent agent MUST execute `invoke_subagent` (`TypeName: self`, `Role: Adversarial Code Reviewer`, `Workspace: inherit`). The subagent prompt MUST include a compacted context block (feature rationale, key architectural decisions, and active constraints) and specify the `<appDataDir>/brain/<conversation-id>/review_manifest_<feature>.md` path to preserve reasoning state across context isolation.
      - The subagent runs isolated review on the worktree, reading `review_manifest_<feature>.md` first to target diff inspection. Repeat fix-commit-push loop until verdict is `APPROVE` with zero open `[CRITICAL]` findings. Post review report in chat.
      - *Subagent Lifecycle Cleanup*: Once the subagent finishes and posts its review report, the parent agent MUST kill the dangling subagent instance using `manage_subagents` (`Action: "kill"`, `ConversationIds: [<subagent_conversation_id>]`).
    - **Step 7b (Post-Review Audit Report Artifact)**:
