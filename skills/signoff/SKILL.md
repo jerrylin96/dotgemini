@@ -53,7 +53,7 @@ Interrogate user across 4 core axes:
    After recording user confirmation in transcript, execute Python helper via temporary file with explicit trap cleanup:
    ```bash
    TMP_DIGEST_FILE=$(mktemp) || { echo "Error: mktemp failed. Aborting signoff." >&2; exit 1; }
-   trap 'rm -- "$TMP_DIGEST_FILE"' EXIT INT TERM
+   trap 'rm -f -- "$TMP_DIGEST_FILE"' EXIT INT TERM
 
    python3 - <<'PY' > "$TMP_DIGEST_FILE"
    import os, sys, hashlib, re
