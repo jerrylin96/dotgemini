@@ -227,3 +227,41 @@ def test_retained_reasoning_and_compaction_rules_exist():
     for field in required_fields:
         assert field in agents_content, f"Compaction field '{field}' missing from AGENTS.md"
         assert field in make_feature_content, f"Compaction field '{field}' missing from make-feature SKILL.md"
+
+
+def test_sequential_subagent_slicing_consistency():
+    """Verify that Sequential Subagent Slicing guidelines, canonical thresholds, and safety rules are consistent across skill files."""
+    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+    inc_md = os.path.join(root_dir, "skills/incremental-implementation/SKILL.md")
+    plan_md = os.path.join(root_dir, "skills/planning-and-task-breakdown/SKILL.md")
+    make_feature_md = os.path.join(root_dir, "skills/make-feature/SKILL.md")
+
+    with open(inc_md, "r", encoding="utf-8") as f:
+        inc_content = f.read()
+    with open(plan_md, "r", encoding="utf-8") as f:
+        plan_content = f.read()
+    with open(make_feature_md, "r", encoding="utf-8") as f:
+        make_feature_content = f.read()
+
+    assert "Sequential Subagent Slicing" in inc_content, "Missing Sequential Subagent Slicing in incremental-implementation"
+    assert "Execution Strategy" in plan_content, "Missing Execution Strategy in planning-and-task-breakdown"
+    assert "Sequential Subagent Delegation" in make_feature_content, "Missing Sequential Subagent Delegation in make-feature"
+
+    # Precise threshold harmonization assertions
+    canonical_threshold = "5 or more complex multi-file slices"
+    assert canonical_threshold in inc_content, f"Canonical threshold '{canonical_threshold}' missing from incremental-implementation"
+    assert canonical_threshold in plan_content, f"Canonical threshold '{canonical_threshold}' missing from planning-and-task-breakdown"
+    assert ">5 heavy slices" not in inc_content, "Obsolete threshold '>5 heavy slices' found in incremental-implementation"
+    assert ">5 heavy slices" not in plan_content, "Obsolete threshold '>5 heavy slices' found in planning-and-task-breakdown"
+
+    # Execution safety, environment wrapper, and handoff rule assertions
+    assert "Single Active Writer" in inc_content, "Missing Single Active Writer rule in incremental-implementation"
+    assert "Pre-Dispatch Verification Gate" in inc_content, "Missing Pre-Dispatch Verification Gate in incremental-implementation"
+    assert "Failure Circuit Breaker" in inc_content, "Missing Failure Circuit Breaker in incremental-implementation"
+    assert "git add -- <intended-paths>" in inc_content, "Missing safe path-specific staging instruction in incremental-implementation"
+    assert "parent conversation ID" in inc_content, "Missing explicit parent conversation ID scratchpad reference in incremental-implementation"
+    assert "python3 ~/.gemini/scripts/run_in_env.py <worktree_path> pytest" in inc_content, "Missing environment wrapper pytest command in incremental-implementation"
+    assert "python3 ~/.gemini/scripts/run_in_env.py <worktree_path> ruff check ." in inc_content, "Missing environment wrapper ruff command in incremental-implementation"
+
+    # Strategy selection checkbox assertion
+    assert "ensuring exactly one strategy checkbox is selected" in plan_content, "Missing single strategy checkbox assertion in planning-and-task-breakdown"
