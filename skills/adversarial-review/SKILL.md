@@ -134,7 +134,7 @@ The script returns JSON on stdout. The schema depends on the outcome:
    - The file lock only serializes concurrent `resolve_branches.py` runs. Do not run git worktree commands against `~/.gemini/tmp/worktrees/` manually while a review is in progress.
    - Note: Git fetches are best-effort. If network resolution fails, the review may run against stale local tracking references.
 4. **Subagent Execution & Environment Setup**:
-   - The main agent should delegate the review execution to a background subagent (`invoke_subagent`) to keep its context clean and eliminate author bias.
+   - The main agent should delegate the review execution to a background subagent (`invoke_subagent`), supplying a compacted context summary block (per AGENTS.md §10 / make-feature SKILL.md Step 7), to keep its context clean and eliminate author bias.
      - **Subagent Selection**: Use `TypeName: self` with `Workspace: inherit` inside `<worktree_path>` (since `self` possesses the necessary write/execution tools to run environment setup and tests). Use `research` subagent ONLY for read-only static analysis.
      - **Recursion Prevention**: If you are already running as the invoked review subagent, execute the steps below directly without spawning further subagents.
    - **Headless Execution Guardrail (No `ctrl+k` Prompts)**: All test, linter, compilation, and setup commands MUST be run using `python3 ~/.gemini/scripts/run_in_env.py <worktree_path> <cmd>` (or whitelisted file/git tools). Direct execution of bare un-wrapped terminal commands (`pytest`, `mkdir`, bare `python`, etc.) is strictly forbidden as it triggers interactive permission prompts.

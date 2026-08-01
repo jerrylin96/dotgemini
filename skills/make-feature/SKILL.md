@@ -29,6 +29,7 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
    - **Step 1 (Resolve Branch)**: Identify target base branch (`<base_branch>`) and feature branch (`gemini/<feature-name>`).
    - **Step 2 (Stage 1a: Draft `/spec`)**: Automatically create/update `/spec` artifact ([spec-driven-development](../spec-driven-development/SKILL.md)). **PAUSE** and wait for explicit human approval of `/spec`.
    - **Step 3 (Stage 1b: Draft `/plan`)**: *Only after `/spec` is explicitly approved*, inspect codebase and create/update `/plan` artifact ([planning-and-task-breakdown](../planning-and-task-breakdown/SKILL.md)). Every task item MUST include explicit TDD `RED Test Spec`, `GREEN Implementation Target`, and `Verify Command`. **PAUSE** and wait for explicit human approval of `/plan`.
+   - **Step 3b (Scratchpad Initialization)**: Run `mkdir -p "<appDataDir>/brain/<conversation-id>/scratch"` and create `<appDataDir>/brain/<conversation-id>/scratch/scratchpad.md` summarizing initial spec/plan decisions and active constraints.
    - *Gate Enforcement*: Drafting `/plan` before `/spec` is approved is STRICTLY FORBIDDEN. Creating worktrees or editing code before `/plan` is approved is STRICTLY FORBIDDEN.
 
 
@@ -43,6 +44,7 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
      > **Empirical Grounding Directive**: Prohibit declaring success, test passes, or schema validity without empirical execution output present in the context window.
    - **Step 4b (Builder Pre-Review Quality Check & Manifest Creation)**:
      - Run `python3 ~/.gemini/scripts/run_in_env.py <worktree_path> pytest` and `ruff check .` inside worktree and verify 100% pass rate.
+     - Update `<appDataDir>/brain/<conversation-id>/scratch/scratchpad.md` with build step findings and empirical test logs.
      - Create review manifest artifact in the conversation artifact directory (`<appDataDir>/brain/<conversation-id>/review_manifest_<feature>.md`) detailing:
        - *Summary & Rationale*: Concise explanation of changes and Ponytail YAGNI justification.
        - *TDD Proof*: List of test cases added/modified and empirical pass log snippet.
@@ -65,10 +67,21 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
      git push origin gemini/<feature-name>
      ```
    - **Step 7 (Subagent Adversarial Review Loop)**:
-     - *Mandatory Subagent Delegation*: The parent agent MUST NOT run the review in its own context. The parent agent MUST execute `invoke_subagent` (`TypeName: self`, `Role: Adversarial Code Reviewer`, `Workspace: inherit`). Prompt MUST specify `<appDataDir>/brain/<conversation-id>/review_manifest_<feature>.md` path.
+     - *Mandatory Subagent Delegation*: The parent agent MUST NOT run the review in its own context. The parent agent MUST execute `invoke_subagent` (`TypeName: self`, `Role: Adversarial Code Reviewer`, `Workspace: inherit`).
+     - *Subagent Compaction Block*: The subagent prompt MUST include a compacted context block (≤ 30 lines) formatted as:
+       ```markdown
+       ### Context Compaction Block
+       - **Feature Rationale**: <1-2 sentences>
+       - **Key Architectural Decisions**: <bulleted list>
+       - **Active Constraints**: <bulleted list>
+       - **Prior Step Findings**: <empirical summary>
+       - **Target Artifact Paths**: <file links>
+       ```
+       *(Prohibition: NEVER include secrets, tokens, credentials, or `.env` contents in the compaction block)*. Specify the `<appDataDir>/brain/<conversation-id>/review_manifest_<feature>.md` path to preserve reasoning state across context isolation.
      - The subagent runs isolated review on the worktree, reading `review_manifest_<feature>.md` first to target diff inspection. Repeat fix-commit-push loop until verdict is `APPROVE` with zero open `[CRITICAL]` findings. Post review report in chat.
      - *Subagent Lifecycle Cleanup*: Once the subagent finishes and posts its review report, the parent agent MUST kill the dangling subagent instance using `manage_subagents` (`Action: "kill"`, `ConversationIds: [<subagent_conversation_id>]`).
-   - **Step 7b (Post-Review Audit Report Artifact)**:
+   - **Step 7b (Post-Review Audit Report Artifact & Scratchpad Update)**:
+     - Update `<appDataDir>/brain/<conversation-id>/scratch/scratchpad.md` with post-review findings and subagent verdict.
      - Generate formal `review_report_<feature>.md` artifact detailing:
        - *What was checked* (empirical test runner logs, linter results, static diff analysis)
        - *What was changed* (file diff breakdown and architectural decisions)
@@ -76,14 +89,15 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
 
 4. **Phase 4 (Human Signoff, PR Creation & Manual Merge)**:
    - **Goal**: Human engineer reviews post-review audit report artifact, creates Pull Request, and manually merges feature branch to target integration branch (`<base_branch>`).
-   - **Step 8 (Human Review, PR Creation & Integration Gate)**: **PAUSE**. Present review report artifact, diff summary, and remote feature branch link to user.
+   - **Step 8 (Human Review, PR Creation & Integration Gate)**: **PAUSE**. Update `<appDataDir>/brain/<conversation-id>/scratch/scratchpad.md` pre-signoff with final completion status. Present review report artifact, diff summary, and remote feature branch link to user.
    - **Human Ownership of PR Creation & Integration**:
      > [!CAUTION]
      > - **Human PR & Merge Ownership**: Creating Pull Requests (PRs), reviewing PR diffs, and merging code *into* the target integration branch (`<base_branch>`, e.g., `main`, `develop`, `staging`, `release/*`, etc.) is **ALWAYS performed manually by the human engineer**. The AI agent is strictly forbidden from creating PRs or merging directly into the primary integration branch.
      > - **Agent Permitted Feature Sync**: Inside its isolated feature worktree (`~/.gemini/tmp/worktrees/gemini_<feature-name>`), the AI agent IS permitted to rebase or pull upstream changes from its designated base branch (`git fetch origin && git rebase origin/<base_branch>`) to resolve drift and keep its feature branch clean for human review and merge.
    - Recommended tools for user: [/explain-diff](../explain-diff/SKILL.md) and [/signoff](../signoff/SKILL.md).
-   - Once merged manually by the user, remove the worktree:
+   - Once merged manually by the user, clean up scratchpad and remove worktree:
      ```bash
+     rm -- "<appDataDir>/brain/<conversation-id>/scratch/scratchpad.md"
      git worktree remove ~/.gemini/tmp/worktrees/gemini_<sanitized-feature-name> --force
      git worktree prune
      ```

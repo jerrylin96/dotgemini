@@ -53,7 +53,7 @@ The draft proof artifact MUST contain:
 The parent agent spawns an isolated subagent (`invoke_subagent` with `TypeName: self` and `Workspace: inherit`).
 
 > [!IMPORTANT]
-> **Subagent Invocation Directive:** The parent agent MUST explicitly include the absolute draft proof path (`<appDataDir>/brain/<conversation-id>/scratch/draft_proof_<concept>.md`) and the empirical script path (`<appDataDir>/brain/<conversation-id>/scratch/temp_math_audit_<concept>.py`) in the subagent prompt. Do not rely on implicit subagent context.
+> **Subagent Invocation Directive:** The parent agent MUST explicitly include a compacted context block (following the template in AGENTS.md §10 / make-feature SKILL.md Step 7), specifying the absolute draft proof path (`<appDataDir>/brain/<conversation-id>/scratch/draft_proof_<concept>.md`) and the empirical script path (`<appDataDir>/brain/<conversation-id>/scratch/temp_math_audit_<concept>.py`) in the subagent prompt. Do not rely on implicit subagent context.
 
 #### Subagent Action Steps:
 

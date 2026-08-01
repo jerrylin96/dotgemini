@@ -77,6 +77,8 @@ For any code modification, feature addition, refactor, or skill creation:
 
 ### Core Operating Behaviors
 * **Empirical Grounding (Zero Hallucinated Claims):** Prohibit declaring success, test passes, function existence, or schema validity without empirical execution output or line-numbered `view_file` citations present in the context window.
+* **Reasoning State Retention (Chain-of-Thought Persistence):** Preserve mental state and key architectural/diagnostic decisions across multi-step turns and subagent invocations by maintaining a lightweight scratchpad summary in the conversation scratch directory (`<appDataDir>/brain/<conversation-id>/scratch/scratchpad.md`). Prevent state degradation by updating this summary when completing lifecycle phases or switching tasks rather than re-deriving context from scratch. *The scratchpad is a memory aid and MUST NOT be cited as empirical evidence of test passes, function existence, or schema validity — those still require fresh execution output or line-numbered `view_file` citations.*
+* **Subagent Context Compaction:** Before delegating tasks to subagents via `invoke_subagent`, compact prior history, active constraints, and past step outcomes into a concise, structured summary block in the prompt (see §10 Heuristics & Guardrails for template requirements) rather than passing raw multi-step logs or empty context.
 * **Surface Assumptions:** Before writing any non-trivial code, explicitly list assumptions:
   ```markdown
   ASSUMPTIONS I'M MAKING:
@@ -175,6 +177,7 @@ Use `invoke_subagent`, `define_subagent`, built-in `self`/`research` types, and 
 
 ### Heuristics & Guardrails
 *   **Context Isolation**: Subagents run using the same model as their parent but start with a clean slate, meaning they do not inherit the parent's existing conversation history (context window).
+*   **Context Compaction & Retained State**: Because subagents start with isolated context windows, parent agents MUST supply a compacted summary block (Feature Rationale, Key Architectural Decisions, Active Constraints, Prior Step Findings, Target Artifact Paths; ≤ 30 lines / ~400 words) in the subagent prompt to ensure immediate alignment and prevent state degradation. NEVER copy secrets, credentials, OAuth tokens, or `.env` file contents into compaction blocks. Intentionally exclude raw terminal output, failed experiment details, and exploratory tangents — only conclusions, decisions, and active constraints should be carried forward.
 *   **Nesting Limit**: Maximum nesting depth: 10 levels. Design delegation hierarchies accordingly to avoid recursion limits.
 *   **Scope & Permission Inheritance**: Subagents automatically inherit the parent's allowed terminal command prefixes and file read/write directory scopes. They cannot exceed the parent's allowed permissions. If a subagent triggers a command requiring user confirmation, the confirmation request bubbles up to the parent's user interface.
 *   **Workspace Access**: Parent agents retain full read and write access to all subagent workspaces (e.g. to inspect intermediate files or perform manual conflict resolution).

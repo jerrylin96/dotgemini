@@ -1,6 +1,7 @@
 import glob
 import os
 import re
+import subprocess
 
 def parse_frontmatter_name(skill_md_path):
     """Parse name from YAML frontmatter without external YAML parser dependency."""
@@ -172,3 +173,57 @@ def test_validation_quoted_valid_name(tmp_path):
     skill_md.write_text("---\nname: \"quoted-name\"\n---\nbody")
     err = validate_skill_resolution(str(tmp_path), "quoted-name")
     assert err is None
+
+
+def test_retained_reasoning_and_compaction_rules_exist():
+    """Verify that AGENTS.md and make-feature SKILL.md contain retained reasoning & compaction rules with strict path safety."""
+    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+    agents_md = os.path.join(root_dir, "AGENTS.md")
+    make_feature_md = os.path.join(root_dir, "skills/make-feature/SKILL.md")
+
+    with open(agents_md, "r", encoding="utf-8") as f:
+        agents_content = f.read()
+
+    with open(make_feature_md, "r", encoding="utf-8") as f:
+        make_feature_content = f.read()
+
+    literal_scratchpad_path = "<appDataDir>/brain/<conversation-id>/scratch/scratchpad.md"
+    assert literal_scratchpad_path in agents_content, f"Exact path '{literal_scratchpad_path}' missing from AGENTS.md"
+    assert literal_scratchpad_path in make_feature_content, f"Exact path '{literal_scratchpad_path}' missing from make-feature SKILL.md"
+
+    # Scan ONLY git-tracked markdown files to exclude untracked local noise or scratch directories
+    res = subprocess.run(
+        ["git", "ls-files", "*.md"],
+        cwd=root_dir,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    tracked_md_files = [
+        os.path.join(root_dir, line.strip())
+        for line in res.stdout.splitlines()
+        if line.strip()
+    ]
+
+    # Only assert when scratchpad.md is preceded by a path segment or slash
+    path_ref_pattern = re.compile(r"[\w~<>./-]+/scratchpad\.md")
+    for md_path in tracked_md_files:
+        with open(md_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        matches = path_ref_pattern.findall(content)
+        for match in matches:
+            assert match == literal_scratchpad_path, (
+                f"Non-canonical scratchpad path reference '{match}' found in {md_path}"
+            )
+
+    # Verify the 5 compaction fields are consistent across AGENTS.md and SKILL.md
+    required_fields = [
+        "Feature Rationale",
+        "Key Architectural Decisions",
+        "Active Constraints",
+        "Prior Step Findings",
+        "Target Artifact Paths",
+    ]
+    for field in required_fields:
+        assert field in agents_content, f"Compaction field '{field}' missing from AGENTS.md"
+        assert field in make_feature_content, f"Compaction field '{field}' missing from make-feature SKILL.md"
