@@ -9,7 +9,7 @@ Designed for external reviewers, supervisors, team leads, and Principal Investig
 
 ## Preset Time Windows & Duration Grammar
 
-When invoked (e.g. `/catchmeup` or `/catchmeup 2w origin/main`), select or resolve the time window:
+When invoked (e.g. `/catchmeup` or `/catchmeup 2 weeks origin/main`), select or resolve the time window:
 
 | Preset | Argument | Period Covered | Description |
 |---|---|---|---|
@@ -19,8 +19,8 @@ When invoked (e.g. `/catchmeup` or `/catchmeup 2w origin/main`), select or resol
 | **1 Month** | `1mo` or `1 month` | Past 30 days | Monthly release & project audit |
 
 ### Duration Grammar & Validation
-- **Accepted Grammar**: `^[0-9]+(d|w|mo|day|days|week|weeks|month|months)$`
-- **Validation Rule**: Validate input duration against grammar before interpolating into git commands. If input fails validation, reject it, report invalid duration, and present preset menu (`[1] 1d`, `[2] 1w (default)`, `[3] 2w`, `[4] 1mo`).
+- **Accepted Grammar**: `^[0-9]+\s*(d|w|mo|day|days|week|weeks|month|months)$`
+- **Validation Rule**: Validate input duration against grammar before interpolating into git commands. If input fails validation, reject it, report invalid duration, and present preset menu (`[1] 1d`, `[2] 1w (default)`, `[3] 2w`, `[4] 1mo`). Trim surrounding whitespace before passing to `--since`.
 - **Mapping Rule**:
   - `<N>d` / `<N> day(s)` -> `--since="<N> days ago"`
   - `<N>w` / `<N> week(s)` -> `--since="<N> weeks ago"`
@@ -31,7 +31,7 @@ When invoked (e.g. `/catchmeup` or `/catchmeup 2w origin/main`), select or resol
 > [!IMPORTANT]
 > - **Read-Only**: This skill is strictly read-only. It never modifies workspace or worktree files, creates commits, or alters repository state. Creating temporary, ephemeral scratch files under the conversation's scratch directory for log/diff reading does not violate this rule, provided cleanup only removes these generated scratch files.
 > - **High-Level First**: Always open with an **Executive Summary** (themes, metrics, signoff attestations) before showing raw commits or line-by-line diffs.
-> - **Real Attestation Parsing**: Parse `Signoff-Reviewed-Commit-SHA` and `Signoff-Status` trailers from attestation commits created by [/signoff](../signoff/SKILL.md) to audit feature commit coverage.
+> - **Real Attestation Parsing**: Parse exact `Signoff-Reviewed-Commit-SHA` and `Signoff-Status` trailers from attestation commits created by [/signoff](../signoff/SKILL.md) to audit feature commit coverage. Never use globbing in format strings.
 
 ## Execution Steps
 
@@ -45,21 +45,22 @@ When invoked (e.g. `/catchmeup` or `/catchmeup 2w origin/main`), select or resol
 - *Remote Tracking Warning*: Skill is read-only and does not run `git fetch` automatically. If using a remote tracking branch ref (e.g. `origin/main`), note that un-fetched remote commits will not be included.
 
 ### 2. Gather Git Activity & Parse Trailers
-To prevent terminal truncation, save raw outputs to the conversation's scratch directory:
+To prevent terminal truncation, save raw outputs to the conversation's scratch directory. Note that attestation commits carrying `Signoff-Reviewed-Commit-SHA` trailers are excluded via `--invert-grep --grep="^Signoff-Reviewed-Commit-SHA:"` so they do not pollute feature commit counts or churn metrics:
+
 ```bash
 mkdir -p "<appDataDir>/brain/<conversation-id>/scratch"
 
-# Commit log without attestation commits
-git log <target_ref> --since="<duration>" --no-merges --pretty=format:"%h|%an|%ad|%s" > "<appDataDir>/brain/<conversation-id>/scratch/temp_catchmeup_log.txt"
+# Feature commit log (excluding empty attestation commits and merge commits)
+git log <target_ref> --since="<duration>" --no-merges --invert-grep --grep="^Signoff-Reviewed-Commit-SHA:" --pretty=format:"%h|%an|%ad|%s" > "<appDataDir>/brain/<conversation-id>/scratch/temp_catchmeup_log.txt"
 
-# Shortstat summary
-git log <target_ref> --since="<duration>" --shortstat > "<appDataDir>/brain/<conversation-id>/scratch/temp_catchmeup_stat.txt"
+# Shortstat summary (excluding attestation commits)
+git log <target_ref> --since="<duration>" --no-merges --invert-grep --grep="^Signoff-Reviewed-Commit-SHA:" --shortstat > "<appDataDir>/brain/<conversation-id>/scratch/temp_catchmeup_stat.txt"
 
-# Unique files touched
-git log <target_ref> --since="<duration>" --name-only --format="" | sort -u > "<appDataDir>/brain/<conversation-id>/scratch/temp_catchmeup_files.txt"
+# Unique files touched (excluding attestation commits)
+git log <target_ref> --since="<duration>" --no-merges --invert-grep --grep="^Signoff-Reviewed-Commit-SHA:" --name-only --format="" | sort -u > "<appDataDir>/brain/<conversation-id>/scratch/temp_catchmeup_files.txt"
 
-# Attestation commits carrying Signoff-* trailers
-git log <target_ref> --since="<duration>" --grep="^Signoff-Reviewed-Commit-SHA:" --format="format:%H%n%(trailers:key=Signoff-*,only=true)" > "<appDataDir>/brain/<conversation-id>/scratch/temp_catchmeup_attestations.txt"
+# Attestation commits carrying explicit Signoff-* trailers
+git log <target_ref> --since="<duration>" --grep="^Signoff-Reviewed-Commit-SHA:" --format="format:%H%n%(trailers:key=Signoff-Reviewed-Commit-SHA,only=true,valueonly=true)%n%(trailers:key=Signoff-Status,only=true,valueonly=true)%n---" > "<appDataDir>/brain/<conversation-id>/scratch/temp_catchmeup_attestations.txt"
 ```
 
 Read generated scratch files using `view_file` in chunks of `<=800-line` max to guarantee untruncated access.

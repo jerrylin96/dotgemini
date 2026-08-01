@@ -295,11 +295,20 @@ def test_catchmeup_skill_contract():
     assert "view_file" in catchmeup_content and "<=800-line" in catchmeup_content, \
         "Missing view_file <=800-line reading instruction in catchmeup SKILL.md"
 
-    # Attestation parsing assertion
-    assert "Signoff-Reviewed-Commit-SHA" in catchmeup_content, \
-        "Missing Signoff-Reviewed-Commit-SHA parsing in catchmeup SKILL.md"
+    # Attestation parsing assertion (must use explicit keys, never broken glob %(trailers:key=Signoff-*)
+    assert "%(trailers:key=Signoff-*" not in catchmeup_content, \
+        "Broken trailer glob %(trailers:key=Signoff-*) found in catchmeup SKILL.md"
+    assert "%(trailers:key=Signoff-Reviewed-Commit-SHA" in catchmeup_content, \
+        "Missing explicit key %(trailers:key=Signoff-Reviewed-Commit-SHA... in catchmeup SKILL.md"
     assert "VERIFIED_BY_HUMAN_NO_TRANSCRIPT_DIGEST" in catchmeup_content, \
         "Missing VERIFIED_BY_HUMAN_NO_TRANSCRIPT_DIGEST handling in catchmeup SKILL.md"
+    assert "--invert-grep" in catchmeup_content, \
+        "Missing --invert-grep attestation exclusion filter in catchmeup SKILL.md"
+
+    # Duration grammar regex test against advertised preset table values
+    grammar_pattern = re.compile(r"^[0-9]+\s*(d|w|mo|day|days|week|weeks|month|months)$")
+    for table_arg in ["1d", "1 day", "1w", "1 week", "2w", "2 weeks", "1mo", "1 month"]:
+        assert grammar_pattern.match(table_arg), f"Grammar regex failed to match table argument '{table_arg}'"
 
     # Reference assertion
     assert "@skill:explain-diff" in catchmeup_content, \
@@ -327,13 +336,14 @@ def test_heavy_mode_documented_consistently():
     with open(inc_md, "r", encoding="utf-8") as f:
         inc_content = f.read()
 
-    canonical_heavy_phrase = "proactively select `Sequential Subagents` execution strategy"
+    canonical_heavy_phrase = "proactively selects `Sequential Subagents` execution strategy"
 
     assert "/make-feature heavy" in readme_content, "Missing /make-feature heavy in README.md"
     assert "/make-feature heavy" in make_feature_content, "Missing /make-feature heavy in make-feature SKILL.md"
     assert "/make-feature heavy" in plan_content, "Missing /make-feature heavy in planning-and-task-breakdown SKILL.md"
     assert "/make-feature heavy" in inc_content, "Missing /make-feature heavy in incremental-implementation SKILL.md"
 
+    assert canonical_heavy_phrase in readme_content, "Canonical heavy phrase missing from README.md"
     assert canonical_heavy_phrase in make_feature_content, "Canonical heavy phrase missing from make-feature SKILL.md"
     assert canonical_heavy_phrase in plan_content, "Canonical heavy phrase missing from planning-and-task-breakdown SKILL.md"
     assert canonical_heavy_phrase in inc_content, "Canonical heavy phrase missing from incremental-implementation SKILL.md"

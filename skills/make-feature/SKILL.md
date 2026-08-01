@@ -11,7 +11,7 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
 
 - **Always.** Mandatory entry point for any file modification in a repository.
 - **Standard Invocation**: Trigger with `/make-feature` (or automatically whenever preparing to write or edit codebase files).
-- **Heavy Mode (`/make-feature heavy`)**: Use for complex multi-slice features. Instructs Phase 1 (`/plan`) to proactively select `Sequential Subagents` execution strategy across task slices.
+- **Heavy Mode (`/make-feature heavy`)**: Use for complex multi-slice features. Instructs Phase 1 (`/plan`) to proactively selects `Sequential Subagents` execution strategy across task slices.
 - The only exception: changes to Antigravity artifacts, scratch files, or non-repo files.
 
 ## Core Rules
