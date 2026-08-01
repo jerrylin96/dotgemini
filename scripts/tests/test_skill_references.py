@@ -349,3 +349,38 @@ def test_heavy_mode_documented_consistently():
     assert canonical_heavy_phrase in make_feature_content, "Canonical heavy phrase missing from make-feature SKILL.md"
     assert canonical_heavy_phrase in plan_content, "Canonical heavy phrase missing from planning-and-task-breakdown SKILL.md"
     assert canonical_heavy_phrase in inc_content, "Canonical heavy phrase missing from incremental-implementation SKILL.md"
+
+
+def test_signoff_socratic_remediation_rule():
+    """Verify that skills/signoff/SKILL.md and skills/math-proof-audit/SKILL.md define hardened Socratic remediation rules for uncertainty and vague answers."""
+    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+    signoff_md = os.path.join(root_dir, "skills/signoff/SKILL.md")
+    math_proof_md = os.path.join(root_dir, "skills/math-proof-audit/SKILL.md")
+
+    assert os.path.exists(signoff_md), "skills/signoff/SKILL.md does not exist"
+    assert os.path.exists(math_proof_md), "skills/math-proof-audit/SKILL.md does not exist"
+
+    with open(signoff_md, "r", encoding="utf-8") as f:
+        signoff_content = f.read()
+
+    assert "Evaluation & Remediation" in signoff_content, "Missing Evaluation & Remediation in skills/signoff/SKILL.md"
+
+    # Extract Evaluation & Remediation section from signoff SKILL.md
+    section_match = re.search(r"Evaluation & Remediation:\s*(.*?)(?=\n### |\n## |\Z)", signoff_content, re.DOTALL)
+    assert section_match, "Could not extract Evaluation & Remediation section from skills/signoff/SKILL.md"
+    remediation_text = section_match.group(1)
+
+    assert any(term in remediation_text for term in ["not sure", "uncertainty"]), "Missing uncertainty trigger in remediation rule"
+    assert "vague" in remediation_text or "hand-waving" in remediation_text, "Missing vague/hand-waving trigger in remediation rule"
+    assert "pause signoff" in remediation_text, "Missing 'pause signoff' in remediation rule"
+    assert "@skill:explain-diff" in remediation_text, "Missing '@skill:explain-diff' reference in remediation rule"
+    assert "re-probe" in remediation_text, "Missing re-probing requirement in remediation rule"
+
+    with open(math_proof_md, "r", encoding="utf-8") as f:
+        math_content = f.read()
+
+    assert "Phase 3: Socratic Signoff" in math_content, "Missing Phase 3 in skills/math-proof-audit/SKILL.md"
+    assert "@skill:signoff" in math_content, "Missing @skill:signoff reference in math-proof-audit SKILL.md"
+    assert "@skill:explain-diff" in math_content, "Missing @skill:explain-diff reference in math-proof-audit SKILL.md"
+
+

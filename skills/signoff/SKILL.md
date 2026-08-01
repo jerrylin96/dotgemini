@@ -34,7 +34,7 @@ Interrogate user across 4 core axes:
 4. **Ownership:** Confirm explicit accountability for results and risks.
 
 **Evaluation & Remediation:**
-- **Vague / Hand-waving:** Switch to **@skill:explain-diff** to explain code mechanics, then re-probe with a targeted scenario until mastery is proven.
+- **Uncertainty / Vague / Hand-waving:** If the user expresses uncertainty ("not sure", "don't know") OR gives vague/hand-waving answers, the agent MUST pause signoff, explain the mechanics and boundaries via **@skill:explain-diff**, and re-probe with a scenario before requesting approval.
 - **Silent Failures Found:** Instruct adding explicit runtime guards before signoff.
 
 ### 3. User Approval & Attestation
