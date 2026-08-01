@@ -99,7 +99,7 @@ This configuration is developed and tested on macOS and Linux (validated in CI).
   * **User Workflow**: Trigger with `/make-feature` (or automatically whenever preparing to write or edit codebase files).
     1. **Phase 1 (Spec & Plan)**: Draft `/spec` and `/plan` artifacts. Antigravity pauses for explicit human approval before creating worktrees or writing code.
     2. **Phase 2 (Build & Worktree)**: Creates a feature branch prefixed with `gemini/` checked out to an isolated worktree under `~/.gemini/tmp/worktrees/`. Performs all file modifications and runs tests via isolated environment wrappers (`run_in_env.py`).
-    3. **Phase 3 (Push & Subagent Review)**: Pushes the feature branch to `origin` and delegates an isolated background subagent to execute an `/adversarial-review` loop until approved.
+    3. **Phase 3 (Push & Subagent Review)**: Pushes the feature branch to `origin` and delegates an isolated background subagent (supplying a compacted context summary block) to execute an `/adversarial-review` loop until approved.
     4. **Phase 4 (Human Signoff & Merge)**: Antigravity pauses, presents the review report, and awaits explicit user confirmation (`/signoff`) before merging into the target branch and pruning the worktree.
 
 * `signoff` — Socratic human-comprehension and risk-ownership audit before merging.

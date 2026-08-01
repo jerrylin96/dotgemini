@@ -172,3 +172,21 @@ def test_validation_quoted_valid_name(tmp_path):
     skill_md.write_text("---\nname: \"quoted-name\"\n---\nbody")
     err = validate_skill_resolution(str(tmp_path), "quoted-name")
     assert err is None
+
+
+def test_retained_reasoning_and_compaction_rules_exist():
+    """Verify that AGENTS.md and make-feature SKILL.md contain retained reasoning & compaction rules."""
+    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+    agents_md = os.path.join(root_dir, "AGENTS.md")
+    make_feature_md = os.path.join(root_dir, "skills/make-feature/SKILL.md")
+
+    with open(agents_md, "r", encoding="utf-8") as f:
+        agents_content = f.read()
+
+    with open(make_feature_md, "r", encoding="utf-8") as f:
+        make_feature_content = f.read()
+
+    assert "Reasoning State Retention" in agents_content
+    assert "Subagent Context Compaction" in agents_content
+    assert "Context Compaction Block" in make_feature_content
+

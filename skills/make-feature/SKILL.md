@@ -29,6 +29,7 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
    - **Step 1 (Resolve Branch)**: Identify target base branch (`<base_branch>`) and feature branch (`gemini/<feature-name>`).
    - **Step 2 (Stage 1a: Draft `/spec`)**: Automatically create/update `/spec` artifact ([spec-driven-development](../spec-driven-development/SKILL.md)). **PAUSE** and wait for explicit human approval of `/spec`.
    - **Step 3 (Stage 1b: Draft `/plan`)**: *Only after `/spec` is explicitly approved*, inspect codebase and create/update `/plan` artifact ([planning-and-task-breakdown](../planning-and-task-breakdown/SKILL.md)). Every task item MUST include explicit TDD `RED Test Spec`, `GREEN Implementation Target`, and `Verify Command`. **PAUSE** and wait for explicit human approval of `/plan`.
+   - **Step 3b (Scratchpad Initialization)**: Create `<appDataDir>/brain/<conversation-id>/scratch/scratchpad.md` summarizing initial spec/plan decisions and active constraints.
    - *Gate Enforcement*: Drafting `/plan` before `/spec` is approved is STRICTLY FORBIDDEN. Creating worktrees or editing code before `/plan` is approved is STRICTLY FORBIDDEN.
 
 
@@ -43,6 +44,7 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
      > **Empirical Grounding Directive**: Prohibit declaring success, test passes, or schema validity without empirical execution output present in the context window.
    - **Step 4b (Builder Pre-Review Quality Check & Manifest Creation)**:
      - Run `python3 ~/.gemini/scripts/run_in_env.py <worktree_path> pytest` and `ruff check .` inside worktree and verify 100% pass rate.
+     - Update `<appDataDir>/brain/<conversation-id>/scratch/scratchpad.md` with build step findings and empirical test logs.
      - Create review manifest artifact in the conversation artifact directory (`<appDataDir>/brain/<conversation-id>/review_manifest_<feature>.md`) detailing:
        - *Summary & Rationale*: Concise explanation of changes and Ponytail YAGNI justification.
        - *TDD Proof*: List of test cases added/modified and empirical pass log snippet.
@@ -65,7 +67,17 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
      git push origin gemini/<feature-name>
      ```
    - **Step 7 (Subagent Adversarial Review Loop)**:
-     - *Mandatory Subagent Delegation*: The parent agent MUST NOT run the review in its own context. The parent agent MUST execute `invoke_subagent` (`TypeName: self`, `Role: Adversarial Code Reviewer`, `Workspace: inherit`). The subagent prompt MUST include a compacted context block (feature rationale, key architectural decisions, and active constraints) and specify the `<appDataDir>/brain/<conversation-id>/review_manifest_<feature>.md` path to preserve reasoning state across context isolation.
+     - *Mandatory Subagent Delegation*: The parent agent MUST NOT run the review in its own context. The parent agent MUST execute `invoke_subagent` (`TypeName: self`, `Role: Adversarial Code Reviewer`, `Workspace: inherit`).
+     - *Subagent Compaction Block*: The subagent prompt MUST include a compacted context block (≤ 30 lines) formatted as:
+       ```markdown
+       ### Context Compaction Block
+       - **Feature Rationale**: <1-2 sentences>
+       - **Key Architectural Decisions**: <bulleted list>
+       - **Active Constraints**: <bulleted list>
+       - **Prior Step Findings**: <empirical summary>
+       - **Target Artifact Paths**: <file links>
+       ```
+       *(Prohibition: NEVER include secrets, tokens, credentials, or `.env` contents in the compaction block)*. Specify the `<appDataDir>/brain/<conversation-id>/review_manifest_<feature>.md` path to preserve reasoning state across context isolation.
      - The subagent runs isolated review on the worktree, reading `review_manifest_<feature>.md` first to target diff inspection. Repeat fix-commit-push loop until verdict is `APPROVE` with zero open `[CRITICAL]` findings. Post review report in chat.
      - *Subagent Lifecycle Cleanup*: Once the subagent finishes and posts its review report, the parent agent MUST kill the dangling subagent instance using `manage_subagents` (`Action: "kill"`, `ConversationIds: [<subagent_conversation_id>]`).
    - **Step 7b (Post-Review Audit Report Artifact)**:
