@@ -12,7 +12,7 @@ This configuration is developed and tested on macOS and Linux (validated in CI).
 ## Setup on a New Machine
 
 1. **Install Antigravity CLI:**
-   Download and install the [Antigravity CLI](https://antigravity.google/product/antigravity-cli). This is required for executing Antigravity skills (`adversarial-review`, `explain-diff`, `make-feature`, `session-sync`), environment runner wrappers, and subagent delegation.
+   Download and install the [Antigravity CLI](https://antigravity.google/product/antigravity-cli). This is required for executing Antigravity skills (`adversarial-review`, `catchmeup`, `explain-diff`, `make-feature`, `session-sync`), environment runner wrappers, and subagent delegation.
    
    Verify your installation:
    ```bash

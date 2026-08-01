@@ -7,9 +7,9 @@ description: Executive time-window activity summary for PIs, leads, and reviewer
 
 Designed for external reviewers, supervisors, team leads, and Principal Investigators (PIs) who need a clear, high-level summary of repository activity over a designated time window, with options to audit signoffs and drill down into specific commits.
 
-## Preset Time Windows
+## Preset Time Windows & Duration Grammar
 
-When invoked (e.g. `/catchmeup` or `/catchmeup 2w`), select or resolve the time window:
+When invoked (e.g. `/catchmeup` or `/catchmeup 2w origin/main`), select or resolve the time window:
 
 | Preset | Argument | Period Covered | Description |
 |---|---|---|---|
@@ -18,57 +18,84 @@ When invoked (e.g. `/catchmeup` or `/catchmeup 2w`), select or resolve the time 
 | **2 Weeks** | `2w` or `2 weeks` | Past 14 days | Bi-weekly review / sprint summary |
 | **1 Month** | `1mo` or `1 month` | Past 30 days | Monthly release & project audit |
 
-*(Custom durations like `3d` or `6w` are also accepted).*
+### Duration Grammar & Validation
+- **Accepted Grammar**: `^[0-9]+(d|w|mo|day|days|week|weeks|month|months)$`
+- **Validation Rule**: Validate input duration against grammar before interpolating into git commands. If input fails validation, reject it, report invalid duration, and present preset menu (`[1] 1d`, `[2] 1w (default)`, `[3] 2w`, `[4] 1mo`).
+- **Mapping Rule**:
+  - `<N>d` / `<N> day(s)` -> `--since="<N> days ago"`
+  - `<N>w` / `<N> week(s)` -> `--since="<N> weeks ago"`
+  - `<N>mo` / `<N> month(s)` -> `--since="<N> months ago"`
 
 ## Core Rules
 
 > [!IMPORTANT]
-> - **Read-Only**: This skill is strictly read-only. It never modifies workspace files, creates commits, or alters repository state.
+> - **Read-Only**: This skill is strictly read-only. It never modifies workspace or worktree files, creates commits, or alters repository state. Creating temporary, ephemeral scratch files under the conversation's scratch directory for log/diff reading does not violate this rule, provided cleanup only removes these generated scratch files.
 > - **High-Level First**: Always open with an **Executive Summary** (themes, metrics, signoff attestations) before showing raw commits or line-by-line diffs.
-> - **Attestation Transparency**: Parse and explicitly report `Signoff-*` git trailers from commit logs (`git log --grep="Signoff-"` or inspect commit bodies).
+> - **Real Attestation Parsing**: Parse `Signoff-Reviewed-Commit-SHA` and `Signoff-Status` trailers from attestation commits created by [/signoff](../signoff/SKILL.md) to audit feature commit coverage.
 
 ## Execution Steps
 
-### 1. Resolve Time Window & Scope
-- If user provides no argument (e.g. `/catchmeup`), present the non-linear preset menu (`[1] 1d`, `[2] 1w (default)`, `[3] 2w`, `[4] 1mo`) or default to `1w`.
-- Map preset to git `--since` flag:
-  - `1d` -> `--since="1 day ago"`
-  - `1w` -> `--since="7 days ago"`
-  - `2w` -> `--since="14 days ago"`
-  - `1mo` -> `--since="30 days ago"`
+### 1. Resolve Scope & Target Ref
+- Syntax: `/catchmeup [duration] [target_ref]` (default ref: active checked-out HEAD).
+- Verify git repository existence (`git rev-parse --is-inside-work-tree`). If not a git repo, display error and halt.
+- Resolve stable target SHA:
+  ```bash
+  git rev-parse <target_ref>
+  ```
+- *Remote Tracking Warning*: Skill is read-only and does not run `git fetch` automatically. If using a remote tracking branch ref (e.g. `origin/main`), note that un-fetched remote commits will not be included.
 
-### 2. Gather Git Activity
-Save logs and stats to scratch files to prevent terminal output truncation:
+### 2. Gather Git Activity & Parse Trailers
+To prevent terminal truncation, save raw outputs to the conversation's scratch directory:
 ```bash
 mkdir -p "<appDataDir>/brain/<conversation-id>/scratch"
 
-# Commit log with author, date, subject
-git log --since="<duration>" --pretty=format:"%h|%an|%ad|%s" > "<appDataDir>/brain/<conversation-id>/scratch/temp_catchmeup_log.txt"
-
-# Detailed log including bodies (for Signoff-* trailers)
-git log --since="<duration>" > "<appDataDir>/brain/<conversation-id>/scratch/temp_catchmeup_full.txt"
+# Commit log without attestation commits
+git log <target_ref> --since="<duration>" --no-merges --pretty=format:"%h|%an|%ad|%s" > "<appDataDir>/brain/<conversation-id>/scratch/temp_catchmeup_log.txt"
 
 # Shortstat summary
-git log --since="<duration>" --shortstat > "<appDataDir>/brain/<conversation-id>/scratch/temp_catchmeup_stat.txt"
+git log <target_ref> --since="<duration>" --shortstat > "<appDataDir>/brain/<conversation-id>/scratch/temp_catchmeup_stat.txt"
+
+# Unique files touched
+git log <target_ref> --since="<duration>" --name-only --format="" | sort -u > "<appDataDir>/brain/<conversation-id>/scratch/temp_catchmeup_files.txt"
+
+# Attestation commits carrying Signoff-* trailers
+git log <target_ref> --since="<duration>" --grep="^Signoff-Reviewed-Commit-SHA:" --format="format:%H%n%(trailers:key=Signoff-*,only=true)" > "<appDataDir>/brain/<conversation-id>/scratch/temp_catchmeup_attestations.txt"
 ```
 
-### 3. Generate Executive Summary
-Present a high-level summary organized into 3 clear sections:
-1. **Activity Overview**:
-   - Time window covered (e.g., *Past 7 Days*).
-   - Total commits, active authors/contributors.
-   - Total files touched, net insertions/deletions.
-2. **Key Feature Themes & Milestones**:
-   - Group commit subjects into logical feature/refactor/fix categories.
-3. **Signoff & Attestation Audit**:
-   - List verified commits containing `Signoff-*` trailers (from [/signoff](../signoff/SKILL.md)).
-   - Highlight any unsigned commits merged directly if auditing release candidates.
+Read generated scratch files using `view_file` in chunks of `<=800-line` max to guarantee untruncated access.
 
-### 4. Interactive Drill-Down Menu
-Present a numbered navigation menu for deeper inspection:
-- `[c]` **View Commit List**: Show full chronological commit log with SHAs, authors, and signoff badges.
-- `[f]` **View Changed Files**: Show list of touched files ranked by churn (+/- lines).
-- `[d]` **Drill Into Specific Commit/File**: Reuse [`/explain-diff`](../explain-diff/SKILL.md) walkthrough engine to inspect hunks or view `git show <sha>`.
+### 3. Generate Executive Report
+
+#### Zero-Commit Handling
+If no commits exist in the time window, display:
+`"No commits found in the last <duration> on <target_ref> (resolved: <SHA>). Baseline commit: <SHA>."`
+
+#### Report Structure
+1. **Header & Context**:
+   - **Target Ref**: `<target_ref>` (Resolved SHA: `<sha>`)
+   - **Period Covered**: Past `<duration>`
+2. **Activity Overview**:
+   - Total substantive feature commits (excluding empty `Signoff-*` attestation commits).
+   - Total active authors/contributors.
+   - Unique files touched count (`temp_catchmeup_files.txt`).
+   - Cumulative churn: total insertions (`+`) and deletions (`-`) aggregated across feature commits.
+3. **Feature Themes & Milestones**:
+   - Group commit subjects (`temp_catchmeup_log.txt`) into logical feature/fix/refactor themes (`--no-merges`).
+4. **Attestation Audit**:
+   - Map `Signoff-Reviewed-Commit-SHA` trailers back to feature commits:
+     - **Verified (`VERIFIED_BY_HUMAN`)**: Fully signed off with transcript reference digest.
+     - **Downgraded (`VERIFIED_BY_HUMAN_NO_TRANSCRIPT_DIGEST`)**: Human approved without transcript digest attestation.
+     - **Unsigned**: Substantive commits without matching attestation trailer.
+
+### 4. Interactive Drill-Down & Cleanup
+Present navigation menu:
+- `[c]` **View Commit List**: Show chronological commit log with SHAs and signoff badges.
+- `[f]` **View Changed Files**: Show list of unique touched files ranked by churn.
+- `[d]` **Drill Into Specific Commit/File**: Delegate to @skill:explain-diff for hunk walkthroughs or view `git show <sha>`.
 - `[q]` **Finish**.
 
-Invite follow-up questions from the reviewer until they confirm completion.
+#### Mandatory Cleanup Step
+Upon completion or failure, clean up ephemeral scratch files:
+```bash
+rm -- "<appDataDir>/brain/<conversation-id>/scratch/temp_catchmeup_"*.txt
+```
