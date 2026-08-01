@@ -95,6 +95,9 @@ This configuration is developed and tested on macOS and Linux (validated in CI).
 * `explain-diff` — Interactive, read-only walkthrough explaining what changed between a feature branch, pull request, or specific commit/range and a reference branch.
   * **User Workflow**: Trigger with `/explain-diff`. Branch selection works exactly like `adversarial-review` (it reuses the same branch resolver and worktree cache). You then get an overall summary of the changeset and a numbered menu of changed files; pick one for a hunk-by-hunk explanation, ask follow-up questions, and return to the menu until done. Nothing is executed or modified — no tests, no linters.
 
+* `catchmeup` — Executive time-window activity summary for PIs, leads, and reviewers (presets: `1d`, `1w`, `2w`, `1mo`).
+  * **User Workflow**: Trigger with `/catchmeup` (or specify duration like `/catchmeup 2w`). Provides an executive overview of recent commits, milestone themes, `Signoff-*` attestation audits, and interactive drill-downs into specific commits or files.
+
 * `make-feature` — Git worktree-based isolated feature branch development engine and mandatory software lifecycle pipeline.
   * **User Workflow**: Trigger with `/make-feature` (or `/make-feature heavy` to proactively force sequential subagent execution per slice for complex multi-file tasks; or automatically whenever preparing to write or edit codebase files).
     1. **Phase 1 (Spec & Plan)**: Draft `/spec` and `/plan` artifacts. Antigravity pauses for explicit human approval before creating worktrees or writing code.
