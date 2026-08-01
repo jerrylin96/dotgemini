@@ -43,11 +43,8 @@ Interrogate user across 4 core axes:
 > [!NOTE]
 > **Scratchpad Lifecycle Sync (make-feature Phase 4, Step 8)**: If `<appDataDir>/brain/<conversation-id>/scratch/scratchpad.md` exists, ensure it is updated pre-signoff with final completion status, matching Step 8 in [make-feature](../make-feature/SKILL.md). If the scratchpad file does not exist (e.g. post-Phase-4 cleanup or standalone `/signoff` execution), skip this step rather than recreating it.
 
-1. **Request Explicit User Approval & Commit Choice:**
-   Present proposed trade-offs, risks, and `Signoff-Verified-By` email (propose value from `git config user.email`). Present the 3 commit options and require explicit selection:
-   - Option 1: Report attestation only (no commit created).
-   - Option 2: Amend unpushed commit `<reviewed-commit-sha>` (`git commit --amend`).
-   - Option 3: Create a new empty attestation commit (`git commit --allow-empty`).
+1. **Request Explicit User Approval:**
+   Present proposed trade-offs, risks, and `Signoff-Verified-By` email (propose value from `git config user.email`). Confirm user readiness to proceed with empty attestation commit (`git commit --allow-empty`).
 
 2. **Verify Clean & Stale-Free State:**
    After receiving initial user approval, re-verify state: current `HEAD` equals `<reviewed-commit-sha>`, no unstaged changes (`git diff --quiet`), and no staged changes (`git diff --cached --quiet`). If dirty or `HEAD` has moved, stop and declare signoff stale.
@@ -56,7 +53,7 @@ Interrogate user across 4 core axes:
    After recording user confirmation in transcript, execute Python helper via temporary file with explicit trap cleanup:
    ```bash
    TMP_DIGEST_FILE=$(mktemp) || { echo "Error: mktemp failed. Aborting signoff." >&2; exit 1; }
-   trap 'rm -f -- "$TMP_DIGEST_FILE"' EXIT INT TERM
+   trap 'rm -- "$TMP_DIGEST_FILE"' EXIT INT TERM
 
    python3 - <<'PY' > "$TMP_DIGEST_FILE"
    import os, sys, hashlib, re
@@ -116,24 +113,16 @@ Signoff-Agent: <Executing Agent Name> /signoff v1.0
 
 ### 4. Commit Execution & Integrity Verification
 
-Execute the user's selected choice:
-- **Option 1 (No Commit):** Present trailers in chat output. Report `Signoff-Attestation-Commit-SHA: none (trailers presented in chat only)`.
+Create an empty attestation commit (`git commit --allow-empty`) with the flat trailer block:
+```bash
+SHORT_SHA=$(git rev-parse --short=7 "<reviewed-commit-sha>")
+git commit --allow-empty -m "[SIGNOFF ${SHORT_SHA}]: human comprehension and risk attestation
 
-- **Option 2 (Amend Unpushed Commit):**
-  *Just-in-time publication check:* Immediately before executing `--amend`, determine configured upstream remote:
-  ```bash
-  REMOTE=$(git config "branch.$(git rev-parse --abbrev-ref HEAD).remote" 2>/dev/null || echo "origin")
-  ```
-  Run `git fetch --prune "$REMOTE"`.
-  - If `git fetch` fails (network/auth error), treat remote status as unverified, block Option 2, and require switching to Option 3 (`--allow-empty`) or Option 1.
-  - Run `git branch -r --contains "<reviewed-commit-sha>"`. If `<reviewed-commit-sha>` appears on any remote branch, block `--amend` and require switching to Option 3 (`--allow-empty`) or Option 1.
-  - If clean and unpublished, append flat trailer block via `git commit --amend`.
-  - *Post-Operation Integrity Check:* Verify `git rev-parse HEAD^{tree}` equals `$TREE_SHA` and `git rev-parse HEAD^@` equals `$PARENTS`. If tree or parents changed, declare failure.
+<trailers>"
+```
+- **Post-Operation Integrity Check:** Verify `git rev-parse HEAD^{tree}` equals `$TREE_SHA` and `git rev-parse HEAD~1` equals `<reviewed-commit-sha>`. If tree or parent changed, declare failure.
 
-- **Option 3 (Empty Attestation Commit):** Append flat trailer block via `git commit --allow-empty -m "..."`.
-  - *Post-Operation Integrity Check:* Verify `git rev-parse HEAD^{tree}` equals `$TREE_SHA` and `git rev-parse HEAD~1` equals `<reviewed-commit-sha>`. If tree or parent changed, declare failure.
-
-After successful execution of Option 2 or Option 3, report the resulting `Signoff-Attestation-Commit-SHA` (`git rev-parse HEAD`).
+After successful execution, report the resulting `Signoff-Attestation-Commit-SHA` (`git rev-parse HEAD`).
 
 ---
 
