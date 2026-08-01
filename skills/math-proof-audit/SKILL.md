@@ -95,6 +95,8 @@ The parent agent synthesizes Red Team findings and presents the draft proof alon
      - **Trade-offs & Approximations:** Highlight any relaxed constraints, truncated series, or numerical approximations.
      - **Boundary Guards:** Verify loud assertions/guards exist for invalid inputs (e.g. NaNs, singular matrices).
      - **Accountability:** Confirm explicit human understanding and approval of mathematical trade-offs.
+3. **Evaluation & Remediation**:
+   - Apply the hardened Socratic remediation rule from **@skill:signoff**: If the user expresses mathematical uncertainty ("not sure", "don't know") OR gives vague/hand-waving answers, the agent MUST pause signoff, explain the mathematical mechanics and boundaries via **@skill:explain-diff**, and re-probe with a scenario before requesting approval.
 
 ---
 
