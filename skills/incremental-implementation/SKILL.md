@@ -91,6 +91,24 @@ Slice 3: Add offline support and reconnection
 
 If Slice 1 fails, you discover it before investing in Slices 2 and 3.
 
+### Sequential Subagent Slicing
+
+For high-complexity features (>5 heavy slices, massive legacy refactors, or pre-architected plans imported from frontier models), delegate each slice sequentially to a fresh subagent with clean context while preserving git state:
+
+```
+Slice 0: Setup & Schema Contract (Parent Agent / Initial Subagent)
+  └─→ Slice 1: Core Domain Models (Subagent 1 in Workspace: inherit)
+        └─→ Slice 2: Service Layer & API (Subagent 2 in Workspace: inherit)
+              └─→ Slice 3: UI & End-to-End Tests (Subagent 3 in Workspace: inherit)
+```
+
+> [!IMPORTANT]
+> **Sequential Subagent Rules**:
+> 1. **Workspace Mode**: Must use `Workspace: inherit` (or target worktree path) so each subagent commits directly onto the shared feature branch.
+> 2. **Context Compaction Block**: Pass a compact summary block (≤ 30 lines) in the subagent prompt detailing feature rationale, completed slice outcomes, active contracts, and target artifact paths.
+> 3. **Scratchpad Handoff**: Subagents must update `<appDataDir>/brain/<conversation-id>/scratch/scratchpad.md` with empirical test results and commit hashes before exiting.
+> 4. **Triggers**: Auto-recommended in `/plan` for >4 complex slices, or auto-flagged when the user uses keywords (`/plan heavy`, `/make-feature heavy`, or explicit prompt directives).
+
 ## Implementation Rules
 
 ### Rule 0: Simplicity First (Ponytail Ladder)

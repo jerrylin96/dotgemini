@@ -42,6 +42,8 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
      Perform all file edits inside isolated worktree directory following strict TDD order (write RED test first, then GREEN implementation). Verify using virtual environment wrappers (`run_in_env.py` for linters and tests).
      > [!IMPORTANT]
      > **Empirical Grounding Directive**: Prohibit declaring success, test passes, or schema validity without empirical execution output present in the context window.
+     > [!TIP]
+     > **Sequential Subagent Delegation**: If the approved `/plan` specifies `Sequential Subagents`, the parent agent (or slice-runner subagents) MUST execute subagents sequentially using `Workspace: inherit` (or target worktree path) so all slice commits land on `gemini/<feature-name>`. Each subagent must update `scratchpad.md` before exiting.
    - **Step 4b (Builder Pre-Review Quality Check & Manifest Creation)**:
      - Run `python3 ~/.gemini/scripts/run_in_env.py <worktree_path> pytest` and `ruff check .` inside worktree and verify 100% pass rate.
      - Update `<appDataDir>/brain/<conversation-id>/scratch/scratchpad.md` with build step findings and empirical test logs.

@@ -47,6 +47,20 @@ Operate in **read-only** mode:
 > [!TIP]
 > For parallelizable slices, use `self` subagents with `Workspace: branch`. Each subagent gets its own git branch to implement a slice concurrently.
 
+### Step 2b: Execution Strategy Recommendation
+
+Every `/plan` artifact must explicitly declare its execution strategy near the top:
+
+```markdown
+## Execution Strategy
+- [x] Standard Single Agent (Fast, atomic tasks)
+- [ ] Sequential Subagents (`Workspace: inherit`) — *Recommended for >4 complex slices or external plan handoffs*
+```
+
+#### Strategy Triggers:
+- **Auto-Recommendation**: Agent automatically recommends `Sequential Subagents` if the task breakdown contains >4 complex multi-file slices.
+- **User Override Modifiers**: If user prompt includes intent keywords (`heavy`, `subagent per slice`) or command modifiers (`/plan heavy`, `/make-feature heavy`), agent defaults to `Sequential Subagents` directly.
+
 ### Step 3: Output
 
 - Create the plan as a reviewable document with a checklist for tracking progress
