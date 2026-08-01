@@ -40,6 +40,9 @@ Interrogate user across 4 core axes:
 
 ### 3. User Approval & Attestation
 
+> [!NOTE]
+> **Scratchpad Lifecycle Sync (make-feature Phase 4, Step 8)**: If `<appDataDir>/brain/<conversation-id>/scratch/scratchpad.md` exists, ensure it is updated pre-signoff with final completion status, matching Step 8 in [make-feature](../make-feature/SKILL.md). If the scratchpad file does not exist (e.g. post-Phase-4 cleanup or standalone `/signoff` execution), skip this step rather than recreating it.
+
 1. **Request Explicit User Approval & Commit Choice:**
    Present proposed trade-offs, risks, and `Signoff-Verified-By` email (propose value from `git config user.email`). Present the 3 commit options and require explicit selection:
    - Option 1: Report attestation only (no commit created).
@@ -53,7 +56,7 @@ Interrogate user across 4 core axes:
    After recording user confirmation in transcript, execute Python helper via temporary file with explicit trap cleanup:
    ```bash
    TMP_DIGEST_FILE=$(mktemp) || { echo "Error: mktemp failed. Aborting signoff." >&2; exit 1; }
-   trap 'rm -f "$TMP_DIGEST_FILE"' EXIT INT TERM
+   trap 'rm -f -- "$TMP_DIGEST_FILE"' EXIT INT TERM
 
    python3 - <<'PY' > "$TMP_DIGEST_FILE"
    import os, sys, hashlib, re
@@ -70,7 +73,7 @@ Interrogate user across 4 core axes:
    PY
    DIGEST_STATUS=$?
    DIGEST=$(cat "$TMP_DIGEST_FILE")
-   rm -f "$TMP_DIGEST_FILE"
+   rm -- "$TMP_DIGEST_FILE"
    trap - EXIT INT TERM
    ```
 
