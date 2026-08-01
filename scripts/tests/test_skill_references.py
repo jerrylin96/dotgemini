@@ -190,16 +190,15 @@ def test_retained_reasoning_and_compaction_rules_exist():
     assert literal_scratchpad_path in agents_content, f"Exact path '{literal_scratchpad_path}' missing from AGENTS.md"
     assert literal_scratchpad_path in make_feature_content, f"Exact path '{literal_scratchpad_path}' missing from make-feature SKILL.md"
 
-    # Negative assertion: Verify no markdown file references scratchpad.md under worktrees or bare workspace-root
+    # Assert that EVERY reference to scratchpad.md in tracked repo markdown files uses the exact canonical path
     all_md_files = glob.glob(os.path.join(root_dir, "**/*.md"), recursive=True)
     for md_path in all_md_files:
-        if "/tmp/" in md_path or "/brain/" in md_path:
-            continue
         with open(md_path, "r", encoding="utf-8") as f:
             content = f.read()
-        assert "tmp/worktrees/scratchpad.md" not in content, f"Worktree-relative scratchpad path found in {md_path}"
-        assert "workspace/scratchpad.md" not in content, f"Workspace-root scratchpad path found in {md_path}"
-        assert "artifact/scratchpad.md" not in content, f"Incorrect artifact path found in {md_path}"
+        if "scratchpad.md" in content:
+            for line in content.splitlines():
+                if "scratchpad.md" in line:
+                    assert literal_scratchpad_path in line, f"Non-canonical scratchpad path found in {md_path}: '{line.strip()}'"
 
     # Verify the 5 compaction fields are consistent across AGENTS.md and SKILL.md
     required_fields = [

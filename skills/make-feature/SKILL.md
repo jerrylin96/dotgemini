@@ -97,7 +97,7 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
    - Recommended tools for user: [/explain-diff](../explain-diff/SKILL.md) and [/signoff](../signoff/SKILL.md).
    - Once merged manually by the user, clean up scratchpad and remove worktree:
      ```bash
-     rm -f "<appDataDir>/brain/<conversation-id>/scratch/scratchpad.md"
+     rm -- "<appDataDir>/brain/<conversation-id>/scratch/scratchpad.md"
      git worktree remove ~/.gemini/tmp/worktrees/gemini_<sanitized-feature-name> --force
      git worktree prune
      ```
