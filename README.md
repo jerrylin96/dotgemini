@@ -103,7 +103,7 @@ This configuration is developed and tested on macOS and Linux (validated in CI).
     4. **Phase 4 (Human Signoff & Merge)**: Antigravity pauses, presents the review report, and awaits explicit user confirmation (`/signoff`) before merging into the target branch and pruning the worktree.
 
 * `signoff` — Socratic human-comprehension and risk-ownership audit before merging.
-  * **User Workflow**: Trigger with `/signoff` before merging a feature branch. Antigravity reverse-interviews you across 4 core axes (mechanics, trade-offs, failure boundaries, ownership). Upon verified comprehension and explicit user approval, it appends a flat block of `Signoff-*` git trailers (including a traceable SHA-256 transcript reference digest) to the commit.
+  * **User Workflow**: Trigger with `/signoff` before merging a feature branch. Antigravity reverse-interviews you across 4 core axes (mechanics, trade-offs, failure boundaries, ownership). Upon verified comprehension and explicit user approval, it creates an empty attestation commit (`git commit --allow-empty`) containing a flat block of `Signoff-*` git trailers (including a traceable SHA-256 transcript reference digest).
 
 * `/ponytail` — Lazy senior developer instructions.
 * `/caveman` — Token-efficient caveman communication mode.
