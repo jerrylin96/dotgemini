@@ -388,4 +388,58 @@ def test_signoff_socratic_remediation_rule():
     assert "worktree_path" in signoff_content, "Missing 'worktree_path' in skills/signoff/SKILL.md Section 4"
 
 
+def test_signoff_gsa_protocol_spec_and_trailers():
+    """Verify the GSA Protocol core spec exists and skills/signoff/SKILL.md implements its portable trailer schema, harness adapters, and Git Notes persistence."""
+    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+    spec_md = os.path.join(root_dir, "skills/signoff/specs/gsa-core.md")
+    signoff_md = os.path.join(root_dir, "skills/signoff/SKILL.md")
+
+    assert os.path.exists(spec_md), "skills/signoff/specs/gsa-core.md does not exist"
+
+    with open(spec_md, "r", encoding="utf-8") as f:
+        spec_content = f.read()
+
+    for anchor in [
+        "Protocol Specification",
+        "Cryptographic Developer Identity Binding",
+        "cat_sort_uniq",
+        "ack_no_transcript",
+    ]:
+        assert anchor in spec_content, f"Missing '{anchor}' in skills/signoff/specs/gsa-core.md"
+
+    with open(signoff_md, "r", encoding="utf-8") as f:
+        signoff_content = f.read()
+
+    # GSA v1.0 trailer schema fields
+    for trailer in [
+        "Signoff-Spec-Version: 1.0",
+        "Signoff-Harness-ID",
+        "Signoff-Transcript-Bytes",
+    ]:
+        assert trailer in signoff_content, f"Missing '{trailer}' trailer in skills/signoff/SKILL.md"
+
+    # Portable harness adapter resolution (the core portability goal)
+    for adapter_env in [
+        "SIGNOFF_TRANSCRIPT_FILE",
+        "ANTIGRAVITY_CONVERSATION_ID",
+        "CLAUDE_CODE_SESSION_ID",
+    ]:
+        assert adapter_env in signoff_content, f"Missing '{adapter_env}' adapter resolution in skills/signoff/SKILL.md"
+
+    # Worktree fallback: cwd slug misses inside linked worktrees, so the adapter
+    # must resolve the primary repository root via git-common-dir
+    assert "--git-common-dir" in signoff_content, "Missing worktree git-common-dir fallback in skills/signoff/SKILL.md"
+
+    # Git Notes dual persistence with tracking-ref concurrency merge
+    assert "refs/notes/signoff" in signoff_content, "Missing 'refs/notes/signoff' persistence in skills/signoff/SKILL.md"
+    assert "cat_sort_uniq" in signoff_content, "Missing 'cat_sort_uniq' notes merge strategy in skills/signoff/SKILL.md"
+    assert "refs/notes/signoff-remote" in signoff_content, "Missing tracking-ref fetch for notes merge in skills/signoff/SKILL.md"
+
+    # Signed attestation commits (GSA spec section 2.4)
+    assert "user.signingkey" in signoff_content, "Missing signed-commit support (user.signingkey) in skills/signoff/SKILL.md"
+
+    # Spec cross-reference resolves relative to the skill directory
+    assert "specs/gsa-core.md" in signoff_content, "Missing specs/gsa-core.md reference in skills/signoff/SKILL.md"
+
+
 
