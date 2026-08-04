@@ -1,6 +1,6 @@
 # Specification: Portable Git Signoff Attestation (GSA) Protocol Core
 
-**Document Version:** 3.1.0  
+**Document Version:** 3.1.1  
 **Status:** Draft / Pending Review (Stage 1a)  
 **Target Scope:** `signoff` skill portability, MCP Server, Harness Adapters, Git Notes Attestation, and Open Commit Protocol Core  
 **Canonical Spec Location:** `skills/signoff/specs/gsa-core.md`  
@@ -77,12 +77,13 @@ To bind an attestation to a verified human developer identity:
 ### 2.5 Attestation Persistence & Concurrency via Git Notes (`refs/notes/signoff`)
 To ensure attestations survive post-merge branch deletion and squash merges:
 1. Every signoff execution writes the trailer payload to an empty commit AND attaches it to `refs/notes/signoff` on `<reviewed-commit-sha>` and `<reviewed-tree-sha>`.
-2. **Concurrency Merge Strategy:** To prevent non-fast-forward push rejections in multi-developer environments, pushes MUST fetch remote notes and resolve merges using `cat_sort_uniq` strategy:
+2. **Concurrency Merge Strategy:** To prevent non-fast-forward push rejections in multi-developer environments, pushes MUST fetch remote notes into a separate tracking ref, merge them into the local signoff notes ref using the `cat_sort_uniq` strategy, and only then push:
    ```bash
-   git fetch origin refs/notes/signoff:refs/notes/signoff
-   git notes merge -s cat_sort_uniq refs/notes/signoff
+   git fetch origin +refs/notes/signoff:refs/notes/signoff-remote
+   git notes --ref=signoff merge -s cat_sort_uniq refs/notes/signoff-remote
    git push origin refs/notes/signoff
    ```
+   Fetching directly into the local `refs/notes/signoff` is a non-fast-forward update whenever local and remote notes have diverged and is rejected; the `+`-forced tracking ref sidesteps this on repeat runs, and `--ref=signoff` ensures the merge targets the signoff notes ref rather than the default `refs/notes/commits`.
 
 ---
 
@@ -164,6 +165,6 @@ To verify if a target commit or tree was attested:
 
 ## 6. Phase 1 Gate Status
 
-- [x] Stage 1a (Revised v3.1.0): Core GSA Spec finalized with repo-relative paths (`skills/signoff/specs/gsa-core.md`), Git Notes concurrency merge handling (`cat_sort_uniq`), and `ack_no_transcript` parameter circuit breaker.
+- [x] Stage 1a (Revised v3.1.1): Core GSA Spec finalized with repo-relative paths (`skills/signoff/specs/gsa-core.md`), Git Notes concurrency merge handling (`cat_sort_uniq` via tracking ref), and `ack_no_transcript` parameter circuit breaker.
 - [ ] Stage 1a Approval: Awaiting user approval of spec artifact.
 - [ ] Stage 1b: Draft implementation plan `/plan`.
