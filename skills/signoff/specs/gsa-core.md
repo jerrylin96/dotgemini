@@ -163,8 +163,9 @@ To verify if a target commit or tree was attested:
 
 ---
 
-## 6. Phase 1 Gate Status
+## 6. Phase Gate Status
 
 - [x] Stage 1a (Revised v3.1.1): Core GSA Spec finalized with repo-relative paths (`skills/signoff/specs/gsa-core.md`), Git Notes concurrency merge handling (`cat_sort_uniq` via tracking ref), and `ack_no_transcript` parameter circuit breaker.
-- [ ] Stage 1a Approval: Awaiting user approval of spec artifact.
-- [ ] Stage 1b: Draft implementation plan `/plan`.
+- [x] Stage 1b: Implementation plan drafted, reviewed, and executed.
+- [x] Phase 1 (Skill-Level Compliance): `skills/signoff/SKILL.md` implements GSA v1.0 trailers, portable harness adapter resolution (`SIGNOFF_TRANSCRIPT_FILE` → `ANTIGRAVITY_CONVERSATION_ID` → `CLAUDE_CODE_SESSION_ID` with worktree `--git-common-dir` fallback), signed attestation commits, and `refs/notes/signoff` dual persistence, enforced by agent instructions and covered by `scripts/tests/test_skill_references.py`.
+- [ ] Phase 2 (Deferred): `signoff-mcp` server, programmatic `TranscriptProvider` implementations, and server-side status derivation with the `ack_no_transcript` circuit breaker (§4) — a prompt-driven skill cannot host server-side enforcement, so §4's guarantees remain unimplemented until this phase.

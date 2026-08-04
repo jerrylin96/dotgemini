@@ -4,6 +4,7 @@
 **Status:** Non-Blocking / Strategic Roadmap  
 **Canonical Spec Location:** `skills/signoff/specs/gsa-cloud-concept.md`  
 **Core Spec Reference:** [gsa-core.md](gsa-core.md)  
+**Lifecycle:** Retained as a scoping reference for future cloud registry work. This concept document will be REMOVED when that work is implemented and replaced by its real specification; it must not be treated as a normative spec in the meantime.  
 
 ---
 
