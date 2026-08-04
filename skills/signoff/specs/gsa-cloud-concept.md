@@ -42,19 +42,28 @@ graph TD
     "tradeoffs": ["Surrogate model used for speed in dev"],
     "risks": ["Out-of-bounds inputs return NaN"],
     "reviewer_email": "engineer@company.com",
-    "privacy_mode": "hash_only",
+    "privacy_mode": "full_audit",
     "transcript_hash": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "transcript_bytes": 48201,
     "encrypted_transcript_payload": "<base64>"
   }
   ```
+- **Response:** `201 Created`
+  ```json
+  {
+    "attestation_id": "att_89f0a21b",
+    "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "attestation_url": "https://<registry-host>/v1/attestations/att_89f0a21b"
+  }
+  ```
 - `privacy_mode` values:
-  - `hash_only`: only the digest is stored; tamper-evidence without retrieval. The transcript never leaves the local machine.
-  - `full_audit`: the transcript payload (first `transcript_bytes` bytes, encrypted at rest) is escrowed for later retrieval. Required for the PI/auditor retrieval use case — `hash_only` alone cannot serve it.
+  - `hash_only`: only the digest is stored; tamper-evidence without retrieval. The transcript never leaves the local machine, and `encrypted_transcript_payload` MUST be omitted.
+  - `full_audit` (shown in the example above): the transcript payload (first `transcript_bytes` bytes, encrypted at rest) is escrowed for later retrieval. `encrypted_transcript_payload` is required. This mode is required for the PI/auditor retrieval use case — `hash_only` alone cannot serve it.
 
 #### Endpoint: `GET /v1/attestations/{attestation_id}/transcript`
+- `{attestation_id}` is the server-generated opaque identifier returned by the ingest response (e.g. `att_89f0a21b`) — not the commit SHA or conversation ID.
 - **Headers:** `Authorization: Bearer <API_KEY>` (access-controlled independently of repository visibility; e.g. PI/auditor roles).
-- **Response:** The escrowed transcript payload. Verifiers MUST recompute SHA256 over the first `transcript_bytes` bytes and compare against the `Signoff-Transcript-Digest` trailer in the repository, closing the loop between git and the archive.
+- **Response:** The escrowed transcript payload, decrypted for the authorized caller. Verifiers MUST recompute SHA256 over the first `transcript_bytes` bytes of the **decrypted plaintext** and compare against the `Signoff-Transcript-Digest` trailer in the repository, closing the loop between git and the archive. (The digest is always computed over plaintext transcript bytes — at-rest encryption is a storage concern invisible to verification.)
 
 ### 2.2 Tamper Evidence via Transparency Log
 
