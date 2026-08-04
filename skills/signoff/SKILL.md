@@ -12,6 +12,8 @@ Human owns results, trade-offs, and failure modes.
 Agent role: Socratic interrogator, not dogmatic gatekeeper.
 Intentional trade-offs (e.g. surrogates violating exact domain laws for speed) pass if human explicitly understands boundaries and risks.
 
+Attestations follow the **Git Signoff Attestation (GSA) Protocol v1.0** defined in [specs/gsa-core.md](specs/gsa-core.md): portable flat trailers, harness-agnostic transcript adapters, and dual persistence (empty commit + `refs/notes/signoff`).
+
 ---
 
 ## Workflow
@@ -48,30 +50,50 @@ Interrogate user across 4 core axes:
 2. **Verify Clean & Stale-Free State:**
    After receiving initial user approval, re-verify state: current `HEAD` equals `<reviewed-commit-sha>`, no unstaged changes (`git diff --quiet`), and no staged changes (`git diff --cached --quiet`). If dirty or `HEAD` has moved, stop and declare signoff stale.
 
-3. **Compute & Validate Transcript Digest:**
-   After recording user confirmation in transcript, execute Python helper via temporary file with explicit trap cleanup:
+3. **Resolve Harness Adapter & Capture Transcript Snapshot:**
+   After recording user confirmation in transcript, resolve the active harness adapter and capture the transcript snapshot (SHA256 digest + exact byte count) immediately before the commit, per GSA snapshot timing rules ([specs/gsa-core.md](specs/gsa-core.md) §2.3). Resolution order: `SIGNOFF_TRANSCRIPT_FILE` explicit override → `ANTIGRAVITY_CONVERSATION_ID` → `CLAUDE_CODE_SESSION_ID`. Execute the Python helper via temporary file with explicit trap cleanup:
    ```bash
    TMP_DIGEST_FILE=$(mktemp) || { echo "Error: mktemp failed. Aborting signoff." >&2; exit 1; }
    trap 'rm -f -- "$TMP_DIGEST_FILE"' EXIT INT TERM
 
    python3 - <<'PY' > "$TMP_DIGEST_FILE"
-   import os, sys, hashlib, re
-   cid = os.environ.get("ANTIGRAVITY_CONVERSATION_ID", "").strip()
-   if not cid:
-       print("unavailable"); sys.exit(0)
-   p = os.path.expanduser(f"~/.gemini/antigravity-cli/brain/{cid}/.system_generated/logs/transcript.jsonl")
-   try:
-       with open(p, "rb") as f:
-           h = hashlib.sha256(f.read()).hexdigest()
-       print(h if re.match(r"^[a-f0-9]{64}$", h) else "unavailable")
-   except OSError:
-       print("unavailable")
+   import hashlib, os
+
+   def emit(harness, cid, path):
+       digest, nbytes = "unavailable", "unavailable"
+       if path:
+           try:
+               with open(os.path.expanduser(path), "rb") as f:
+                   data = f.read()
+               digest, nbytes = hashlib.sha256(data).hexdigest(), str(len(data))
+           except OSError:
+               pass
+       print(harness)
+       print(cid if cid else "unavailable")
+       print(digest)
+       print(nbytes)
+
+   override = os.environ.get("SIGNOFF_TRANSCRIPT_FILE", "").strip()
+   ag_cid = os.environ.get("ANTIGRAVITY_CONVERSATION_ID", "").strip()
+   cc_cid = os.environ.get("CLAUDE_CODE_SESSION_ID", "").strip()
+
+   if override:
+       emit("generic-file", ag_cid or cc_cid or None, override)
+   elif ag_cid:
+       emit("antigravity-cli", ag_cid,
+            f"~/.gemini/antigravity-cli/brain/{ag_cid}/.system_generated/logs/transcript.jsonl")
+   elif cc_cid:
+       slug = os.getcwd().replace("/", "-")
+       emit("claude-code", cc_cid, f"~/.claude/projects/{slug}/{cc_cid}.jsonl")
+   else:
+       emit("unknown", None, None)
    PY
    DIGEST_STATUS=$?
-   DIGEST=$(cat "$TMP_DIGEST_FILE")
+   { read -r HARNESS_ID; read -r CONV_ID; read -r DIGEST; read -r T_BYTES; } < "$TMP_DIGEST_FILE"
    rm -- "$TMP_DIGEST_FILE"
    trap - EXIT INT TERM
    ```
+   *Harness storage paths are adapter-owned and non-normative (GSA §3.2); the `claude-code` path slug is the absolute working directory with `/` converted to `-`. Run the helper from the repository root so the slug resolves correctly.*
 
 4. **Construct Flat Git Trailers & Determine Status:**
    Evaluate helper exit status and exact output strictly. No subsequent trailer construction or commit occurs after an error abort:
@@ -79,10 +101,10 @@ Interrogate user across 4 core axes:
    if [ $DIGEST_STATUS -ne 0 ]; then
        echo "Error: Digest helper exited non-zero ($DIGEST_STATUS). Aborting signoff." >&2
        exit 1
-   elif [[ "$DIGEST" =~ ^[a-f0-9]{64}$ ]]; then
+   elif [[ "$DIGEST" =~ ^[a-f0-9]{64}$ && "$T_BYTES" =~ ^[0-9]+$ ]]; then
        STATUS="VERIFIED_BY_HUMAN"
        TRAILER_DIGEST="sha256:$DIGEST"
-   elif [ "$DIGEST" = "unavailable" ]; then
+   elif [ "$DIGEST" = "unavailable" ] && [ "$T_BYTES" = "unavailable" ]; then
        STATUS="VERIFIED_BY_HUMAN_NO_TRANSCRIPT_DIGEST"
        TRAILER_DIGEST="unavailable"
        # REQUIRED ACTION: Present downgraded trailers and request second explicit user confirmation.
@@ -93,32 +115,37 @@ Interrogate user across 4 core axes:
        exit 1
    fi
    ```
-   *If `ANTIGRAVITY_CONVERSATION_ID` is unset or empty, write `Signoff-Conversation-ID: unavailable`; otherwise write `$ANTIGRAVITY_CONVERSATION_ID`.*
+   *Status is derived strictly from transcript availability — never set it manually. Write `$HARNESS_ID`, `$CONV_ID`, `$TRAILER_DIGEST`, and `$T_BYTES` into the trailers exactly as emitted by the helper.*
 
 ```text
+Signoff-Spec-Version: 1.0
 Signoff-Status: <STATUS>
 Signoff-Timestamp: <ISO-8601 UTC timestamp, e.g. date -u +%Y-%m-%dT%H:%M:%SZ>
 Signoff-Base-SHA: <merge-base-sha>
 Signoff-Reviewed-Commit-SHA: <reviewed-commit-sha>
 Signoff-Reviewed-Tree-SHA: <reviewed-tree-sha>
-Signoff-Conversation-ID: <conversation-id-or-unavailable>
+Signoff-Harness-ID: <HARNESS_ID>
+Signoff-Conversation-ID: <CONV_ID>
 Signoff-Transcript-Digest: <TRAILER_DIGEST>
+Signoff-Transcript-Bytes: <T_BYTES>
 Signoff-Tradeoff: <Acknowledged Trade-off 1 or 'none'>
 Signoff-Risk: <Acknowledged Risk 1 or 'none'>
 Signoff-Verified-By: <Confirmed User Email>
-Signoff-Agent: <Executing Agent Name> /signoff v1.0
+Signoff-Agent: <agent-name-and-model>
 ```
-*Note: For missing/unreadable transcripts, use `Signoff-Status: VERIFIED_BY_HUMAN_NO_TRANSCRIPT_DIGEST` and `Signoff-Transcript-Digest: unavailable`. Repeat `Signoff-Tradeoff:` and `Signoff-Risk:` lines for each acknowledged item; use `none` if empty.*
+*Note: For missing/unreadable transcripts, use `Signoff-Status: VERIFIED_BY_HUMAN_NO_TRANSCRIPT_DIGEST` with `Signoff-Transcript-Digest: unavailable` and `Signoff-Transcript-Bytes: unavailable`. Repeat `Signoff-Tradeoff:` and `Signoff-Risk:` lines for each acknowledged item; use `none` if empty.*
 
 ### 4. Commit Execution & Integrity Verification
 
 > [!IMPORTANT]
 > **Worktree Target Mandate:** If signoff is performed on a feature branch (e.g. via `resolve_branches.py` or `/make-feature`), the empty attestation commit MUST be executed inside `worktree_path` directly on the feature branch before pushing to `origin` and merging. Creating attestation commits on the primary workspace branch (e.g. `main`) is strictly prohibited.
 
-Create an empty attestation commit (`git commit --allow-empty`) with the flat trailer block:
+Create an empty attestation commit (`git commit --allow-empty`) with the flat trailer block. Per GSA §2.4, the commit SHOULD be GPG/SSH-signed (`-S`) when a signing key is configured:
 ```bash
 SHORT_SHA=$(git rev-parse --short=7 "<reviewed-commit-sha>")
-git commit --allow-empty -m "[SIGNOFF ${SHORT_SHA}]: human comprehension and risk attestation
+SIGN_FLAG=""
+[ -n "$(git config user.signingkey)" ] && SIGN_FLAG="-S"
+git commit --allow-empty $SIGN_FLAG -m "[SIGNOFF ${SHORT_SHA}]: human comprehension and risk attestation
 
 <trailers>"
 ```
@@ -126,34 +153,58 @@ git commit --allow-empty -m "[SIGNOFF ${SHORT_SHA}]: human comprehension and ris
 
 After successful execution, report the resulting `Signoff-Attestation-Commit-SHA` (`git rev-parse HEAD`).
 
+### 5. Git Notes Persistence (`refs/notes/signoff`)
+
+Per GSA §2.5, mirror the attestation payload into Git Notes so it survives squash merges and post-merge branch deletion. Attach the full attestation message to both the reviewed commit and its tree:
+```bash
+ATTESTATION_SHA=$(git rev-parse HEAD)
+NOTE_BODY=$(git log -1 --format=%B "$ATTESTATION_SHA")
+git notes --ref=signoff append -m "$NOTE_BODY" "<reviewed-commit-sha>"
+git notes --ref=signoff append -m "$NOTE_BODY" "$TREE_SHA"
+```
+
+When pushing, fetch remote notes into a tracking ref and merge with `cat_sort_uniq` first — fetching directly into the local `refs/notes/signoff` is a non-fast-forward update whenever notes have diverged and is rejected:
+```bash
+if git fetch origin +refs/notes/signoff:refs/notes/signoff-remote 2>/dev/null; then
+    git notes --ref=signoff merge -s cat_sort_uniq refs/notes/signoff-remote
+fi
+git push origin refs/notes/signoff
+```
+*The fetch guard tolerates remotes that have no `refs/notes/signoff` yet (first attestation ever pushed).*
+
 ---
 
 ## Verification & Debugging
 
-To manually verify the transcript digest helper logic across all outcome classes:
+To manually verify the harness adapter and transcript digest helper logic across all outcome classes (helper emits exactly 4 lines: harness ID, conversation ID, digest, byte count):
 
-1. **Valid Readable Transcript:**
+1. **Generic Override (any harness):**
+   `SIGNOFF_TRANSCRIPT_FILE="/path/to/transcript" ...`
+   - Output: `generic-file` / conversation ID (or `unavailable`) / 64-hex digest / byte count. Status set to `VERIFIED_BY_HUMAN`. Override takes precedence over all harness env vars.
+
+2. **Antigravity CLI:**
    `ANTIGRAVITY_CONVERSATION_ID="<valid-id>" ...`
+   - Output: `antigravity-cli` / conversation ID / 64-hex digest / byte count. Status set to `VERIFIED_BY_HUMAN`.
+
+3. **Claude Code:**
+   `CLAUDE_CODE_SESSION_ID="<valid-id>" ...` (run from repository root)
+   - Output: `claude-code` / session ID / 64-hex digest / byte count. Status set to `VERIFIED_BY_HUMAN`.
+
+4. **Absent / Unreadable Transcript (any adapter):**
+   e.g. `ANTIGRAVITY_CONVERSATION_ID="nonexistent" ...`
    - Exit status: `0`
-   - Output: 64-character lowercase hex digest. Status set to `VERIFIED_BY_HUMAN`.
+   - Output: harness ID / conversation ID / `unavailable` / `unavailable`. Status set to `VERIFIED_BY_HUMAN_NO_TRANSCRIPT_DIGEST` (requires second user confirmation).
 
-2. **Absent / Unreadable Transcript:**
-   `ANTIGRAVITY_CONVERSATION_ID="nonexistent" ...`
-   - Exit status: `0`
-   - Output: `unavailable`. Status set to `VERIFIED_BY_HUMAN_NO_TRANSCRIPT_DIGEST` (requires second user confirmation).
+5. **No Harness Detected:**
+   All adapter env vars unset -> Output: `unknown` / `unavailable` / `unavailable` / `unavailable`. Downgraded status as in case 4.
 
-3. **Helper / Runtime Failure:**
-   `python3 -c "import sys; sys.exit(1)"`
-   - Exit status: `1` (non-zero)
-   - Action: `exit 1` triggers immediate hard abort. No trailers or commits created.
+6. **Helper / Runtime Failure:**
+   Helper exits non-zero -> `exit 1` triggers immediate hard abort. No trailers or commits created.
 
-4. **Empty Output:**
-   Output is empty -> fails `^[a-f0-9]{64}$` regex -> `exit 1` triggers immediate hard abort.
+7. **Malformed Output:**
+   Digest fails `^[a-f0-9]{64}$` regex or byte count non-numeric (empty output, truncated lines, mixed availability) -> `exit 1` triggers immediate hard abort.
 
-5. **Multi-line Output (e.g. two 32-character lines):**
-   Output contains embedded newline -> fails `^[a-f0-9]{64}$` regex -> `exit 1` triggers immediate hard abort.
-
-6. **`mktemp` Failure:**
+8. **`mktemp` Failure:**
    `mktemp` exits non-zero -> `{ echo ... >&2; exit 1; }` triggers immediate hard abort.
 
 ---
