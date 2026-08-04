@@ -426,6 +426,10 @@ def test_signoff_gsa_protocol_spec_and_trailers():
     ]:
         assert adapter_env in signoff_content, f"Missing '{adapter_env}' adapter resolution in skills/signoff/SKILL.md"
 
+    # Worktree fallback: cwd slug misses inside linked worktrees, so the adapter
+    # must resolve the primary repository root via git-common-dir
+    assert "--git-common-dir" in signoff_content, "Missing worktree git-common-dir fallback in skills/signoff/SKILL.md"
+
     # Git Notes dual persistence with tracking-ref concurrency merge
     assert "refs/notes/signoff" in signoff_content, "Missing 'refs/notes/signoff' persistence in skills/signoff/SKILL.md"
     assert "cat_sort_uniq" in signoff_content, "Missing 'cat_sort_uniq' notes merge strategy in skills/signoff/SKILL.md"

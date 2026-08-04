@@ -57,7 +57,7 @@ Interrogate user across 4 core axes:
    trap 'rm -f -- "$TMP_DIGEST_FILE"' EXIT INT TERM
 
    python3 - <<'PY' > "$TMP_DIGEST_FILE"
-   import hashlib, os
+   import hashlib, os, subprocess
 
    def emit(harness, cid, path):
        digest, nbytes = "unavailable", "unavailable"
@@ -73,6 +73,9 @@ Interrogate user across 4 core axes:
        print(digest)
        print(nbytes)
 
+   def slug(p):
+       return p.replace("/", "-")
+
    override = os.environ.get("SIGNOFF_TRANSCRIPT_FILE", "").strip()
    ag_cid = os.environ.get("ANTIGRAVITY_CONVERSATION_ID", "").strip()
    cc_cid = os.environ.get("CLAUDE_CODE_SESSION_ID", "").strip()
@@ -83,8 +86,18 @@ Interrogate user across 4 core axes:
        emit("antigravity-cli", ag_cid,
             f"~/.gemini/antigravity-cli/brain/{ag_cid}/.system_generated/logs/transcript.jsonl")
    elif cc_cid:
-       slug = os.getcwd().replace("/", "-")
-       emit("claude-code", cc_cid, f"~/.claude/projects/{slug}/{cc_cid}.jsonl")
+       path = f"~/.claude/projects/{slug(os.getcwd())}/{cc_cid}.jsonl"
+       if not os.path.exists(os.path.expanduser(path)):
+           # Worktree fallback: session transcripts are keyed to the primary repo root
+           try:
+               git_dir = subprocess.check_output(
+                   ["git", "rev-parse", "--git-common-dir"],
+                   text=True, stderr=subprocess.DEVNULL).strip()
+               main_root = os.path.abspath(os.path.join(git_dir, os.pardir))
+               path = f"~/.claude/projects/{slug(main_root)}/{cc_cid}.jsonl"
+           except Exception:
+               pass
+       emit("claude-code", cc_cid, path)
    else:
        emit("unknown", None, None)
    PY
@@ -93,7 +106,7 @@ Interrogate user across 4 core axes:
    rm -- "$TMP_DIGEST_FILE"
    trap - EXIT INT TERM
    ```
-   *Harness storage paths are adapter-owned and non-normative (GSA §3.2); the `claude-code` path slug is the absolute working directory with `/` converted to `-`. Run the helper from the repository root so the slug resolves correctly.*
+   *Harness storage paths are adapter-owned and non-normative (GSA §3.2); the `claude-code` path slug is the absolute working directory with `/` converted to `-`. When executed inside a linked worktree (per the Worktree Target Mandate), the cwd slug will not match the session's transcript directory, so the adapter falls back to the primary repository root resolved via `git rev-parse --git-common-dir`.*
 
 4. **Construct Flat Git Trailers & Determine Status:**
    Evaluate helper exit status and exact output strictly. No subsequent trailer construction or commit occurs after an error abort:
@@ -187,8 +200,9 @@ To manually verify the harness adapter and transcript digest helper logic across
    - Output: `antigravity-cli` / conversation ID / 64-hex digest / byte count. Status set to `VERIFIED_BY_HUMAN`.
 
 3. **Claude Code:**
-   `CLAUDE_CODE_SESSION_ID="<valid-id>" ...` (run from repository root)
+   `CLAUDE_CODE_SESSION_ID="<valid-id>" ...`
    - Output: `claude-code` / session ID / 64-hex digest / byte count. Status set to `VERIFIED_BY_HUMAN`.
+   - From a linked worktree: the cwd-slug lookup misses, the `git rev-parse --git-common-dir` fallback resolves the primary repository root slug, and the digest still resolves. Outside any git repo, the fallback exception path degrades cleanly to `unavailable`.
 
 4. **Absent / Unreadable Transcript (any adapter):**
    e.g. `ANTIGRAVITY_CONVERSATION_ID="nonexistent" ...`

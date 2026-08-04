@@ -35,6 +35,7 @@ None at this time. The protocol spec (`v3.1.1`) defines all metadata fields, ada
 - Update header to reference `specs/gsa-core.md`.
 - Expand context & range resolution to record `Signoff-Spec-Version: 1.0`, `Signoff-Harness-ID`, `Signoff-Transcript-Bytes`, and exact base/reviewed commit/tree SHAs.
 - Replace the Antigravity-only digest helper with portable harness adapter resolution (the core portability deliverable). Resolution order: `SIGNOFF_TRANSCRIPT_FILE` explicit override (`generic-file`) → `ANTIGRAVITY_CONVERSATION_ID` (`antigravity-cli`) → `CLAUDE_CODE_SESSION_ID` (`claude-code`, path slug = absolute cwd with `/` → `-`) → `unknown`. The helper emits harness ID, conversation ID, SHA256 digest, and exact byte count (`Signoff-Transcript-Bytes`) as a snapshot at commit time.
+- Worktree compatibility: when the cwd-slug lookup misses (signoff executed inside a linked worktree per the Worktree Target Mandate), the `claude-code` adapter falls back to the primary repository root resolved via `git rev-parse --git-common-dir`, preventing a silent downgrade to `VERIFIED_BY_HUMAN_NO_TRANSCRIPT_DIGEST` when a valid transcript exists.
 - Add signed attestation commit support per spec §2.4: `git commit -S --allow-empty` when `git config user.signingkey` is set.
 - Update trailer schema to include all v1.0 standard fields:
   ```text
