@@ -1,0 +1,32 @@
+{
+  "name": "signoff",
+  "owner": {
+    "name": "jerrylin96",
+    "url": "https://github.com/jerrylin96"
+  },
+  "metadata": {
+    "description": "Marketplace for the signoff plugin: Git Signoff Attestation (GSA) Socratic human-comprehension audit.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "signoff",
+      "source": "./",
+      "description": "Socratic reverse-interview verifying human comprehension, domain risk awareness, and explicit accountability for branch diffs before merging (GSA Protocol v1.0). Maps to /signoff.",
+      "version": "0.1.0",
+      "author": {
+        "name": "jerrylin96"
+      },
+      "license": "MIT",
+      "homepage": "https://github.com/jerrylin96/signoff",
+      "repository": "https://github.com/jerrylin96/signoff",
+      "keywords": [
+        "git",
+        "attestation",
+        "code-review",
+        "signoff",
+        "accountability"
+      ]
+    }
+  ]
+}

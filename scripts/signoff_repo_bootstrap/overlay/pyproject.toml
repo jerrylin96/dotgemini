@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "signoff-mcp"
+version = "0.1.0"
+description = "Git Signoff Attestation (GSA) Protocol v1.0 — deterministic MCP server mechanics for human comprehension attestations"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+dependencies = ["mcp"]
+
+[project.urls]
+Homepage = "https://github.com/jerrylin96/signoff"
+Repository = "https://github.com/jerrylin96/signoff"
+
+[project.scripts]
+signoff-mcp = "signoff_mcp.server:main"
+
+[tool.setuptools.packages.find]
+include = ["signoff_mcp*"]
+exclude = ["signoff_mcp.tests*"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F"]
+ignore = ["E402", "E501"]
