@@ -12,7 +12,7 @@ and this directory is historical (safe to delete).
   `overlay/` (plugin marketplace manifests, packaging, docs, trimmed tests)
   onto the root, applies `apply_skill_edits.py`, and commits with pinned
   identity/timestamps. Every run reproduces the same HEAD SHA
-  (`f9a655d6726b56a51c40e159c6e035eba338d592`), so the repo can be rebuilt and
+  (`28002ee9605bc3bbb15b7b1d7050e2b9dd889405`), so the repo can be rebuilt and
   pushed from any clone. Requires `pip install git-filter-repo`.
 - To publish (once `github.com/jerrylin96/signoff` exists, empty):
   ```bash
