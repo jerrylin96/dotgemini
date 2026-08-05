@@ -52,6 +52,29 @@ Web-specific caveats:
   transcripts, so first-N-bytes re-verification is less reliable than on
   local CLI harnesses.
 
+### Updating the skill
+
+Re-uploading a zip with the same skill name **replaces** the installed copy —
+no delete needed. During active development, skip the upload loop entirely:
+cloud sessions also load project skills committed to the cloned repo's
+`.claude/skills/` (synced from git at session start), so this repo carries a
+`.claude/skills/signoff` symlink and `git push` is the whole update mechanism
+for sessions on this repo. Refresh the user-level (Customize) copy at stable
+milestones only.
+
+### Distribution to end users (no repo linking)
+
+Users on unrelated projects never clone or link this repo:
+
+- **Web sessions, all projects**: claude.ai skill upload (this section) — the
+  only user-scoped channel that reaches cloud sessions; user-installed plugins
+  do not transfer to them.
+- **CLI/desktop, all projects**: Claude Code plugin, user scope (planned
+  distribution channel once the dedicated signoff repo/marketplace exists).
+- **Team repos (web + local)**: a repo-declared plugin line in *their*
+  `.claude/settings.json` — installed at session start from the marketplace.
+- **Other harnesses**: self-contained folder copy (sections below).
+
 ## Claude Code — CLI
 
 Copy the folder to `~/.claude/skills/signoff` (user-level, all projects) or
