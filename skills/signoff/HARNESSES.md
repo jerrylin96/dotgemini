@@ -66,11 +66,14 @@ milestones only.
 
 Users on unrelated projects never clone or link this repo:
 
-- **Web sessions, all projects**: claude.ai skill upload (this section) — the
-  only user-scoped channel that reaches cloud sessions; user-installed plugins
-  do not transfer to them.
-- **CLI/desktop, all projects**: Claude Code plugin, user scope (planned
-  distribution channel once the dedicated signoff repo/marketplace exists).
+- **All projects, any surface**: claude.ai Directory → Plugins → "Add from a
+  repository" syncs a plugin marketplace from a git URL at the account level
+  (planned primary channel once the dedicated signoff repo ships
+  `.claude-plugin/marketplace.json`; account-scoped like account skills —
+  verify cloud-session sync during dogfood). Machine-local plugin installs
+  (`~/.claude/settings.json`) do not transfer to cloud sessions.
+- **Web sessions fallback**: claude.ai skill zip upload (this section) — the
+  proven user-scoped channel that reaches cloud sessions today.
 - **Team repos (web + local)**: a repo-declared plugin line in *their*
   `.claude/settings.json` — installed at session start from the marketplace.
 - **Other harnesses**: self-contained folder copy (sections below).
