@@ -51,6 +51,38 @@ Web-specific caveats:
 - **Weaker append-only assumption** (GSA §2.3): web sessions sync and compact
   transcripts, so first-N-bytes re-verification is less reliable than on
   local CLI harnesses.
+- **`refs/notes/signoff` cannot be pushed from a web session** (verified
+  2026-08-05): the cloud GitHub proxy restricts pushes to the session's
+  working branch and returns HTTP 403 for notes refs (misreported by git as
+  "Everything up-to-date" — verify with `git ls-remote`). The attestation
+  commit still pushes with the branch, so verification falls back to the
+  git-log lookup (GSA §5.1). Recover the notes mirror afterward from any
+  unrestricted clone — the note body is byte-identical to the attestation
+  commit message:
+  ```bash
+  NOTE_BODY=$(git log -1 --format=%B <attestation-sha>)
+  git notes --ref=signoff append -m "$NOTE_BODY" <reviewed-commit-sha>
+  git notes --ref=signoff append -m "$NOTE_BODY" <reviewed-tree-sha>
+  git fetch origin +refs/notes/signoff:refs/notes/signoff-remote &&
+      git notes --ref=signoff merge -s cat_sort_uniq refs/notes/signoff-remote
+  git push origin refs/notes/signoff
+  ```
+
+### Verified-By resolution (all harnesses)
+
+`Signoff-Verified-By` is proposed deterministically, never inferred; the
+human's explicit confirmation of the proposed value remains the
+accountability step. Resolution order:
+
+1. `SIGNOFF_VERIFIED_BY` env override — export once (e.g. shell profile) to
+   pin a canonical identity across harnesses
+2. Harness-authenticated account email (`CLAUDE_CODE_USER_EMAIL` on Claude
+   Code web)
+3. `git config user.email` (local harnesses; on web this is the session
+   identity, not the human — never use it there)
+
+Unifying multiple recorded emails to one human is the read side's job via
+standard `.mailmap`, not the capture side's.
 
 ### Updating the skill
 
