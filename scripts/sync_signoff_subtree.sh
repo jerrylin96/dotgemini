@@ -45,6 +45,19 @@ for prefix in skills/signoff signoff_mcp; do
         git subtree add --prefix="$prefix" --squash "$split" \
             -m "Adopt $prefix as subtree from signoff@${FETCHED:0:7}"
     fi
+
+    # Drift guard: a squash merge succeeds even when local-only edits have
+    # diverged this prefix from upstream, and nothing else ever checks. Fail
+    # loudly instead of leaving the vendored copy silently out of sync.
+    upstream_tree=$(git rev-parse "${FETCHED}:${prefix}")
+    local_tree=$(git rev-parse "HEAD:${prefix}")
+    if [ "$upstream_tree" != "$local_tree" ]; then
+        echo "error: $prefix diverges from upstream after sync" >&2
+        echo "  local  ${local_tree}" >&2
+        echo "  remote ${upstream_tree}" >&2
+        echo "Vendored copies accept changes only via the signoff repo; reconcile there and re-sync." >&2
+        exit 1
+    fi
 done
 
 echo "Done. Run pytest before pushing."
