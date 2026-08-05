@@ -153,3 +153,58 @@ export SIGNOFF_TRANSCRIPT_FILE=/path/to/transcript.log
 
 Adapter resolution order (fixed): `SIGNOFF_TRANSCRIPT_FILE` →
 `ANTIGRAVITY_CONVERSATION_ID` → `CLAUDE_CODE_SESSION_ID` → `CODEX_SESSION_ID`.
+
+## Interviewer provenance (`Signoff-Agent`)
+
+Attestations record who conducted the interview via the `Signoff-Agent`
+trailer (grammar: [specs/gsa-core.md](specs/gsa-core.md) §2.3):
+
+```text
+Signoff-Agent: harness=<id>/<version|N/A> model=<model-id|N/A> reasoning=<level|N/A> interview=<intensity-level>/<profile-id>
+```
+
+Fields are deterministically sourced where the harness exposes them; the
+digest helper emits harness version, model, and reasoning from the same
+transcript snapshot bytes as the digest. Per-harness sources:
+
+| Harness | harness version | model | reasoning |
+|---|---|---|---|
+| Claude Code (web + CLI) | `CLAUDE_CODE_VERSION` | `ANTHROPIC_MODEL` → transcript scan (last `"model"` field) → agent self-report | `CLAUDE_EFFORT` (set on web; CLI only if exported), else `N/A` |
+| Antigravity CLI | `N/A` (not exposed) | transcript scan → self-report | `N/A` (not exposed) |
+| Codex CLI | `N/A` (not exposed) | rollout scan → self-report | `N/A` at skill level (`model_reasoning_effort` lives in `$CODEX_HOME/config.toml` and is not auto-discovered) |
+| Generic / other | `N/A` | transcript scan → self-report | `N/A` |
+
+`interview=` records the intensity level actually run (cursory / standard /
+skeptical, post-escalation) and the active profile's `Profile-ID`.
+Self-reported model values are honest best-effort, not verifiable; where the
+harness records model IDs in the transcript, the transcript digest lets
+auditors re-derive the model from the same bytes.
+
+## Customizing the interview (INTERVIEW PROFILE)
+
+`SKILL.md` contains exactly one delimited block:
+
+```text
+<!-- INTERVIEW-PROFILE:BEGIN (sole customization point — replace only this block) -->
+...
+<!-- INTERVIEW-PROFILE:END -->
+```
+
+This block — and only this block — is the sole customization point of the
+skill. Universal axes, intensity levels, workflow steps, and attestation
+mechanics are fixed: do not edit them. Profiles weight probes *within* the
+universal axes and may add domain emphases; they cannot remove axes or lower
+pass criteria.
+
+To swap domains, replace everything between the markers (inclusive) with the
+block from a shipped profile in [profiles/](profiles/):
+
+- [profiles/software-general.md](profiles/software-general.md) — default:
+  efficiency, data structures, API contracts.
+- [profiles/domain-science.md](profiles/domain-science.md) — research code:
+  unit/dimensional validity, surrogate-vs-ground-truth boundaries,
+  statistical validity, reproducibility.
+
+The `Profile-ID:` line inside the block feeds the `interview=` token of
+`Signoff-Agent`, so every attestation records which profile interviewed the
+human.

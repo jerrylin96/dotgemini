@@ -442,4 +442,79 @@ def test_signoff_gsa_protocol_spec_and_trailers():
     assert "specs/gsa-core.md" in signoff_content, "Missing specs/gsa-core.md reference in skills/signoff/SKILL.md"
 
 
+PROFILE_BLOCK_RE = re.compile(
+    r"<!-- INTERVIEW-PROFILE:BEGIN[^>]*-->\n(.*?)<!-- INTERVIEW-PROFILE:END -->",
+    re.DOTALL,
+)
+
+
+def _extract_profile_block(content, source):
+    blocks = PROFILE_BLOCK_RE.findall(content)
+    assert len(blocks) == 1, f"Expected exactly one INTERVIEW PROFILE block in {source}, found {len(blocks)}"
+    return blocks[0]
+
+
+def test_signoff_phase3c_interview_contract():
+    """Verify Phase 3c: Signoff-Agent provenance grammar, named intensity levels, and the single swappable INTERVIEW PROFILE block."""
+    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+    signoff_md = os.path.join(root_dir, "skills/signoff/SKILL.md")
+    spec_md = os.path.join(root_dir, "skills/signoff/specs/gsa-core.md")
+    harnesses_md = os.path.join(root_dir, "skills/signoff/HARNESSES.md")
+    default_profile_md = os.path.join(root_dir, "skills/signoff/profiles/software-general.md")
+    science_profile_md = os.path.join(root_dir, "skills/signoff/profiles/domain-science.md")
+
+    for path in [signoff_md, spec_md, harnesses_md, default_profile_md, science_profile_md]:
+        assert os.path.exists(path), f"{os.path.relpath(path, root_dir)} does not exist"
+
+    with open(signoff_md, "r", encoding="utf-8") as f:
+        signoff_content = f.read()
+    with open(spec_md, "r", encoding="utf-8") as f:
+        spec_content = f.read()
+    with open(harnesses_md, "r", encoding="utf-8") as f:
+        harnesses_content = f.read()
+    with open(default_profile_md, "r", encoding="utf-8") as f:
+        default_profile_content = f.read()
+    with open(science_profile_md, "r", encoding="utf-8") as f:
+        science_profile_content = f.read()
+
+    # (1) Signoff-Agent provenance grammar defined in the spec and used by the skill
+    for token in ["harness=", "model=", "reasoning=", "interview="]:
+        assert token in signoff_content, f"Signoff-Agent grammar token '{token}' missing from skills/signoff/SKILL.md"
+        assert token in spec_content, f"Signoff-Agent grammar token '{token}' missing from skills/signoff/specs/gsa-core.md"
+    assert "N/A" in spec_content, "Missing N/A convention for unexposed provenance fields in gsa-core.md"
+    # Deterministic sources for the priority harness
+    for env_var in ["CLAUDE_CODE_VERSION", "CLAUDE_EFFORT", "ANTHROPIC_MODEL"]:
+        assert env_var in signoff_content, f"Deterministic provenance source '{env_var}' missing from skills/signoff/SKILL.md"
+
+    # (2) Named intensity levels formalizing --quick/--deep
+    for level in ["cursory", "standard", "skeptical"]:
+        assert level in signoff_content, f"Intensity level '{level}' missing from skills/signoff/SKILL.md"
+    assert "--quick" in signoff_content and "--deep" in signoff_content, "Missing --quick/--deep modifier mapping in skills/signoff/SKILL.md"
+    assert "Interview Intensity Levels" in signoff_content, "Missing Interview Intensity Levels section in skills/signoff/SKILL.md"
+    assert "prediction challenge" in signoff_content, "Missing skeptical-level prediction challenges in skills/signoff/SKILL.md"
+
+    # (3) Exactly one delimited INTERVIEW PROFILE block, byte-identical to the shipped default
+    embedded_block = _extract_profile_block(signoff_content, "skills/signoff/SKILL.md")
+    default_block = _extract_profile_block(default_profile_content, "skills/signoff/profiles/software-general.md")
+    assert embedded_block == default_block, (
+        "Embedded INTERVIEW PROFILE block in SKILL.md diverged from profiles/software-general.md"
+    )
+
+    # Every profile block declares a Profile-ID matching the trailer token grammar
+    for block, source in [
+        (embedded_block, "skills/signoff/SKILL.md"),
+        (science_profile_content, "skills/signoff/profiles/domain-science.md"),
+    ]:
+        pid = re.search(r"^Profile-ID:\s*([a-z0-9-]+)\s*$", block, re.MULTILINE)
+        assert pid, f"Missing or malformed Profile-ID in {source}"
+    assert "Profile-ID: software-general" in embedded_block, "Default embedded profile must be software-general"
+    assert "Profile-ID: domain-science" in science_profile_content, "domain-science profile must declare its Profile-ID"
+
+    # External-user documentation: the block is the sole customization point
+    assert "sole customization point" in signoff_content, "Missing 'sole customization point' marker in skills/signoff/SKILL.md"
+    assert "sole customization point" in harnesses_content, "Missing 'sole customization point' documentation in skills/signoff/HARNESSES.md"
+    assert "profiles/software-general.md" in harnesses_content, "Missing software-general profile reference in HARNESSES.md"
+    assert "profiles/domain-science.md" in harnesses_content, "Missing domain-science profile reference in HARNESSES.md"
+
+
 
