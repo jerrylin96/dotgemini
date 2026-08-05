@@ -31,9 +31,9 @@ on other Antigravity setups, copy the folder per the Portability Rules.
 
 ## Claude Code — web (claude.ai/code)
 
-Preferred: install the signoff **plugin** (see "Distribution to end users"
-below) so `/signoff` follows your account everywhere. The proven fallback is
-installing a **user-level skill** by zip upload:
+The operative web channel is a **user-level skill** installed by zip upload
+(the plugin channel registers in cloud sessions but does not load its skill
+there yet — see "Distribution to end users" below):
 
 1. Zip the folder: `cd skills && zip -r signoff.zip signoff`
 2. In the left panel: **Customize → Skills → Add**, upload the zip.
@@ -100,18 +100,23 @@ milestones only.
 
 Users on unrelated projects never clone or link this repo:
 
-- **All projects, any surface (primary)**: claude.ai Customize → Plugins →
-  Add → "Add marketplace" → "Add from a repository" → `jerrylin96/signoff`,
-  then install the `signoff` plugin (path verified 2026-08-05 — note it lives
-  under Customize, not the Directory). The repo root ships
-  `.claude-plugin/marketplace.json` + `plugin.json`, so the repo itself is the
-  marketplace; installs are account-scoped like account skills (cloud-session
-  sync verification in progress). CLI/desktop equivalent:
-  `/plugin marketplace add jerrylin96/signoff` then
-  `/plugin install signoff@signoff`. Machine-local plugin installs
-  (`~/.claude/settings.json`) do not transfer to cloud sessions.
-- **Web sessions fallback**: claude.ai skill zip upload (this section) — the
-  proven user-scoped channel that reaches cloud sessions today.
+- **Plugin marketplace (primary on CLI/desktop)**: claude.ai Customize →
+  Plugins → Add → "Add marketplace" → "Add from a repository" →
+  `jerrylin96/signoff`, then install the `signoff` plugin (path verified
+  2026-08-05 — note it lives under Customize, not the Directory). CLI
+  equivalent: `/plugin marketplace add jerrylin96/signoff` then
+  `/plugin install signoff@signoff`. The repo root ships
+  `.claude-plugin/marketplace.json` + `plugin.json`, so the repo itself is
+  the marketplace. **Cloud-session caveat (verified 2026-08-05)**: the
+  account-scoped install does sync — cloud sessions list the plugin as
+  enabled — but its bundled skill does not currently load there, so
+  `/signoff` stays unavailable in cloud sessions from this channel alone.
+  Machine-local plugin installs (`~/.claude/settings.json`) do not transfer
+  to cloud sessions either.
+- **Web sessions (operative channel)**: claude.ai skill zip upload (this
+  section) — the proven user-scoped channel that reaches cloud sessions
+  today. Keep the plugin installed alongside; the zip becomes redundant once
+  cloud sessions load plugin skills.
 - **Team repos (web + local)**: a repo-declared plugin line in *their*
   `.claude/settings.json` — installed at session start from the marketplace.
 - **Other harnesses**: self-contained folder copy (sections below).
