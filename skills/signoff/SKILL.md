@@ -30,12 +30,47 @@ Per-harness installation (Antigravity, Claude Code web/CLI, Codex, generic) and 
 3. Record `Base-SHA` (`$BASE_SHA`), `Reviewed-Commit-SHA` (`<reviewed-commit-sha>`), and `Reviewed-Tree-SHA` (`$TREE_SHA`) for the attestation record.
 4. Inspect range diff `git diff "$BASE_SHA...<reviewed-commit-sha>"` to analyze core mechanisms, contract deviations, and silent failure paths prior to starting the interview.
 
-### 2. Socratic Interview Loop (1-2 Probes / Turn)
-Interrogate user across 4 core axes:
+### 2. Socratic Interview Loop
+
+Pace: 1-2 probes per turn. Select the interview intensity level before the first probe; announce any guard-forced escalation to the user.
+
+#### Universal Axes (fixed — applied to every reviewer)
+
 1. **Mechanics & Intent:** Explain what changed and why this specific design was chosen.
-2. **Deviations & Trade-offs:** Identify approximations or relaxed constraints; verify if intentional and acceptable.
-3. **Failure Boundaries & Observability:** Define input/operating limits where code fails/drifts. Ensure failures happen **loudly** (explicit assertions/guards) in dev/test, not silently in production.
+2. **Deviations, Trade-offs & Edge Cases:** Identify approximations, relaxed constraints, and the edge cases the change handles specially (or fails to handle); verify if intentional and acceptable.
+3. **Boundary Conditions & Failure Loudness:** Define input/operating limits where code fails/drifts. Ensure failures happen **loudly** (explicit assertions/guards) in dev/test, not silently in production.
 4. **Ownership:** Confirm explicit accountability for results and risks.
+
+#### Interview Intensity Levels
+
+| Level | Modifier | Probes | Coverage | Pass criteria |
+|---|---|---|---|---|
+| **cursory** | `--quick` | 2 (one turn) | One merged Mechanics & Intent probe; one Ownership probe including the single riskiest consequence | User states in their own words what changed, why, and the riskiest consequence, and explicitly accepts ownership. Any uncertainty or vagueness escalates to standard. |
+| **standard** | *(default)* | 4-6 | At least one probe per universal axis | No axis left with an unresolved vague or uncertain answer after the remediation loop; all silent-failure findings guarded before signoff. |
+| **skeptical** | `--deep` | 8+ | At least two probes per universal axis, including at least two prediction challenges | User predicts concrete behavior (given input → expected output/failure) **before** the agent reveals it; a wrong prediction triggers explanation and a fresh scenario that must pass. Restating the diff does not pass — answers must demonstrate reasoning not present verbatim in the diff. |
+
+Guards:
+- **Cursory eligibility:** The agent MUST refuse cursory and run standard — stating the escalation — when the diff is large or high-risk: more than 5 files or 200 changed lines, schema/API/data-integrity changes, or areas flagged by the active interview profile.
+- **One-way escalation:** Escalate whenever pass criteria are not met; never de-escalate within a session.
+- Record the level actually run (post-escalation) in the `interview=` token of `Signoff-Agent`.
+
+#### Interview Profile (sole customization point)
+
+The block below weights probes *within* the universal axes for the active domain. It is the only supported customization point of this skill — profiles may add domain emphases but cannot remove axes or lower pass criteria. Swap instructions and shipped profiles: [HARNESSES.md](HARNESSES.md), [profiles/](profiles/).
+
+<!-- INTERVIEW-PROFILE:BEGIN (sole customization point — replace only this block) -->
+### Interview Profile: software-general
+Profile-ID: software-general
+
+Domain emphases — weight probes within the universal axes; never remove axes
+or lower pass criteria:
+- **Efficiency:** algorithmic complexity and hot-path cost of the chosen
+  design; what input scale breaks the current approach.
+- **Data structures:** invariants of the chosen structures, which operations
+  can corrupt them, and why this representation over alternatives.
+- **API contracts:** caller-visible behavior changes, error contracts, and
+  backward compatibility of interfaces the diff touches.
+<!-- INTERVIEW-PROFILE:END -->
 
 **Evaluation & Remediation:**
 - **Uncertainty / Vague / Hand-waving:** If the user expresses uncertainty ("not sure", "don't know") OR gives vague/hand-waving answers, the agent MUST pause signoff, explain the mechanics and boundaries via **@skill:explain-diff**, and re-probe with a scenario before requesting approval.
@@ -59,10 +94,29 @@ Interrogate user across 4 core axes:
    trap 'rm -f -- "$TMP_DIGEST_FILE"' EXIT INT TERM
 
    python3 - <<'PY' > "$TMP_DIGEST_FILE"
-   import hashlib, os, subprocess
+   import hashlib, os, re, subprocess
+
+   TOKEN = re.compile(r"^[A-Za-z0-9._:/-]+$")
+
+   def agent_fields(data):
+       # Interviewer provenance (Signoff-Agent): deterministic where exposed.
+       # Version/reasoning are Claude Code env vars; scope them to that harness.
+       in_claude_code = bool(os.environ.get("CLAUDE_CODE_SESSION_ID", "").strip())
+       hver = os.environ.get("CLAUDE_CODE_VERSION", "").strip() if in_claude_code else ""
+       reasoning = os.environ.get("CLAUDE_EFFORT", "").strip() if in_claude_code else ""
+       model = os.environ.get("ANTHROPIC_MODEL", "").strip()
+       if not model and data:
+           # Same snapshot bytes as the digest — never a second read.
+           hits = re.findall(rb'"model"\s*:\s*"([^"]+)"', data)
+           if hits:
+               model = hits[-1].decode("utf-8", "replace")
+       return [
+           value if value and TOKEN.match(value) else missing
+           for value, missing in ((hver, "N/A"), (model, "unavailable"), (reasoning, "N/A"))
+       ]
 
    def emit(harness, cid, path):
-       digest, nbytes = "unavailable", "unavailable"
+       digest, nbytes, data = "unavailable", "unavailable", None
        if path:
            try:
                with open(os.path.expanduser(path), "rb") as f:
@@ -74,6 +128,8 @@ Interrogate user across 4 core axes:
        print(cid if cid else "unavailable")
        print(digest)
        print(nbytes)
+       for line in agent_fields(data):
+           print(line)
 
    def slug(p):
        return p.replace("/", "-")
@@ -104,7 +160,8 @@ Interrogate user across 4 core axes:
        emit("unknown", None, None)
    PY
    DIGEST_STATUS=$?
-   { read -r HARNESS_ID; read -r CONV_ID; read -r DIGEST; read -r T_BYTES; } < "$TMP_DIGEST_FILE"
+   { read -r HARNESS_ID; read -r CONV_ID; read -r DIGEST; read -r T_BYTES; \
+     read -r AGENT_HVER; read -r AGENT_MODEL; read -r AGENT_REASONING; } < "$TMP_DIGEST_FILE"
    rm -- "$TMP_DIGEST_FILE"
    trap - EXIT INT TERM
    ```
@@ -129,6 +186,12 @@ Interrogate user across 4 core axes:
        echo "Error: Unexpected or malformed digest output. Aborting signoff." >&2
        exit 1
    fi
+   for v in "$AGENT_HVER" "$AGENT_MODEL" "$AGENT_REASONING"; do
+       if ! [[ "$v" =~ ^[A-Za-z0-9._:/-]+$ ]]; then
+           echo "Error: Malformed Signoff-Agent provenance field '${v}'. Aborting signoff." >&2
+           exit 1
+       fi
+   done
    ```
    *Status is derived strictly from transcript availability — never set it manually. Write `$HARNESS_ID`, `$CONV_ID`, `$TRAILER_DIGEST`, and `$T_BYTES` into the trailers exactly as emitted by the helper.*
 
@@ -146,9 +209,11 @@ Signoff-Transcript-Bytes: <T_BYTES>
 Signoff-Tradeoff: <Acknowledged Trade-off 1 or 'none'>
 Signoff-Risk: <Acknowledged Risk 1 or 'none'>
 Signoff-Verified-By: <Confirmed User Email>
-Signoff-Agent: <agent-name-and-model>
+Signoff-Agent: harness=<HARNESS_ID>/<AGENT_HVER> model=<AGENT_MODEL> reasoning=<AGENT_REASONING> interview=<intensity-level>/<profile-id>
 ```
 *Note: For missing/unreadable transcripts, use `Signoff-Status: VERIFIED_BY_HUMAN_NO_TRANSCRIPT_DIGEST` with `Signoff-Transcript-Digest: unavailable` and `Signoff-Transcript-Bytes: unavailable`. Repeat `Signoff-Tradeoff:` and `Signoff-Risk:` lines for each acknowledged item; use `none` if empty.*
+
+*`Signoff-Agent` provenance (grammar: [specs/gsa-core.md](specs/gsa-core.md) §2.3): space-separated `key=value` tokens, values matching `[A-Za-z0-9._:/-]+`. When `<AGENT_MODEL>` is `unavailable`, substitute the agent's self-reported model identifier (use `N/A` only if genuinely unknown); keep `<AGENT_HVER>` and `<AGENT_REASONING>` exactly as emitted (`N/A` when the harness exposes none). `<intensity-level>` is the interview level actually run (post-escalation); `<profile-id>` is the `Profile-ID` of the active INTERVIEW PROFILE block.*
 
 ### 4. Commit Execution & Integrity Verification
 
@@ -191,7 +256,7 @@ git push origin refs/notes/signoff
 
 ## Verification & Debugging
 
-To manually verify the harness adapter and transcript digest helper logic across all outcome classes (helper emits exactly 4 lines: harness ID, conversation ID, digest, byte count):
+To manually verify the harness adapter and transcript digest helper logic across all outcome classes (helper emits exactly 7 lines: harness ID, conversation ID, digest, byte count, harness version, model, reasoning level):
 
 1. **Generic Override (any harness):**
    `SIGNOFF_TRANSCRIPT_FILE="/path/to/transcript" ...`
@@ -204,6 +269,7 @@ To manually verify the harness adapter and transcript digest helper logic across
 3. **Claude Code:**
    `CLAUDE_CODE_SESSION_ID="<valid-id>" ...`
    - Output: `claude-code` / session ID / 64-hex digest / byte count. Status set to `VERIFIED_BY_HUMAN`.
+   - Provenance lines: harness version from `CLAUDE_CODE_VERSION`, model from `ANTHROPIC_MODEL` else the last `"model"` field of the transcript snapshot bytes, reasoning from `CLAUDE_EFFORT`. Unset sources degrade to `N/A` (version, reasoning) or `unavailable` (model).
    - From a linked worktree: the cwd-slug lookup misses, the `git rev-parse --git-common-dir` fallback resolves the primary repository root slug, and the digest still resolves. Outside any git repo, the fallback exception path degrades cleanly to `unavailable`.
 
 4. **Absent / Unreadable Transcript (any adapter):**
@@ -212,13 +278,13 @@ To manually verify the harness adapter and transcript digest helper logic across
    - Output: harness ID / conversation ID / `unavailable` / `unavailable`. Status set to `VERIFIED_BY_HUMAN_NO_TRANSCRIPT_DIGEST` (requires second user confirmation).
 
 5. **No Harness Detected:**
-   All adapter env vars unset -> Output: `unknown` / `unavailable` / `unavailable` / `unavailable`. Downgraded status as in case 4.
+   All adapter env vars unset -> Output: `unknown` / `unavailable` / `unavailable` / `unavailable` / `N/A` / `unavailable` / `N/A`. Downgraded status as in case 4.
 
 6. **Helper / Runtime Failure:**
    Helper exits non-zero -> `exit 1` triggers immediate hard abort. No trailers or commits created.
 
 7. **Malformed Output:**
-   Digest fails `^[a-f0-9]{64}$` regex or byte count non-numeric (empty output, truncated lines, mixed availability) -> `exit 1` triggers immediate hard abort.
+   Digest fails `^[a-f0-9]{64}$` regex, byte count non-numeric, or any provenance field fails `^[A-Za-z0-9._:/-]+$` (empty output, truncated lines, mixed availability) -> `exit 1` triggers immediate hard abort.
 
 8. **`mktemp` Failure:**
    `mktemp` exits non-zero -> `{ echo ... >&2; exit 1; }` triggers immediate hard abort.
@@ -226,6 +292,7 @@ To manually verify the harness adapter and transcript digest helper logic across
 ---
 
 ## Modifiers
-- `/signoff`: Standard audit (4 axes).
-- `/signoff --quick`: Streamlined 2-probe audit for small diffs.
-- `/signoff --deep`: Intensive boundary & trade-off audit.
+Modifiers select the named interview-intensity level (see Interview Intensity Levels):
+- `/signoff`: **standard** intensity (default).
+- `/signoff --quick`: **cursory** intensity — subject to the cursory-eligibility guard (auto-escalates to standard on large or high-risk diffs).
+- `/signoff --deep`: **skeptical** intensity.

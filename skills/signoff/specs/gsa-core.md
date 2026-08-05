@@ -1,6 +1,6 @@
 # Specification: Portable Git Signoff Attestation (GSA) Protocol Core
 
-**Document Version:** 3.1.1  
+**Document Version:** 3.2.0  
 **Status:** Draft / Pending Review (Stage 1a)  
 **Target Scope:** `signoff` skill portability, MCP Server, Harness Adapters, Git Notes Attestation, and Open Commit Protocol Core  
 **Canonical Spec Location:** `skills/signoff/specs/gsa-core.md`  
@@ -42,7 +42,7 @@ Signoff-Tradeoff: <acknowledged-tradeoff-1>
 Signoff-Tradeoff: <acknowledged-tradeoff-2>
 Signoff-Risk: <acknowledged-risk-1>
 Signoff-Verified-By: <confirmed-user-email>
-Signoff-Agent: <agent-name-and-model>
+Signoff-Agent: harness=<harness-id>/<version|N/A> model=<model-id|N/A> reasoning=<level|N/A> interview=<intensity-level>/<profile-id>
 ```
 
 *(Note: Optional cloud trailers like `Signoff-Cloud-Attestation-URL` are omitted entirely when unconfigured rather than written as `none`.)*
@@ -68,6 +68,10 @@ Signoff-Agent: <agent-name-and-model>
 - `Signoff-Tradeoff` & `Signoff-Risk`:
   - **Repeat Rule:** Repeat the trailer key for each item acknowledged during interview.
   - **Empty Rule:** Write `Signoff-Tradeoff: none` or `Signoff-Risk: none` exactly once if zero items were identified.
+- `Signoff-Agent` (Interviewer Provenance):
+  - **Grammar (SHOULD):** `harness=<id>/<version|N/A> model=<model-id|N/A> reasoning=<level|N/A> interview=<intensity-level>/<profile-id>` — space-separated `key=value` tokens in this fixed order, each value matching `[A-Za-z0-9._:/-]+`; the literal `N/A` marks fields the harness does not expose.
+  - **Sourcing:** `harness` mirrors `Signoff-Harness-ID` plus the harness version. `model` and `reasoning` identify the interviewing agent, deterministically sourced where the harness provides them (environment variables, transcript metadata from the same snapshot bytes as the digest), agent-self-reported otherwise. `interview` records the interview-intensity level actually run and the active INTERVIEW PROFILE identifier (both defined in the skill layer, `skills/signoff/SKILL.md`).
+  - **Backward Compatibility:** Values not matching this grammar (including all pre-3c attestations) remain valid opaque strings; verifiers MUST NOT reject an attestation on `Signoff-Agent` format.
 
 ### 2.4 Cryptographic Developer Identity Binding
 To bind an attestation to a verified human developer identity:
@@ -171,6 +175,6 @@ To verify if a target commit or tree was attested:
 - [x] Phase 2: `signoff-mcp` package (`signoff_mcp/`) — programmatic `TranscriptProvider` adapters (incl. worktree fallback and an additive Codex adapter; §3.2 is informative), MCP tools `signoff_prepare`/`signoff_commit`/`signoff_push_notes` with server-derived status, the `ack_no_transcript` circuit breaker, stale-state checks (§4), and `cat_sort_uniq` notes push flow (§2.5). Covered by `signoff_mcp/tests/`, including the production `[SIGNOFF 453c633]` attestation as a test vector (whose stale trailer tree SHA documents the failure class server-side derivation eliminates).
 - [ ] Phase 3a (Portability): per-harness install & portability guide (`skills/signoff/HARNESSES.md`); skill folder self-contained for copy-paste installation as a user-level Claude Code skill.
 - [ ] Phase 3b (Dogfood): end-to-end `/signoff` runs on Claude Code web, Antigravity (ongoing), and ChatGPT Codex. Exit gate: one pushed attestation per harness in `refs/notes/signoff`.
-- [ ] Phase 3c (Interview Customization & Transparency): (1) attestations record interviewer provenance — harness, model, and reasoning level (`N/A` when the harness exposes none) — via a defined `Signoff-Agent` format, deterministically sourced where the harness provides it; (2) named interview-intensity levels spanning cursory (high-level comprehension check) to skeptical (user must demonstrably prove understanding), formalizing the `--quick`/`--deep` modifiers with explicit probe counts and pass criteria per level; (3) SKILL.md restructured to be modular: fixed universal axes applied to every reviewer (edge cases, boundary conditions, failure loudness, ownership) plus exactly one clearly-delimited swappable INTERVIEW PROFILE text block for domain customization (e.g. domain-science validity for researchers; efficiency and data structures for software engineers), with external-user documentation stating that this block — and only this block — is the customization point.
+- [x] Phase 3c (Interview Customization & Transparency): (1) attestations record interviewer provenance — harness, model, and reasoning level (`N/A` when the harness exposes none) — via a defined `Signoff-Agent` format (§2.3), deterministically sourced where the harness provides it; (2) named interview-intensity levels spanning cursory (high-level comprehension check) to skeptical (user must demonstrably prove understanding), formalizing the `--quick`/`--deep` modifiers with explicit probe counts and pass criteria per level; (3) SKILL.md restructured to be modular: fixed universal axes applied to every reviewer (edge cases, boundary conditions, failure loudness, ownership) plus exactly one clearly-delimited swappable INTERVIEW PROFILE text block for domain customization (shipped profiles in `skills/signoff/profiles/`: `software-general` for efficiency/data-structures, `domain-science` for research validity), with external-user documentation in `skills/signoff/HARNESSES.md` stating that this block — and only this block — is the customization point. Contract enforced by `scripts/tests/test_skill_references.py::test_signoff_phase3c_interview_contract`.
 - [ ] Phase 4 (Extraction & Distribution): dedicated signoff GitHub repository (history carried via `git filter-repo`), consumed by this repo via submodule or subtree; project website (GitHub Pages first). The repo MUST double as a Claude Code plugin marketplace: `.claude-plugin/marketplace.json` at root plus a plugin manifest (`.claude-plugin/plugin.json`) wrapping the skill, so users install via claude.ai Directory → Plugins → "Add from a repository" (account-scoped; verify cloud-session sync during dogfood) or `/plugin marketplace add` on CLI/desktop. The plugin SHOULD also bundle the `signoff-mcp` MCP server (requires publishing to PyPI — reserve the package name) so one install delivers skill + server-side enforcement. Remaining channels, no repo linking anywhere: claude.ai skill zip upload (web user scope fallback; machine-local user plugins do not transfer to cloud sessions), repo-declared `.claude/settings.json` plugin for team repos, self-contained folder copy for other harnesses per `skills/signoff/HARNESSES.md`.
 - [ ] Phase 5 (Cloud): promote `gsa-cloud-concept.md` to a reviewed spec (privacy/encryption design first), then transcript escrow storage. Payment options deferred until a non-trivial user base exists.
