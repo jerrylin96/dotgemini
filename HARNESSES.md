@@ -35,7 +35,9 @@ The operative web channel is a **user-level skill** installed by zip upload
 (the plugin channel registers in cloud sessions but does not load its skill
 there yet — see "Distribution to end users" below):
 
-1. Zip the folder: `cd skills && zip -r signoff.zip signoff`
+1. Get `signoff.zip` — download the CI-built asset from the
+   [latest release](https://github.com/jerrylin96/signoff/releases/latest/download/signoff.zip),
+   or build it from a current checkout: `cd skills && zip -r signoff.zip signoff`
 2. In the left panel: **Customize → Skills → Add**, upload the zip.
 3. Invoke with `/signoff` in any session.
 
@@ -98,7 +100,8 @@ milestones only.
 
 ### Distribution to end users (no repo linking)
 
-Users on unrelated projects never clone or link this repo:
+Users on unrelated projects never clone or link this repo. **Pick exactly
+one channel for your surface** — none requires another:
 
 - **Plugin marketplace (primary on CLI/desktop)**: claude.ai Customize →
   Plugins → Add → "Add marketplace" → "Add from a repository" →
@@ -114,11 +117,15 @@ Users on unrelated projects never clone or link this repo:
   Machine-local plugin installs (`~/.claude/settings.json`) do not transfer
   to cloud sessions either.
 - **Web sessions (operative channel)**: claude.ai skill zip upload (this
-  section) — the proven user-scoped channel that reaches cloud sessions
-  today. Keep the plugin installed alongside; the zip becomes redundant once
-  cloud sessions load plugin skills.
-- **Team repos (web + local)**: a repo-declared plugin line in *their*
-  `.claude/settings.json` — installed at session start from the marketplace.
+  section) using the CI-built `signoff.zip` from the
+  [latest release](https://github.com/jerrylin96/signoff/releases/latest/download/signoff.zip)
+  — the proven user-scoped channel that reaches cloud sessions today. A zip
+  is a snapshot: it updates only when re-uploaded, so re-download on new
+  releases. This channel retires once cloud sessions load plugin skills.
+- **Team repos (web + local)**: declare the plugin under
+  [`enabledPlugins`](https://code.claude.com/docs/en/settings#enabledplugins)
+  in *their* `.claude/settings.json` — installed at session start from the
+  marketplace and auto-updating, per-repo rather than account-scoped.
 - **Other harnesses**: self-contained folder copy (sections below).
 
 ## Claude Code — CLI
