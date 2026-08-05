@@ -79,7 +79,7 @@ or lower pass criteria:
 ### 3. User Approval & Attestation
 
 > [!NOTE]
-> **Scratchpad Lifecycle Sync (make-feature Phase 4, Step 8)**: If `<appDataDir>/brain/<conversation-id>/scratch/scratchpad.md` exists, ensure it is updated pre-signoff with final completion status, matching Step 8 in [make-feature](../make-feature/SKILL.md). If the scratchpad file does not exist (e.g. post-Phase-4 cleanup or standalone `/signoff` execution), skip this step rather than recreating it.
+> **Scratchpad Lifecycle Sync (make-feature Phase 4, Step 8)**: If `<appDataDir>/brain/<conversation-id>/scratch/scratchpad.md` exists, ensure it is updated pre-signoff with final completion status, matching Step 8 of the make-feature skill (in harnesses that ship it). If the scratchpad file does not exist (e.g. post-Phase-4 cleanup or standalone `/signoff` execution), skip this step rather than recreating it.
 
 1. **Request Explicit User Approval:**
    Present proposed trade-offs, risks, and `Signoff-Verified-By` email. Propose the email deterministically, in order: `SIGNOFF_VERIFIED_BY` env override → harness-authenticated account email (`CLAUDE_CODE_USER_EMAIL` on Claude Code) → `git config user.email` (local harnesses only — in cloud sessions git config holds the session identity, not the human; see [HARNESSES.md](HARNESSES.md)). The human's explicit confirmation of the proposed value is the accountability step. Confirm user readiness to proceed with empty attestation commit (`git commit --allow-empty`).

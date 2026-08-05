@@ -22,18 +22,22 @@ Canonical protocol: [specs/gsa-core.md](specs/gsa-core.md).
 
 ## Antigravity CLI (native)
 
-Nothing to install: this repo is the Antigravity global config; the skill is
-indexed in `AGENTS.md` and maps to `/signoff`.
+In the [dotgemini](https://github.com/jerrylin96/dotgemini) Antigravity global
+config this skill is indexed natively in `AGENTS.md` and maps to `/signoff`;
+on other Antigravity setups, copy the folder per the Portability Rules.
 
 - Transcript env: `ANTIGRAVITY_CONVERSATION_ID`
 - Transcript path: `~/.gemini/antigravity-cli/brain/<cid>/.system_generated/logs/transcript.jsonl`
 
 ## Claude Code — web (claude.ai/code)
 
-Claude Code does not read this repo's root `skills/` layout. Install signoff as
-a **user-level skill** so it follows you across sessions and repositories:
+The operative web channel is a **user-level skill** installed by zip upload
+(the plugin channel registers in cloud sessions but does not load its skill
+there yet — see "Distribution to end users" below):
 
-1. Zip the folder: `cd skills && zip -r signoff.zip signoff`
+1. Get `signoff.zip` — download the CI-built asset from the
+   [latest release](https://github.com/jerrylin96/signoff/releases/latest/download/signoff.zip),
+   or build it from a current checkout: `cd skills && zip -r signoff.zip signoff`
 2. In the left panel: **Customize → Skills → Add**, upload the zip.
 3. Invoke with `/signoff` in any session.
 
@@ -96,18 +100,32 @@ milestones only.
 
 ### Distribution to end users (no repo linking)
 
-Users on unrelated projects never clone or link this repo:
+Users on unrelated projects never clone or link this repo. **Pick exactly
+one channel for your surface** — none requires another:
 
-- **All projects, any surface**: claude.ai Directory → Plugins → "Add from a
-  repository" syncs a plugin marketplace from a git URL at the account level
-  (planned primary channel once the dedicated signoff repo ships
-  `.claude-plugin/marketplace.json`; account-scoped like account skills —
-  verify cloud-session sync during dogfood). Machine-local plugin installs
-  (`~/.claude/settings.json`) do not transfer to cloud sessions.
-- **Web sessions fallback**: claude.ai skill zip upload (this section) — the
-  proven user-scoped channel that reaches cloud sessions today.
-- **Team repos (web + local)**: a repo-declared plugin line in *their*
-  `.claude/settings.json` — installed at session start from the marketplace.
+- **Plugin marketplace (primary on CLI/desktop)**: claude.ai Customize →
+  Plugins → Add → "Add marketplace" → "Add from a repository" →
+  `jerrylin96/signoff`, then install the `signoff` plugin (path verified
+  2026-08-05 — note it lives under Customize, not the Directory). CLI
+  equivalent: `/plugin marketplace add jerrylin96/signoff` then
+  `/plugin install signoff@signoff`. The repo root ships
+  `.claude-plugin/marketplace.json` + `plugin.json`, so the repo itself is
+  the marketplace. **Cloud-session caveat (verified 2026-08-05)**: the
+  account-scoped install does sync — cloud sessions list the plugin as
+  enabled — but its bundled skill does not currently load there, so
+  `/signoff` stays unavailable in cloud sessions from this channel alone.
+  Machine-local plugin installs (`~/.claude/settings.json`) do not transfer
+  to cloud sessions either.
+- **Web sessions (operative channel)**: claude.ai skill zip upload (this
+  section) using the CI-built `signoff.zip` from the
+  [latest release](https://github.com/jerrylin96/signoff/releases/latest/download/signoff.zip)
+  — the proven user-scoped channel that reaches cloud sessions today. A zip
+  is a snapshot: it updates only when re-uploaded, so re-download on new
+  releases. This channel retires once cloud sessions load plugin skills.
+- **Team repos (web + local)**: declare the plugin under
+  [`enabledPlugins`](https://code.claude.com/docs/en/settings#enabledplugins)
+  in *their* `.claude/settings.json` — installed at session start from the
+  marketplace and auto-updating, per-repo rather than account-scoped.
 - **Other harnesses**: self-contained folder copy (sections below).
 
 ## Claude Code — CLI
@@ -122,7 +140,7 @@ Optional MCP enforcement (server-derived status, `ack_no_transcript` circuit
 breaker, stale-state checks — GSA §4):
 
 ```bash
-pip install "dotgemini[mcp] @ git+https://github.com/jerrylin96/dotgemini"
+pip install "signoff-mcp @ git+https://github.com/jerrylin96/signoff"
 claude mcp add signoff -- signoff-mcp   # server must run with cwd = target repo
 ```
 
