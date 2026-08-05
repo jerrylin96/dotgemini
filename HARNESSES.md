@@ -100,9 +100,10 @@ milestones only.
 
 Users on unrelated projects never clone or link this repo:
 
-- **All projects, any surface (primary)**: claude.ai Directory → Plugins →
-  "Add from a repository" → `https://github.com/jerrylin96/signoff`, then
-  install the `signoff` plugin. The repo root ships
+- **All projects, any surface (primary)**: claude.ai Customize → Plugins →
+  Add → "Add marketplace" → "Add from a repository" → `jerrylin96/signoff`,
+  then install the `signoff` plugin (path verified 2026-08-05 — note it lives
+  under Customize, not the Directory). The repo root ships
   `.claude-plugin/marketplace.json` + `plugin.json`, so the repo itself is the
   marketplace; installs are account-scoped like account skills (cloud-session
   sync verification in progress). CLI/desktop equivalent:
