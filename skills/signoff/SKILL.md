@@ -14,6 +14,8 @@ Intentional trade-offs (e.g. surrogates violating exact domain laws for speed) p
 
 Attestations follow the **Git Signoff Attestation (GSA) Protocol v1.0** defined in [specs/gsa-core.md](specs/gsa-core.md): portable flat trailers, harness-agnostic transcript adapters, and dual persistence (empty commit + `refs/notes/signoff`).
 
+Per-harness installation (Antigravity, Claude Code web/CLI, Codex, generic) and portability rules: [HARNESSES.md](HARNESSES.md). Outside Antigravity, `@skill:` references degrade gracefully — explain diff mechanics inline when the referenced skill is unavailable.
+
 ---
 
 ## Workflow
