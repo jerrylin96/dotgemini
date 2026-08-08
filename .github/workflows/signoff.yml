@@ -102,8 +102,8 @@ jobs:
           }
 
           # --- Check 1: Empty GSA Attestation Commit on HEAD ---
-          HEAD_PAYLOAD=$(git log -1 --format="%B" HEAD)
-          if git rev-parse --verify -q HEAD~1 >/dev/null; then
+          HEAD_PAYLOAD=$(git log -1 --format="%(trailers:only=true)" HEAD)
+          if [ -n "$HEAD_PAYLOAD" ] && git rev-parse --verify -q HEAD~1 >/dev/null; then
             PARENT_TREE=$(git rev-parse HEAD~1^{tree} 2>/dev/null || true)
             PARENT_SHA=$(git rev-parse HEAD~1 2>/dev/null || true)
             if [ "$PARENT_TREE" = "$HEAD_TREE" ]; then
