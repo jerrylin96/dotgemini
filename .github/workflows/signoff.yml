@@ -109,7 +109,7 @@ jobs:
 
             [ -n "$payload" ] || return 1
 
-            python3 scripts/validate_gsa_note.py "$payload" "$expected_tree" "$expected_commit"
+            printf '%s\n' "$payload" | python3 scripts/validate_gsa_note.py - "$expected_tree" "$expected_commit"
           }
 
           # --- Check 1: Empty GSA Attestation Commit on HEAD ---

@@ -431,6 +431,28 @@ def test_note_missing_verified_by_fails(tmp_path):
     assert res.returncode == 1
 
 
+def test_lowercase_trailer_keys_fail(tmp_path):
+    """Verify that a note with lowercase trailer keys is rejected (GSA §2.1 & §2.3 case-sensitivity)."""
+    repo = str(tmp_path)
+    setup_git_repo(repo)
+
+    subprocess.run(["git", "commit", "--allow-empty", "-m", "Feature commit"], cwd=repo, check=True)
+    head_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+    tree_sha = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+
+    note_content = (
+        f"signoff-spec-version: 1.0\n"
+        f"signoff-status: VERIFIED_BY_HUMAN\n"
+        f"signoff-reviewed-commit-sha: {head_sha}\n"
+        f"signoff-reviewed-tree-sha: {tree_sha}\n"
+        f"signoff-verified-by: alice@example.com"
+    )
+    subprocess.run(["git", "notes", "--ref=signoff", "add", "-m", note_content], cwd=repo, check=True)
+
+    res = run_verification_in_repo(repo)
+    assert res.returncode == 1
+
+
 def test_conformance_vectors(tmp_path):
     """Pin the gate against the shared GSA v1.0 conformance suite (Task 2)."""
     import json

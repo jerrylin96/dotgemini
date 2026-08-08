@@ -18,16 +18,14 @@ SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 
 
 def parse_trailers(text: str) -> dict[str, list[str]]:
-    """Extract Signoff-* trailers from text block."""
+    """Extract Signoff-* trailers from text block using exact case-sensitive keys (GSA §2.1 & §2.3)."""
     trailers: dict[str, list[str]] = {}
     for line in text.splitlines():
         line = line.strip()
-        m = re.match(r"^(Signoff-[A-Za-z0-9-]+):\s*(.*)$", line, re.IGNORECASE)
+        m = re.match(r"^(Signoff-[A-Za-z0-9-]+):\s*(.*)$", line)
         if m:
             key = m.group(1)
-            # Normalize casing for canonical lookup
-            canonical_key = "-".join(part.capitalize() for part in key.split("-"))
-            trailers.setdefault(canonical_key, []).append(m.group(2).strip())
+            trailers.setdefault(key, []).append(m.group(2).strip())
     return trailers
 
 
@@ -37,8 +35,8 @@ def check_block(text: str, expected_tree: str = "", expected_commit: str = "") -
 
     specs = trailers.get("Signoff-Spec-Version", [])
     statuses = trailers.get("Signoff-Status", [])
-    trees = trailers.get("Signoff-Reviewed-Tree-Sha", [])
-    commits = trailers.get("Signoff-Reviewed-Commit-Sha", [])
+    trees = trailers.get("Signoff-Reviewed-Tree-SHA", [])
+    commits = trailers.get("Signoff-Reviewed-Commit-SHA", [])
     verified_bys = trailers.get("Signoff-Verified-By", [])
 
     # Mandatory trailers check (GSA §2.1 & §2.5)
