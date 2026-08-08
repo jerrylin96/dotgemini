@@ -275,11 +275,26 @@ def commit(
 
 
 def push_notes(repo: GitRepo, remote: str = "origin") -> dict:
-    """Push refs/notes/signoff via the §2.5 tracking-ref cat_sort_uniq merge.
+    """Push active feature branch and refs/notes/signoff via the §2.5 tracking-ref cat_sort_uniq merge.
 
-    The fetch guard tolerates remotes with no signoff notes yet (first
-    attestation ever pushed). All git failures surface as SignoffPushError.
+    The branch push auto-pushes the active feature branch (if on a named branch) to remote;
+    failures are captured non-blockingly as branch_push_warning so notes sync/push proceeds.
+    The fetch guard tolerates remotes with no signoff notes yet (first attestation ever pushed).
+    All notes push git failures surface as SignoffPushError.
     """
+    branch = repo.out("rev-parse", "--abbrev-ref", "HEAD").strip()
+    branch_pushed = False
+    branch_push_warning = None
+
+    if branch != "HEAD":
+        b_push = repo.git("push", remote, branch, check=False)
+        if b_push.returncode == 0:
+            branch_pushed = True
+        else:
+            branch_push_warning = f"Failed to push branch '{branch}' to {remote}: {b_push.stderr.strip()}"
+    else:
+        branch_push_warning = "Detached HEAD detected; skipping feature branch push"
+
     fetch = repo.git("fetch", remote, f"+{NOTES_REF}:{NOTES_TRACKING_REF}", check=False)
     merged = False
     if fetch.returncode == 0:
@@ -287,10 +302,25 @@ def push_notes(repo: GitRepo, remote: str = "origin") -> dict:
         if merge.returncode != 0:
             raise SignoffPushError(f"Notes merge failed: {merge.stderr.strip()}")
         merged = True
-    push = repo.git("push", remote, NOTES_REF, check=False)
-    if push.returncode != 0:
-        raise SignoffPushError(f"Notes push failed: {push.stderr.strip()}")
-    return {"remote": remote, "merged_remote_notes": merged, "pushed": True}
+
+    has_local_notes = repo.git("rev-parse", "--verify", "-q", NOTES_REF, check=False).returncode == 0
+    pushed = False
+    if has_local_notes:
+        push = repo.git("push", remote, NOTES_REF, check=False)
+        if push.returncode != 0:
+            raise SignoffPushError(f"Notes push failed: {push.stderr.strip()}")
+        pushed = True
+
+    return {
+        "remote": remote,
+        "branch": branch,
+        "branch_pushed": branch_pushed,
+        "branch_push_warning": branch_push_warning,
+        "merged_remote_notes": merged,
+        "pushed": pushed or branch_pushed,
+    }
+
+
 
 
 _TRAILER_RE = re.compile(r"^(Signoff-[A-Za-z0-9-]+):\s*(.*)$")

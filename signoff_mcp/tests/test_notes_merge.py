@@ -93,3 +93,59 @@ def test_push_notes_bad_remote_raises_structured_error(two_clones, tmp_path):
     repo_a, _, _ = _attest(alice, tmp_path, "alice", "2026-01-01T00:00:00Z")
     with pytest.raises(core.SignoffPushError, match="push failed"):
         core.push_notes(repo_a, remote=str(tmp_path / "no-such-remote"))
+
+
+def test_push_notes_pushes_active_feature_branch(two_clones, tmp_path):
+    alice, _ = two_clones
+    repo_a = core.GitRepo(str(alice))
+    git(alice, "checkout", "-b", "feature/auto-push")
+    commit_file(alice, "feature_file.txt", "content\n", "feature commit")
+
+    out = core.push_notes(repo_a)
+    assert out["branch"] == "feature/auto-push"
+    assert out["branch_pushed"] is True
+    assert out["branch_push_warning"] is None
+    assert out["pushed"] is True
+    # Remote origin must now have feature/auto-push
+    ls_out = git(alice, "ls-remote", "origin", "feature/auto-push").stdout.strip()
+    assert ls_out != ""
+
+
+def test_push_notes_handles_detached_head_gracefully(two_clones, tmp_path):
+    alice, _ = two_clones
+    repo_a, _, _ = _attest(alice, tmp_path, "alice", "2026-01-01T00:00:00Z")
+    git(alice, "checkout", "--detach")
+
+    out = core.push_notes(repo_a)
+    assert out["branch"] == "HEAD"
+    assert out["branch_pushed"] is False
+    assert out["branch_push_warning"] is not None
+    assert "Detached HEAD" in out["branch_push_warning"]
+    assert out["pushed"] is True
+
+
+def test_push_notes_captures_branch_push_failure_non_blockingly(two_clones, tmp_path):
+    alice, _ = two_clones
+    origin = tmp_path / "origin.git"
+    repo_a, _, _ = _attest(alice, tmp_path, "alice", "2026-01-01T00:00:00Z")
+    git(alice, "branch", "-m", "main", "feature/conflict")
+
+    # Create remote feature/conflict on origin with a diverging commit to force push failure
+    seed = tmp_path / "diverger"
+    git(tmp_path, "clone", "-q", str(origin), "diverger")
+    git(seed, "checkout", "-b", "feature/conflict")
+    commit_file(seed, "conflict.txt", "seed conflict\n", "remote conflict")
+    git(seed, "push", "-q", "origin", "feature/conflict")
+
+    # In alice clone, add different commit on feature/conflict
+    commit_file(alice, "conflict.txt", "alice conflict\n", "local conflict")
+
+    out = core.push_notes(repo_a)
+    assert out["branch"] == "feature/conflict"
+    assert out["branch_pushed"] is False
+    assert out["branch_push_warning"] is not None
+    assert "Failed to push branch" in out["branch_push_warning"]
+    # Notes push still succeeded non-blockingly
+    assert out["pushed"] is True
+
+

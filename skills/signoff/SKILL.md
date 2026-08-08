@@ -233,7 +233,7 @@ git commit --allow-empty $SIGN_FLAG -m "[SIGNOFF ${SHORT_SHA}]: human comprehens
 
 After successful execution, report the resulting `Signoff-Attestation-Commit-SHA` (`git rev-parse HEAD`).
 
-### 5. Git Notes Persistence (`refs/notes/signoff`)
+### 5. Git Notes Persistence (`refs/notes/signoff`) & Feature Branch Push
 
 Per GSA §2.5, mirror the attestation payload into Git Notes so it survives squash merges and post-merge branch deletion. Attach the full attestation message to both the reviewed commit and its tree:
 ```bash
@@ -243,14 +243,25 @@ git notes --ref=signoff append -m "$NOTE_BODY" "<reviewed-commit-sha>"
 git notes --ref=signoff append -m "$NOTE_BODY" "$TREE_SHA"
 ```
 
-When pushing, fetch remote notes into a tracking ref and merge with `cat_sort_uniq` first — fetching directly into the local `refs/notes/signoff` is a non-fast-forward update whenever notes have diverged and is rejected:
+When pushing, auto-push the active feature branch to `origin` (if attached to a named branch), then fetch remote notes into a tracking ref and merge with `cat_sort_uniq`:
 ```bash
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "HEAD")
+if [ "$CURRENT_BRANCH" != "HEAD" ]; then
+    echo "Pushing attestation commit on branch '$CURRENT_BRANCH' to origin..."
+    if ! git push origin "$CURRENT_BRANCH"; then
+        echo "Warning: Failed to push branch '$CURRENT_BRANCH' to origin. Attestation commit remains local." >&2
+    fi
+else
+    echo "Warning: Detached HEAD detected; skipping feature branch push to origin." >&2
+fi
+
 if git fetch origin +refs/notes/signoff:refs/notes/signoff-remote 2>/dev/null; then
     git notes --ref=signoff merge -s cat_sort_uniq refs/notes/signoff-remote
 fi
 git push origin refs/notes/signoff
 ```
 *The fetch guard tolerates remotes that have no `refs/notes/signoff` yet (first attestation ever pushed).*
+
 
 ---
 
