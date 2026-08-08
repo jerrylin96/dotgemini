@@ -34,9 +34,17 @@ Write a failing test before writing the code that makes it pass. For bug fixes, 
 
 Write the test first. It must fail. A test that passes immediately proves nothing.
 
+### Step 1b: Subagent Adversarial RED Test Review
+
+Parent agent invokes `invoke_subagent` (`TypeName: self`, `Role: Adversarial Test Reviewer`). Subagent audits written RED tests to verify:
+- Tests fail for the correct architectural reason (not syntax or import bugs).
+- Assertions are rigorous (testing business logic boundaries, not weak non-null checks).
+- 100% parity with requirements and edge cases defined in `/spec`.
+- Repeat fix-verify loop until verdict is `APPROVE`.
+
 ### Step 2: GREEN — Make It Pass
 
-Write the minimum code to make the test pass. Don't over-engineer.
+Write the minimum code to make the approved test pass. Don't over-engineer.
 
 ### Step 3: REFACTOR — Clean Up
 

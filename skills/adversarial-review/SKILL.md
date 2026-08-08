@@ -5,7 +5,42 @@ description: Adversarial review of two git worktrees to find bugs/quality issues
 
 # Adversarial Review
 
-Automatically resolve context, create/update feature branch worktree, and perform adversarial diff review.
+Automatically resolve context, create/update feature branch worktree, and perform adversarial diff review across 4 distinct lifecycle gates.
+
+## Operational Review Modes & Roles
+
+The adversarial review subagent loop operates in 4 distinct lifecycle review modes:
+
+1. **Spec Reviewer Mode (`Role: Adversarial Spec Reviewer`)**:
+   - **Target**: `/spec` artifact.
+   - **Checklist**: Scope completeness, unstated assumptions, missing edge cases, security/architectural risks, non-negotiables.
+   - **Verdict**: `APPROVE` or `REJECT` with specific required spec fixes.
+
+2. **Plan Reviewer Mode (`Role: Adversarial Plan Reviewer`)**:
+   - **Target**: `/plan` artifact.
+   - **Checklist**: Atomic task decomposition, explicit TDD RED/GREEN specs, executable verify commands, dependency ordering, worktree/env isolation safety.
+   - **Verdict**: `APPROVE` or `REJECT` with specific plan fixes.
+
+3. **RED Test Reviewer Mode (`Role: Adversarial Test Reviewer`)**:
+   - **Target**: Written RED test suite in worktree.
+   - **Checklist**: Verification that tests fail for the correct architectural reason (not syntax/import bugs), assertion rigor (no weak `assert result is not None`), edge case coverage, boundary/error testing, and 100% spec requirement parity.
+   - **Verdict**: `APPROVE` or `REJECT` with required test additions/fixes.
+
+4. **Code Reviewer Mode (`Role: Adversarial Code Reviewer`)**:
+   - **Target**: Worktree changeset & pushed feature branch.
+   - **Checklist**: Empirical test pass proof, linter results, ponytail reusability, zero unrequested abstractions, zero regressions.
+   - **Verdict**: `APPROVE` or `REJECT` with blocking findings.
+
+### Subagent Context Compaction Template
+Parent agents MUST include a compacted context block (≤ 30 lines / ~400 words) when invoking review subagents:
+```markdown
+### Context Compaction Block
+- **Feature Rationale**: <1-2 sentences>
+- **Key Architectural Decisions**: <bulleted list>
+- **Active Constraints**: <bulleted list>
+- **Prior Step Findings**: <empirical summary>
+- **Target Artifact Paths**: <file links>
+```
 
 ## Core Workflow Rules
 > [!IMPORTANT]

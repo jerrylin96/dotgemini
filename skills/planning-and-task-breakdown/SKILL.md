@@ -70,10 +70,15 @@ When Sequential Subagents strategy is selected:
 - **User Override Conventions**: If user prompt includes intent signals (`heavy`, `subagent per slice`, or external plan handoff) or command invocation conventions (`/plan heavy`, `/make-feature heavy`), agent proactively selects `Sequential Subagents` execution strategy.
 - **External Plan Handoff Definition**: An external plan handoff refers to a plan produced outside this repository's `/plan` process, including pre-architected plans imported from frontier models.
 
-### Step 3: Output
+### Step 2c: Subagent Adversarial Plan Review
+
+Parent agent invokes `invoke_subagent` (`TypeName: self`, `Role: Adversarial Plan Reviewer`). Subagent audits `/plan` for atomic task decomposition, explicit TDD RED/GREEN specifications, executable verify commands, dependency ordering, and worktree/env isolation safety until `APPROVE`.
+
+### Step 3: Output & Human Approval Gate
 
 - Create the plan as a reviewable document with a checklist for tracking progress
 - Every task must include TDD RED/GREEN specifications and an empirical verify step (prohibiting unverified claims).
+- **PAUSE**: Do not create worktrees or write code until the human engineer explicitly approves the audited plan (`make-feature` Step 3c).
 
 > [!TIP]
 > Store the plan as an artifact with `RequestFeedback: true` in `<appDataDir>/brain/<conversation-id>/`.

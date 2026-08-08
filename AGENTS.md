@@ -59,15 +59,17 @@ Use the following commands to navigate the development lifecycle:
 
 ### Mandatory Default Execution Pipeline & Milestone Gates
 For any code modification, feature addition, refactor, or skill creation:
-1. **Automatic Unified Trigger**: The agent MUST automatically initiate the unified `/make-feature` lifecycle sequence across four distinct, sequential milestone phases.
+1. **Automatic Unified Trigger**: The agent MUST automatically initiate the unified `/make-feature` lifecycle sequence across five distinct, sequential milestone phases.
 2. **Pre-Execution Worktree Circuit Breaker (Hard Stop)**:
    - Before invoking any file modification tool (`replace_file_content`, `write_to_file`, etc.) on a git repository file, the agent MUST verify that `TargetFile` is inside `~/.gemini/tmp/worktrees/`.
-   - Modifying files directly in the primary working tree is **STRICTLY PROHIBITED**. If `TargetFile` is in the primary workspace, HALT immediately and initiate Phase 1 (`/spec` & `/plan`).
+   - Modifying files directly in the primary working tree is **STRICTLY PROHIBITED**. If `TargetFile` is in the primary workspace, HALT immediately and initiate Stage 0 (`/grillme`) and Phase 1 (`/spec` & `/plan`).
 3. **Sequential Milestone Goals & Stop Gates**:
-   - **Phase 1 (Spec & Plan - Two-Stage Sequential Gate)**: Goal = Sequential user approval of `/spec` (Stage 1a) followed by `/plan` (Stage 1b). The agent MUST draft `/spec`, PAUSE for human approval, and ONLY AFTER `/spec` is approved proceed to draft `/plan`. Explicit human approval of both artifacts is required before creating worktrees or writing code.
-   - **Phase 2 (Build & Worktree)**: Goal = Isolated worktree created, code edited, tested, and committed locally.
-   - **Phase 3 (Push & Adversarial Review)**: Goal = Feature branch pushed to `origin` AND subagent review verdict `APPROVE` posted in chat.
-     - *Subagent Delegation Mandate*: The parent agent is STRICTLY FORBIDDEN from running the review directly in its own context. The parent agent MUST call `invoke_subagent` (`TypeName: self`, `Role: Adversarial Code Reviewer`) to execute the isolated review loop until `APPROVE`.
+   - **Stage 0 (Interactive Alignment Gate - `/grillme`)**: Goal = Clarify non-negotiables, edge cases, scope boundaries, and user preferences through interactive interview before drafting `/spec`.
+   - **Phase 1a (Spec & Adversarial Spec Review Gate)**: Goal = Draft `/spec` artifact and run subagent `Adversarial Spec Reviewer` loop until `APPROVE`. PAUSE for explicit human approval of `/spec`.
+   - **Phase 1b (Plan & Adversarial Plan Review Gate)**: Goal = Draft `/plan` artifact (with TDD targets) and run subagent `Adversarial Plan Reviewer` loop until `APPROVE`. PAUSE for explicit human approval of `/plan`.
+   - **Phase 2 (Build & Worktree - Adversarial RED Test Review Gate)**: Goal = Create isolated worktree branch (`gemini/<feature-name>`), write RED test suite, run subagent `Adversarial Test Reviewer` loop until `APPROVE`, write GREEN implementation code, verify 100% test pass.
+   - **Phase 3 (Push & Adversarial Code Review Gate)**: Goal = Push feature branch to `origin` and invoke subagent `Adversarial Code Reviewer` loop until `APPROVE`. Generate review report artifact.
+     - *Subagent Delegation Mandate*: The parent agent is STRICTLY FORBIDDEN from running adversarial reviews directly in its own context. The parent agent MUST call `invoke_subagent` (`TypeName: self`, `Role: Adversarial <Spec|Plan|Test|Code> Reviewer`) to execute isolated review loops until `APPROVE`.
    - **Phase 4 (Human Signoff & Primary Branch Merge)**: Goal = Human engineer reviews post-review audit report artifact and manually merges feature branch to the selected target branch (`<base_branch>`).
 4. **Primary Integration vs. Feature Sync Rules**:
    - **Human Ownership of Primary Branch Integration**: Integrating code *into* the selected target branch (`<base_branch>`, e.g., `main`, `develop`, `staging`, `release/*`, etc.) is **ALWAYS performed manually by the human engineer** (e.g. via GitHub Pull Request UI or manual git merge). The AI agent is strictly forbidden from mutating or merging directly into the target integration branch.

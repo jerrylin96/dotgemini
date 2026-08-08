@@ -15,12 +15,12 @@ Write the spec before the code. Every non-trivial change follows the unified [ma
 
 ## Process
 
-### 1. Clarify Requirements
+### 1. Stage 0: Clarify Requirements (`/grillme`)
 
 Define what to build. Identify ambiguities, missing requirements, assumptions.
 
 > [!TIP]
-> If underspecified, use `/grill-me` to run an iterative interview until you hit ~95% confidence.
+> Use `/grillme` to run an interactive interview until you hit ~95% confidence on scope, non-negotiables, technical constraints, and edge cases before drafting the spec.
 
 ### 2. Draft the Spec
 
@@ -29,9 +29,13 @@ Cover: **Objectives**, **Scope**, **Project Structure**, **Code Style**, **Testi
 > [!TIP]
 > Store the spec as an artifact with `RequestFeedback: true` so the human gets a review prompt, or persist in an Obsidian vault per `AGENTS.md §9`.
 
+### 2b. Subagent Adversarial Spec Review
+
+Parent agent invokes `invoke_subagent` (`TypeName: self`, `Role: Adversarial Spec Reviewer`). Subagent audits `/spec` for unstated assumptions, missing edge cases, security/architectural risks, and scope creep until `APPROVE`.
+
 ### 3. Human Approval (Sequential Pause)
 
-**PAUSE**: Do not write code or advance to `/plan` until the human engineer explicitly approves the spec (`make-feature` Step 2).
+**PAUSE**: Do not write code or advance to `/plan` until the human engineer explicitly approves the audited spec (`make-feature` Step 2c).
 
 ### 4. Plan & Implement
 
