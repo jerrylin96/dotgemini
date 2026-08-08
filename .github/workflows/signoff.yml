@@ -37,6 +37,7 @@ jobs:
           # They do not prove that a Socratic review occurred or establish independent human identity.
           # Cryptographic signing (git commit -S) and trusted reviewer verification remain required if independent identity assurance is intended.
           # REAL ENFORCEMENT REQUIRES A GITHUB BRANCH PROTECTION RULE requiring 'Signoff Verification Gate' on 'main'.
+          # Note on Commit Trailers (Check 1): Empty attestation commits must be the HEAD commit on the PR branch. Pushing new code commits after signing requires re-attestation or Git Notes (Check 2/3).
 
           set -eo pipefail
 
