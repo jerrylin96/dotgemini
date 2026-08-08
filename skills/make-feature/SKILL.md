@@ -11,7 +11,7 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
 
 - **Always.** Mandatory entry point for any file modification in a repository.
 - **Standard Invocation**: Trigger with `/make-feature` (or automatically whenever preparing to write or edit codebase files).
-- **Heavy Mode (`/make-feature heavy`)**: Use for complex multi-slice features. In Phase 1 (`/plan`), the agent proactively selects `Sequential Subagents` execution strategy across task slices. In Phase 2, each task slice undergoes per-slice RED test review (`Adversarial Test Reviewer`) and per-slice code review (`Adversarial Code Reviewer`) before advancing to the next slice.
+- **Heavy Mode (`/make-feature heavy`)**: Use for complex multi-slice features. In Phase 1b (`/plan`), the agent proactively selects `Sequential Subagents` execution strategy across task slices. In Phase 2, each task slice undergoes per-slice RED test review (`Adversarial Test Reviewer`) and per-slice code review (`Adversarial Code Reviewer`) before advancing to the next slice.
 - The only exception: changes to Antigravity artifacts, scratch files, or non-repo files.
 
 ## Core Rules
@@ -24,7 +24,7 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
 
 > [!CAUTION]
 > **Pre-Execution Worktree Circuit Breaker (Hard Stop)**:
-> Before calling any file edit tool (`replace_file_content`, `write_to_file`, etc.) on a repository file, verify `TargetFile` is under `~/.gemini/tmp/worktrees/`. Modifying files directly in the primary workspace is **STRICTLY PROHIBITED**. If target is in the primary workspace, HALT immediately and initiate Stage 0 (`/grillme`) and Phase 1 (`/spec` & `/plan`).
+> Before calling any file edit tool (`replace_file_content`, `write_to_file`, etc.) on a repository file, verify `TargetFile` is under `~/.gemini/tmp/worktrees/`. Modifying files directly in the primary workspace is **STRICTLY PROHIBITED**. If target is in the primary workspace, HALT immediately and initiate Stage 0 (`/grill-me`) and Phase 1 (`/spec` & `/plan`).
 
 0. **Stage 0 (Interactive Alignment Gate - `/grill-me`)**:
    - **Goal**: Clarify scope boundaries, non-negotiables, technical constraints, and edge cases through interactive Q&A alignment before drafting `/spec`. Transition proactively to `/spec` once ~95% confidence is reached. (If `/grill-me` is unavailable or for trivial typo fixes, embed clarifying Q&A directly into `/spec` drafting).
@@ -55,7 +55,7 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
      > [!IMPORTANT]
      > **Empirical Grounding Directive**: Prohibit declaring success, test passes, or schema validity without empirical execution output present in the context window.
      > [!TIP]
-     > **Sequential Subagent Delegation**: If the approved `/plan` specifies `Sequential Subagents`, execution subagents MUST run sequentially using `Workspace: inherit` (or target worktree path) so all slice commits land on `gemini/<feature-name>`. In Heavy Mode (`/make-feature heavy`), each task slice builder writes RED tests, triggers `Adversarial Test Reviewer` subagent, writes GREEN implementation, triggers slice `Adversarial Code Reviewer` subagent (unless slice touches ≤1 file and ≤10 LOC), updates `scratchpad.md`, and commits the slice before advancing to the next slice. Parent agent MUST clean up review subagents via `manage_subagents` (`Action: "kill"`). Max 3 REJECT cycles per review gate before escalating to human engineer.
+     > **Sequential Subagent Delegation**: If the approved `/plan` specifies `Sequential Subagents`, execution subagents MUST run sequentially using `Workspace: inherit` (or target worktree path) so all slice commits land on `gemini/<feature-name>`. In Heavy Mode (`/make-feature heavy`), each task slice builder writes RED tests, triggers `Adversarial Test Reviewer` subagent, writes GREEN implementation, triggers slice `Adversarial Code Reviewer` subagent, updates `scratchpad.md`, and commits the slice before advancing to the next slice. Parent agent MUST clean up review subagents via `manage_subagents` (`Action: "kill"`). Max 3 REJECT cycles per review gate before escalating to human engineer.
    - **Step 4e (Builder Pre-Review Quality Check & Manifest Creation)**:
      - Update `<appDataDir>/brain/<conversation-id>/scratch/scratchpad.md` with build step findings and empirical test logs.
      - Create review manifest artifact in conversation artifact directory (`<appDataDir>/brain/<conversation-id>/review_manifest_<feature>.md`).
@@ -92,6 +92,7 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
      - Generate formal `review_report_<feature>.md` artifact detailing:
        - *What was checked* (empirical test runner logs, linter results, static diff analysis)
        - *What was changed* (file diff breakdown and architectural decisions)
+       - *Full Audit Trail Preservation*: Include or link to the verdict and 3-5 line Adversarial Audit Summary for all four review gates (Spec Review, Plan Review, RED Test Review, Code Review) with empirical evidence references.
        - *Human Review Attention Points* (edge cases, potential risks, or recommendations for signoff)
 
 5. **Phase 4 (Human Signoff, PR Creation & Manual Merge)**:

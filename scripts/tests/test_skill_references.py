@@ -267,6 +267,55 @@ def test_sequential_subagent_slicing_consistency():
     assert "ensuring exactly one strategy checkbox is selected" in plan_content, "Missing single strategy checkbox assertion in planning-and-task-breakdown"
 
 
+def test_multi_stage_adversarial_gates_contract():
+    """Verify Stage 0 /grill-me hyphenation, 4 adversarial review modes, artifact-only bypass rules, and audit summary preservation."""
+    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+    agents_md = os.path.join(root_dir, "AGENTS.md")
+    make_feature_md = os.path.join(root_dir, "skills/make-feature/SKILL.md")
+    adv_review_md = os.path.join(root_dir, "skills/adversarial-review/SKILL.md")
+    lifecycle_guide_md = os.path.join(root_dir, "skills/make-feature/resources/lifecycle-guide.md")
+    spec_md = os.path.join(root_dir, "skills/spec-driven-development/SKILL.md")
+    plan_md = os.path.join(root_dir, "skills/planning-and-task-breakdown/SKILL.md")
+
+    with open(agents_md, "r", encoding="utf-8") as f:
+        agents_c = f.read()
+    with open(make_feature_md, "r", encoding="utf-8") as f:
+        mf_c = f.read()
+    with open(adv_review_md, "r", encoding="utf-8") as f:
+        adv_c = f.read()
+    with open(lifecycle_guide_md, "r", encoding="utf-8") as f:
+        lg_c = f.read()
+    with open(spec_md, "r", encoding="utf-8") as f:
+        spec_c = f.read()
+    with open(plan_md, "r", encoding="utf-8") as f:
+        plan_c = f.read()
+
+    # 1. Canonical /grill-me hyphenation (no unhyphenated /grillme in instructions)
+    assert "/grill-me" in agents_c, "Missing canonical /grill-me in AGENTS.md"
+    assert "/grill-me" in mf_c, "Missing canonical /grill-me in make-feature SKILL.md"
+    assert "/grill-me" in spec_c, "Missing canonical /grill-me in spec-driven-development SKILL.md"
+    assert "/grill-me" in lg_c, "Missing canonical /grill-me in lifecycle-guide.md"
+    assert "/grillme" not in agents_c, "Un-hyphenated /grillme found in AGENTS.md"
+    assert "/grillme" not in mf_c, "Un-hyphenated /grillme found in make-feature SKILL.md"
+    assert "/grillme" not in spec_c, "Un-hyphenated /grillme found in spec-driven-development SKILL.md"
+
+    # 2. All 4 review modes documented in adversarial-review/SKILL.md
+    modes = ["Spec Reviewer Mode", "Plan Reviewer Mode", "RED Test Reviewer Mode", "Code Reviewer Mode"]
+    for mode in modes:
+        assert mode in adv_c, f"Review mode '{mode}' missing from adversarial-review SKILL.md"
+
+    # 3. Artifact-only mode bypass assertion
+    assert "Artifact Review Modes (Spec & Plan)" in adv_c, "Missing Artifact Review Modes section in adversarial-review SKILL.md"
+    assert "SKIP `resolve_branches.py` worktree creation" in adv_c, "Missing artifact-only worktree bypass rule in adversarial-review SKILL.md"
+
+    # 4. Mandatory Adversarial Audit Summary in AGENTS.md & adversarial-review SKILL.md
+    assert "Adversarial Audit Summary" in agents_c, "Missing Adversarial Audit Summary rule in AGENTS.md"
+    assert "Adversarial Audit Summary" in adv_c, "Missing Adversarial Audit Summary section in adversarial-review SKILL.md"
+
+    # 5. Full Audit Trail Preservation in make-feature SKILL.md
+    assert "Full Audit Trail Preservation" in mf_c, "Missing Full Audit Trail Preservation requirement in make-feature SKILL.md"
+
+
 def test_catchmeup_skill_contract():
     """Verify that catchmeup SKILL.md contains required presets, read-only exception, cleanup instructions, trailer parsing, and @skill references."""
     root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
