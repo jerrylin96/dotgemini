@@ -1,0 +1,34 @@
+
+Signoff-Agent: Antigravity /signoff v1.0
+Signoff-Agent: harness=claude-code/2.1.42 model=claude-fable-5 reasoning=high interview=standard/atmos-science-dogfood/sha256:5fd075753d5b
+Signoff-Base-SHA: f31907acf1bca6e6f9decf5c7c7b07601b96f060
+Signoff-Base-SHA: f5a531634da16a9996648405a06f292e0be14e01
+Signoff-Conversation-ID: c898d01c-7758-544a-ad25-7557a5bc8106
+Signoff-Conversation-ID: d079fa80-516d-41d5-8e76-8b6d79dbd3c9
+Signoff-Harness-ID: antigravity-cli
+Signoff-Harness-ID: claude-code
+Signoff-Reviewed-Commit-SHA: 453c633078ecdd82d93c33eefac4d5f4cbe2ef55
+Signoff-Reviewed-Commit-SHA: daf493942141846828d4079a73ef252cb3710fd8
+Signoff-Reviewed-Tree-SHA: 83679c5222ef2c7a7b8e5c83bc56c526d7f95567
+Signoff-Reviewed-Tree-SHA: dedb983e660b6233eb2a9c9bde642ceddc2efd0c
+Signoff-Risk: none
+Signoff-Risk: refs/notes/signoff push may be 403-blocked in this cloud session, as in the prior dogfood
+Signoff-Risk: science-signal regexes are informative heuristics with false positives/negatives; agent judgment in the skill layer remains authoritative
+Signoff-Risk: squash or rebase merge would leave the v0.2.0 tag pointing outside main's history
+Signoff-Spec-Version: 1.0
+Signoff-Status: VERIFIED_BY_HUMAN
+Signoff-Timestamp: 2026-08-04T19:40:30Z
+Signoff-Timestamp: 2026-08-06T00:12:14Z
+Signoff-Tradeoff: Accumulate repeat attestations via git notes append
+Signoff-Tradeoff: Defer MCP server implementation to Phase 2
+Signoff-Tradeoff: profile-resolution logic exists twice (SKILL.md bash, signoff_mcp python); only digest parity is test-pinned, other semantics can drift
+Signoff-Tradeoff: repo-local atmos-science-dogfood profile permanently governs future signoffs on this repository
+Signoff-Tradeoff: v0.2.0 tag cut from the unmerged review branch; a true merge of this branch is required for the tag to join main history
+Signoff-Transcript-Bytes: 1060969
+Signoff-Transcript-Bytes: 121474
+Signoff-Transcript-Digest: sha256:1675b639de65cab2ef732bf418f37d9583023ffe77a166a835ca1828e1a3738e
+Signoff-Transcript-Digest: sha256:db65dd8962619fa2d3acb0c1e31a71f1d095e72ded5520755a2788d1d7fc671d
+Signoff-Verified-By: jerrylin247365@gmail.com
+Signoff-Verified-By: jlin404@bu.edu
+[SIGNOFF 453c633]: human comprehension and risk attestation
+[SIGNOFF daf4939]: human comprehension and risk attestation
