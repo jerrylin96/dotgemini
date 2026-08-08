@@ -1,0 +1,17 @@
+[SIGNOFF 2c1c0b7]: human comprehension and risk attestation
+
+Signoff-Spec-Version: 1.0
+Signoff-Status: VERIFIED_BY_HUMAN
+Signoff-Timestamp: 2026-08-04T20:21:48Z
+Signoff-Base-SHA: 2b24e2550c398db88997f55faad0d4d953cf54c6
+Signoff-Reviewed-Commit-SHA: 2c1c0b72ca0f372b364adc901196d8ffc1f5506f
+Signoff-Reviewed-Tree-SHA: b96a7889c2258c1f1282cef20f05accc
+Signoff-Harness-ID: antigravity-cli
+Signoff-Conversation-ID: 9d93ba92-4ae7-46f3-aaa6-41c77a24005f
+Signoff-Transcript-Digest: sha256:e9dcfa8bf02691d3fa2f68476b79820e9c6d0842a94a3598b5ede900fd68f5ab
+Signoff-Transcript-Bytes: 55858
+Signoff-Tradeoff: full_audit mode escrows encrypted transcripts to cloud registry to guarantee persistence across offboarding, accepting external cloud custody; hash_only mode retains zero cloud transcript data, sacrificing escrow retrieval
+Signoff-Risk: Session transcripts capture complete conversation context; registry access control must be managed independently from git repository visibility
+Signoff-Verified-By: jerrylin247365@gmail.com
+Signoff-Agent: Antigravity (Gemini 3.6 Flash)
+
