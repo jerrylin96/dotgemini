@@ -1,11 +1,113 @@
 ---
 name: adversarial-review
-description: Adversarial review of two git worktrees to find bugs/quality issues before merge. Do not use for simple diffs or neutral walkthroughs.
+description: Multi-stage adversarial review of specifications, plans, RED tests, and code worktrees to catch edge cases, non-negotiables, and bugs across the software lifecycle.
 ---
 
 # Adversarial Review
 
-Automatically resolve context, create/update feature branch worktree, and perform adversarial diff review.
+Automatically route review mode, perform artifact audits (Spec/Plan) or worktree diff audits (Test/Code) across 4 distinct lifecycle gates.
+
+## Step 0: Select Review Mode and Route (Mandatory Dispatch)
+
+The review subagent MUST first inspect its prompt inputs / Context Compaction Block to determine its target review mode:
+1. **Spec Reviewer Mode (`spec-review`, Role: Adversarial Spec Reviewer)** -> Execute **Artifact Review Path (Spec & Plan)**.
+2. **Plan Reviewer Mode (`plan-review`, Role: Adversarial Plan Reviewer)** -> Execute **Artifact Review Path (Spec & Plan)**.
+3. **RED Test Reviewer Mode (`test-review`, Role: Adversarial Test Reviewer)** -> Execute **Worktree RED Test Review Path**.
+4. **Code Reviewer Mode (`code-review`, Role: Adversarial Code Reviewer)** -> Execute **Worktree Code Review Path**.
+
+> [!IMPORTANT]
+> If the review mode is missing or ambiguous, the reviewer MUST stop immediately and ask the parent agent for explicit mode selection.
+
+---
+
+## Artifact Review Path (Spec & Plan)
+
+Applicable **ONLY** to `spec-review` and `plan-review` modes.
+
+> [!CAUTION]
+> **Artifact Mode Bypass Rules**: When executing `spec-review` or `plan-review`, the review subagent MUST NOT:
+> - Ask the user or parent agent to select a feature branch.
+> - Invoke `resolve_branches.py`.
+> - Create or use a git worktree.
+> - Generate or read a git diff.
+> - Run test, linter, or environment setup scripts (`setup_review_env.py`, `run_in_env.py`).
+
+### Execution Procedure for Spec & Plan Artifacts:
+1. Read the target artifact directly via `view_file` using the file path provided under `Target Artifact Paths` in the Context Compaction Block.
+2. Apply mode-specific checklist:
+   - **`spec-review` Checklist**: Scope completeness, unstated assumptions, missing edge cases, security/architectural risks, non-negotiables.
+   - **`plan-review` Checklist**: Atomic task decomposition, explicit TDD RED/GREEN specs, executable verify commands, dependency ordering, worktree/env isolation safety.
+3. Output verdict (`APPROVE` or `REJECT`) with required 3-5 line **Adversarial Audit Summary** (state clean compliance honestly if zero blocking issues found):
+   ```markdown
+   ### Adversarial Audit Summary (What Was Caught & Fixed)
+   - **[Mode]**: <Concise bullet describing bug, missing edge case, weak assertion, or path issue resolved>
+   - **[Mode]**: <If no blocking issues found: "No blocking issues found; verified clean compliance for [area/spec]">
+   ```
+4. **TERMINATE TURN**: Immediately stop calling tools upon posting the verdict report. Do NOT proceed to branch resolution or worktree review sections below.
+
+---
+
+## Worktree RED Test Review Path
+
+Applicable **ONLY** to `test-review` mode.
+
+### 1. Required Inputs:
+The review subagent MUST be provided with:
+- **Target Worktree Path**: Absolute path under `~/.gemini/tmp/worktrees/`.
+- **Designated RED Test Paths**: Specific test file path(s) or pytest node IDs.
+- **Approved Spec Path**: Target `/spec` artifact path.
+- **Task Slice Info**: (Optional) Relevant plan task item.
+
+> [!IMPORTANT]
+> If any required input (worktree path, test path, spec path) is missing or ambiguous, the reviewer MUST stop immediately and ask the parent agent for explicit input parameters.
+
+### 2. Mandatory Source-Review & Assertion Rigor Audit:
+Before running tests, the reviewer MUST view the test source code and spec artifact via `view_file` to evaluate:
+- **Spec Parity**: Verify every relevant requirement and non-negotiable in the spec is represented by a substantive test case.
+- **Assertion Rigor**: Reject weak assertions (e.g. trivial `assert result is not None` or generic type checks when value, state, or error semantics are required).
+- **Edge, Boundary & Error Coverage**: Verify edge cases, boundary limits, and expected failure modes specified in the spec are tested (or explicitly explain why inapplicable).
+- **Trivial-Implementation Resilience**: Reject tests that can pass after unrelated or minimal incorrect implementations.
+
+### 3. Empirical Test Execution & Behavioral Failure Validation:
+Run ONLY the designated RED test file(s) inside the worktree using the environment runner:
+```bash
+python3 ~/.gemini/scripts/run_in_env.py <worktree_path> pytest <designated_test_path>
+```
+- **Expected Behavioral Failure**: APPROVE only if tests fail for legitimate expected architectural or behavioral reasons.
+- **Reject Syntax/Import/Env Errors**: REJECT if tests fail due to syntax errors, import bugs, collection failures, or environment issues.
+- **Full Suite Exemption**: Do NOT require the full test suite to pass at this gate — RED tests should fail cleanly.
+
+### 4. Verdict Report & Audit Summary:
+Emit `APPROVE` or `REJECT` verdict detailing:
+- Test command executed and observed failure traceback/reason.
+- Spec requirements checked and assertion/coverage findings.
+- Required 3-5 line **Adversarial Audit Summary**.
+- **TERMINATE TURN**: Stop calling tools immediately after posting report. Max 3 REJECT cycles per gate before escalating to human engineer.
+
+---
+
+## Worktree Code Review Path
+
+The following `Core Workflow Rules`, `Context Resolution`, and `Execution Steps` apply **ONLY** to `code-review` mode.
+
+### Subagent Context Compaction Template
+Parent agents MUST include a compacted context block (≤ 30 lines / ~400 words) when invoking review subagents:
+```markdown
+### Context Compaction Block
+- **Feature Rationale**: <1-2 sentences>
+- **Key Architectural Decisions**: <bulleted list>
+- **Active Constraints**: <bulleted list>
+- **Prior Step Findings**: <empirical summary>
+- **Target Artifact Paths**: <file links>
+```
+
+### Mandatory Terse Audit Summary Output
+Every review subagent verdict (`APPROVE` or `REJECT`) MUST include a 3-5 line **Adversarial Audit Summary** detailing exactly what was caught and remediated during the audit loop. If zero issues were found, state clean compliance honestly without inventing findings:
+```markdown
+### Adversarial Audit Summary (What Was Caught & Fixed)
+- **[Code]**: <Concise bullet describing bug, missing edge case, weak assertion, or path issue resolved>
+- **[Code]**: <If no blocking issues found: "No blocking issues found; verified clean compliance for [area/spec]">
+```
 
 ## Core Workflow Rules
 > [!IMPORTANT]
@@ -13,7 +115,7 @@ Automatically resolve context, create/update feature branch worktree, and perfor
 > - **Feature Branch (Target)**: The branch containing the new changes to review. The agent must ALWAYS ask the user to select this branch.
 > - **Worktree Checkout**: The resolver script creates/updates a managed worktree checked out to the selected **feature branch** at `worktree_path`.
 > - **Testing/Inspecting**: All testing, linting, or inspection of the feature branch code must be run inside the resolved `worktree_path` (by executing `cd <worktree_path>` first), leaving the active workspace untouched on the reference branch.
-> - **Subagent Delegation & Recursion Guardrail**: Subagent delegation is initiated by the main/parent agent (`invoke_subagent` using `TypeName: self` with `Workspace: inherit` on `worktree_path`). **If the current agent is ALREADY executing as a review subagent inside `worktree_path`, it must NOT spawn nested subagents**; it executes Steps 1–5 directly.
+> - **Subagent Delegation & Recursion Guardrail**: Subagent delegation is initiated by the main/parent agent (`invoke_subagent` using `TypeName: self` with `Workspace: inherit` on `worktree_path`). **If the current agent is ALREADY executing as a review subagent inside `worktree_path`, it must NOT spawn nested subagents**; it executes review checks directly. Max 3 REJECT cycles per gate before escalating to human engineer.
 > - **Ephemeral Scratch files**: Creating temporary scratch files under the conversation's scratch directory for diff reading is permitted and does not violate repository/worktree read-only constraints, provided cleanup only removes those generated scratch files.
 
 ## Context Resolution
@@ -134,7 +236,7 @@ The script returns JSON on stdout. The schema depends on the outcome:
    - The file lock only serializes concurrent `resolve_branches.py` runs. Do not run git worktree commands against `~/.gemini/tmp/worktrees/` manually while a review is in progress.
    - Note: Git fetches are best-effort. If network resolution fails, the review may run against stale local tracking references.
 4. **Subagent Execution & Environment Setup**:
-   - The main agent should delegate the review execution to a background subagent (`invoke_subagent`), supplying a compacted context summary block (per AGENTS.md §10 / make-feature SKILL.md Step 7), to keep its context clean and eliminate author bias.
+   - The main agent should delegate the review execution to a background subagent (`invoke_subagent`), supplying a compacted context summary block (per AGENTS.md §10 / make-feature SKILL.md Phase 3), to keep its context clean and eliminate author bias.
      - **Subagent Selection**: Use `TypeName: self` with `Workspace: inherit` inside `<worktree_path>` (since `self` possesses the necessary write/execution tools to run environment setup and tests). Use `research` subagent ONLY for read-only static analysis.
      - **Recursion Prevention**: If you are already running as the invoked review subagent, execute the steps below directly without spawning further subagents.
    - **Headless Execution Guardrail (No `ctrl+k` Prompts)**: All test, linter, compilation, and setup commands MUST be run using `python3 ~/.gemini/scripts/run_in_env.py <worktree_path> <cmd>` (or whitelisted file/git tools). Direct execution of bare un-wrapped terminal commands (`pytest`, `mkdir`, bare `python`, etc.) is strictly forbidden as it triggers interactive permission prompts.
@@ -167,4 +269,3 @@ The script returns JSON on stdout. The schema depends on the outcome:
 6. **Output Report & Terminate Turn**:
    - Output the final review report directly into the chat. Do not save to file unless requested.
    - **Turn Termination**: Immediately upon posting the review report, the subagent MUST stop calling tools to conclude its turn. Do not execute further steps or linger in an idle loop.
-
