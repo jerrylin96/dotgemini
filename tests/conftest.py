@@ -7,6 +7,7 @@ from signoff_mcp.tests.helpers import commit_file, git, init_repo
 def _isolated_env(monkeypatch):
     """Neutralize harness env vars and user/system git config for scratch repos."""
     for var in (
+        "SIGNOFF_PROFILE_FILE",
         "SIGNOFF_TRANSCRIPT_FILE",
         "ANTIGRAVITY_CONVERSATION_ID",
         "CLAUDE_CODE_SESSION_ID",
