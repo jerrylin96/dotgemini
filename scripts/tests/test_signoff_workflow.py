@@ -1,5 +1,7 @@
 import os
+import shutil
 import subprocess
+import sys
 
 try:
     import yaml
@@ -19,13 +21,10 @@ def get_verification_script() -> str:
             steps = data.get("jobs", {}).get("verify-signoff", {}).get("steps", [])
             for step in steps:
                 if step.get("name") == "Verify Git Signoff Attestation":
-                    script = step.get("run", "")
-                    if script:
-                        return script
+                    return step.get("run", "")
         except Exception:
             pass
 
-    # Fallback un-indent parsing
     with open(WORKFLOW_PATH, "r", encoding="utf-8") as f:
         lines = f.readlines()
 
@@ -47,7 +46,8 @@ def get_verification_script() -> str:
             if base_indent is not None:
                 if line.strip() and (len(line) - len(line.lstrip())) < base_indent:
                     break
-                script_lines.append(line[base_indent:] if len(line) >= base_indent else line)
+                unindented = line[base_indent:] if len(line) >= base_indent else line.lstrip()
+                script_lines.append(unindented)
 
     if not script_lines:
         raise RuntimeError("Verify Git Signoff Attestation step not found in workflow")
@@ -88,6 +88,11 @@ def setup_git_repo(repo_dir: str) -> None:
     subprocess.run(["git", "init", "-b", "main"], cwd=repo_dir, check=True, env=env)
     subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo_dir, check=True, env=env)
     subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo_dir, check=True, env=env)
+    os.makedirs(os.path.join(repo_dir, "scripts"), exist_ok=True)
+    src_script = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "validate_gsa_note.py"))
+    dst_script = os.path.join(repo_dir, "scripts", "validate_gsa_note.py")
+    if os.path.exists(src_script):
+        shutil.copy2(src_script, dst_script)
 
 
 def run_verification_in_repo(repo_dir: str) -> subprocess.CompletedProcess:
@@ -405,9 +410,32 @@ def test_tree_note_missing_reviewed_commit_sha_fails(tmp_path):
     assert "::error::Missing, incomplete, or mismatched" in res.stdout or "::error::Missing, incomplete, or mismatched" in res.stderr
 
 
+def test_note_missing_verified_by_fails(tmp_path):
+    """Verify that a note missing Signoff-Verified-By fails validation (GSA §2.1 accountability field)."""
+    repo = str(tmp_path)
+    setup_git_repo(repo)
+
+    subprocess.run(["git", "commit", "--allow-empty", "-m", "Feature commit"], cwd=repo, check=True)
+    head_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+    tree_sha = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+
+    note_content = (
+        f"Signoff-Spec-Version: 1.0\n"
+        f"Signoff-Status: VERIFIED_BY_HUMAN\n"
+        f"Signoff-Reviewed-Commit-SHA: {head_sha}\n"
+        f"Signoff-Reviewed-Tree-SHA: {tree_sha}\n"
+    )
+    subprocess.run(["git", "notes", "--ref=signoff", "add", "-m", note_content], cwd=repo, check=True)
+
+    res = run_verification_in_repo(repo)
+    assert res.returncode == 1
+
+
 def test_conformance_vectors(tmp_path):
     """Pin the gate against the shared GSA v1.0 conformance suite (Task 2)."""
     import json
+    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+    from validate_gsa_note import validate_payload
 
     conformance_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "conformance"))
     expected_file = os.path.join(conformance_dir, "expected.json")
@@ -429,24 +457,11 @@ def test_conformance_vectors(tmp_path):
 
         is_valid_expected = spec["valid"]
 
-        py_cmd = (
-            r"import sys, re; payload, tree, commit = sys.argv[1], sys.argv[2], sys.argv[3]; "
-            r"statuses = {'VERIFIED_BY_HUMAN', 'VERIFIED_BY_HUMAN_NO_TRANSCRIPT_DIGEST'}; "
-            r"sha_re = re.compile(r'^[0-9a-fA-F]{40}$'); "
-            r"blocks = ['[SIGNOFF ' + b for b in payload.split('[SIGNOFF ') if b.strip()] if '[SIGNOFF ' in payload else [payload]; "
-            r"parse = lambda b: {k: [v.strip() for v in re.findall(r'^' + k + r':\s*(.*)$', b, re.M)] for k in ['Signoff-Spec-Version', 'Signoff-Status', 'Signoff-Reviewed-Tree-SHA', 'Signoff-Reviewed-Commit-SHA']}; "
-            r"valid = lambda b: (lambda t: bool(t['Signoff-Spec-Version'] and t['Signoff-Status'] and t['Signoff-Reviewed-Tree-SHA'] and t['Signoff-Reviewed-Commit-SHA'] and all(s == '1.0' for s in t['Signoff-Spec-Version']) and all(st in statuses for st in t['Signoff-Status']) and all(sha_re.match(x) for x in t['Signoff-Reviewed-Tree-SHA']) and all(sha_re.match(x) for x in t['Signoff-Reviewed-Commit-SHA']) and (not tree or tree in t['Signoff-Reviewed-Tree-SHA']) and (not commit or commit in t['Signoff-Reviewed-Commit-SHA'])))(parse(b)); "
-            r"sys.exit(0 if any(valid(b) for b in blocks) or valid(payload) else 1)"
-        )
-
-        res = subprocess.run(
-            ["python3", "-c", py_cmd, vector_payload, "", ""],
-            capture_output=True,
-            text=True
-        )
+        passed = validate_payload(vector_payload)
 
         if is_valid_expected:
-            assert res.returncode == 0, f"Expected vector {vector_rel_path} to pass, but failed: {res.stderr}"
+            assert passed, f"Expected vector {vector_rel_path} to pass, but failed"
         else:
-            assert res.returncode == 1, f"Expected vector {vector_rel_path} to fail, but passed"
+            assert not passed, f"Expected vector {vector_rel_path} to fail, but passed"
+
 
