@@ -1,0 +1,39 @@
+{
+  "_comment": "Expected verification outcomes for the GSA v1.0 conformance vectors. 'valid' is the structural verdict a conforming verifier must reach; 'problems_contain' are substrings that must appear among a conforming verifier's reported problems for invalid vectors; 'reviewed_commit_shas' pins repeated-key-aware trailer parsing (order-insensitive).",
+  "vectors/valid-production.txt": {
+    "valid": true,
+    "status": ["VERIFIED_BY_HUMAN"],
+    "reviewed_commit_shas": ["453c633078ecdd82d93c33eefac4d5f4cbe2ef55"]
+  },
+  "vectors/valid-profile-digest.txt": {
+    "valid": true,
+    "status": ["VERIFIED_BY_HUMAN"],
+    "reviewed_commit_shas": ["daf493942141846828d4079a73ef252cb3710fd8"],
+    "agent_contains": "interview=standard/atmos-science-dogfood/sha256:5fd075753d5b"
+  },
+  "vectors/valid-no-transcript-digest.txt": {
+    "valid": true,
+    "status": ["VERIFIED_BY_HUMAN_NO_TRANSCRIPT_DIGEST"],
+    "reviewed_commit_shas": ["1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b"]
+  },
+  "vectors/valid-note-cat-sort-uniq.txt": {
+    "valid": true,
+    "status": ["VERIFIED_BY_HUMAN"],
+    "reviewed_commit_shas": [
+      "453c633078ecdd82d93c33eefac4d5f4cbe2ef55",
+      "daf493942141846828d4079a73ef252cb3710fd8"
+    ]
+  },
+  "vectors/invalid-missing-spec-version.txt": {
+    "valid": false,
+    "problems_contain": ["Signoff-Spec-Version"]
+  },
+  "vectors/invalid-malformed-tree-sha.txt": {
+    "valid": false,
+    "problems_contain": ["Signoff-Reviewed-Tree-SHA"]
+  },
+  "vectors/invalid-status.txt": {
+    "valid": false,
+    "problems_contain": ["Signoff-Status"]
+  }
+}

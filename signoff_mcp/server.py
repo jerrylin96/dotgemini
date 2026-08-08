@@ -30,8 +30,14 @@ def create_server(repo_path: str | None = None) -> MCPServer:
     def signoff_prepare(target_ref: str = "HEAD", reference_ref: str | None = None) -> dict:
         """Resolve reviewed/base/tree SHAs, range diff, file list, and transcript status.
 
-        reference_ref defaults to the target's configured upstream; pass it
-        explicitly when no upstream exists.
+        Also reports the resolved interview profile (source, path, id, digest
+        per SKILL.md Section 1 step 5 — announce it before the first probe;
+        a set fallback_reason means a malformed file-sourced profile was
+        ignored for the embedded default) and the science-guard signal
+        categories detected in the range diff (non-empty means the
+        domain-science emphases apply additively and cursory must be
+        refused). reference_ref defaults to the target's configured upstream;
+        pass it explicitly when no upstream exists.
         """
         try:
             prep = core.prepare(repo, target_ref, reference_ref)

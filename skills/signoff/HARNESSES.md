@@ -200,29 +200,66 @@ auditors re-derive the model from the same bytes.
 
 ## Customizing the interview (INTERVIEW PROFILE)
 
-`SKILL.md` contains exactly one delimited block:
+The interview profile — a single delimited text block — is the sole
+customization point of the skill. Universal axes, intensity levels, workflow
+steps, and attestation mechanics are fixed: profiles weight probes *within*
+the universal axes and may add domain emphases; they cannot remove axes or
+lower pass criteria.
+
+The active profile is resolved per run, in fixed order:
+
+1. **`SIGNOFF_PROFILE_FILE`** — explicit path to a profile file. Highest
+   precedence; if set but unreadable, signoff aborts rather than silently
+   falling back.
+2. **`<repo>/.signoff/profile.md`** — repo-local profile. Commit one file to
+   the repository under review and every `/signoff` run there uses it — for
+   every collaborator, on every install channel, surviving plugin
+   auto-updates. This is the recommended path for labs and teams.
+3. **Embedded block in `SKILL.md`** — the shipped default
+   (`software-general`). Editing it in a self-managed copy still works, but
+   managed plugin installs overwrite such edits on update — prefer the
+   repo-local file.
+
+A profile file must contain exactly one block of the form:
 
 ```text
 <!-- INTERVIEW-PROFILE:BEGIN (sole customization point — replace only this block) -->
-...
+### Interview Profile: <your domain>
+Profile-ID: <your-domain-id>
+
+Domain emphases — weight probes within the universal axes; never remove axes
+or lower pass criteria:
+- **<Emphasis>:** <what to probe — e.g. grid-resolution sensitivity of any
+  reported trend; conservation properties of a new parameterization>
 <!-- INTERVIEW-PROFILE:END -->
 ```
 
-This block — and only this block — is the sole customization point of the
-skill. Universal axes, intensity levels, workflow steps, and attestation
-mechanics are fixed: do not edit them. Profiles weight probes *within* the
-universal axes and may add domain emphases; they cannot remove axes or lower
-pass criteria.
-
-To swap domains, replace everything between the markers (inclusive) with the
-block from a shipped profile in [profiles/](profiles/):
+Start from a shipped profile:
 
 - [profiles/software-general.md](profiles/software-general.md) — default:
   efficiency, data structures, API contracts.
 - [profiles/domain-science.md](profiles/domain-science.md) — research code:
-  unit/dimensional validity, surrogate-vs-ground-truth boundaries,
-  statistical validity, reproducibility.
+  unit/dimensional validity, surrogate-vs-ground-truth boundaries, numerical
+  stability, statistical validity, uncertainty quantification,
+  reproducibility.
 
-The `Profile-ID:` line inside the block feeds the `interview=` token of
-`Signoff-Agent`, so every attestation records which profile interviewed the
-human.
+Malformed or out-of-scope file-sourced profiles (missing markers or
+`Profile-ID`, attempts to weaken axes or pass criteria, instructions
+unrelated to interview emphasis) are announced and ignored — the run falls
+back to the embedded default, so a broken profile can only restore stock
+rigor, never lower it.
+
+**Provenance:** the `Profile-ID:` line feeds the `interview=` token of
+`Signoff-Agent`, and file-sourced profiles additionally record a 12-hex
+SHA256 prefix of the block
+(`interview=<level>/<profile-id>/sha256:<digest>`, GSA §2.3), so every
+attestation shows exactly which question set interviewed the human — a
+diluted profile is distinguishable from a shipped one.
+
+**Science guard:** independent of the active profile, any diff that touches
+scientific computation (scientific-stack imports, notebooks, RNG seeding,
+unit-bearing constants, netCDF/GRIB/zarr datasets or model configs)
+additively triggers the `domain-science` emphases — see the guard in
+`SKILL.md`. A repo whose profile already carries those emphases sees no
+change; the guard exists so science probes never depend on someone having
+configured anything.

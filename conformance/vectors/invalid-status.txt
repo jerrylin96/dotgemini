@@ -1,0 +1,16 @@
+[SIGNOFF 9f8e7d6]: human comprehension and risk attestation
+
+Signoff-Spec-Version: 1.0
+Signoff-Status: APPROVED
+Signoff-Timestamp: 2026-08-06T00:00:00Z
+Signoff-Base-SHA: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+Signoff-Reviewed-Commit-SHA: 9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e
+Signoff-Reviewed-Tree-SHA: 0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f
+Signoff-Harness-ID: claude-code
+Signoff-Conversation-ID: unavailable
+Signoff-Transcript-Digest: unavailable
+Signoff-Transcript-Bytes: unavailable
+Signoff-Tradeoff: none
+Signoff-Risk: none
+Signoff-Verified-By: reviewer@example.org
+Signoff-Agent: harness=claude-code/2.x model=example reasoning=high interview=standard/software-general

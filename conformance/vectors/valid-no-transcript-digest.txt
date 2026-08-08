@@ -1,0 +1,16 @@
+[SIGNOFF 1a2b3c4]: human comprehension and risk attestation
+
+Signoff-Spec-Version: 1.0
+Signoff-Status: VERIFIED_BY_HUMAN_NO_TRANSCRIPT_DIGEST
+Signoff-Timestamp: 2026-08-06T00:00:00Z
+Signoff-Base-SHA: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+Signoff-Reviewed-Commit-SHA: 1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b
+Signoff-Reviewed-Tree-SHA: b0a9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1
+Signoff-Harness-ID: generic-file
+Signoff-Conversation-ID: unavailable
+Signoff-Transcript-Digest: unavailable
+Signoff-Transcript-Bytes: unavailable
+Signoff-Tradeoff: none
+Signoff-Risk: transcript unavailable; digest downgraded with explicit second confirmation
+Signoff-Verified-By: reviewer@example.org
+Signoff-Agent: harness=generic-file/N/A model=N/A reasoning=N/A interview=standard/software-general
