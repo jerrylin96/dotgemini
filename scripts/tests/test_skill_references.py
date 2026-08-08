@@ -298,6 +298,7 @@ def test_multi_stage_adversarial_gates_contract():
     assert "/grillme" not in agents_c, "Un-hyphenated /grillme found in AGENTS.md"
     assert "/grillme" not in mf_c, "Un-hyphenated /grillme found in make-feature SKILL.md"
     assert "/grillme" not in spec_c, "Un-hyphenated /grillme found in spec-driven-development SKILL.md"
+    assert "/grillme" not in plan_c, "Un-hyphenated /grillme found in planning-and-task-breakdown SKILL.md"
 
     # 2. All 4 review modes documented in adversarial-review/SKILL.md
     modes = ["Spec Reviewer Mode", "Plan Reviewer Mode", "RED Test Reviewer Mode", "Code Reviewer Mode"]
@@ -330,8 +331,9 @@ def test_multi_stage_adversarial_gates_contract():
     assert "Adversarial Audit Summary" in agents_c, "Missing Adversarial Audit Summary rule in AGENTS.md"
     assert "Adversarial Audit Summary" in adv_c, "Missing Adversarial Audit Summary section in adversarial-review SKILL.md"
 
-    # 5. Full Audit Trail Preservation in make-feature SKILL.md
+    # 5. Full Audit Trail Preservation in make-feature SKILL.md & Plan Review in planning-and-task-breakdown SKILL.md
     assert "Full Audit Trail Preservation" in mf_c, "Missing Full Audit Trail Preservation requirement in make-feature SKILL.md"
+    assert "Subagent Adversarial Plan Review" in plan_c, "Missing Subagent Adversarial Plan Review section in planning-and-task-breakdown SKILL.md"
 
 
 def test_catchmeup_skill_contract():
