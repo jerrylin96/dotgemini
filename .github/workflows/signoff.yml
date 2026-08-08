@@ -102,6 +102,16 @@ jobs:
             return 0
           }
 
+          validate_note_payload() {
+            local payload="$1"
+            local expected_tree="$2"
+            local expected_commit="$3"
+
+            [ -n "$payload" ] || return 1
+
+            printf '%s\n' "$payload" | python3 scripts/validate_gsa_note.py - "$expected_tree" "$expected_commit"
+          }
+
           # --- Check 1: Empty GSA Attestation Commit on HEAD ---
           HEAD_PAYLOAD=$(git log -1 --format="%(trailers:only=true)" HEAD)
           if [ -n "$HEAD_PAYLOAD" ] && git rev-parse --verify -q HEAD~1 >/dev/null; then
@@ -119,7 +129,7 @@ jobs:
           if [ "$IS_VALID" -eq 0 ]; then
             NOTE_COMMIT=$(git notes --ref=signoff show HEAD 2>/dev/null || true)
             if [ -n "$NOTE_COMMIT" ]; then
-              if validate_payload "$NOTE_COMMIT" "$HEAD_TREE" "$HEAD_SHA"; then
+              if validate_note_payload "$NOTE_COMMIT" "$HEAD_TREE" "$HEAD_SHA"; then
                 echo "✅ Git Signoff Attestation verified via commit note."
                 IS_VALID=1
               fi
@@ -130,7 +140,7 @@ jobs:
           if [ "$IS_VALID" -eq 0 ]; then
             NOTE_TREE_PAYLOAD=$(git notes --ref=signoff show "$HEAD_TREE" 2>/dev/null || true)
             if [ -n "$NOTE_TREE_PAYLOAD" ]; then
-              if validate_payload "$NOTE_TREE_PAYLOAD" "$HEAD_TREE" ""; then
+              if validate_note_payload "$NOTE_TREE_PAYLOAD" "$HEAD_TREE" ""; then
                 echo "✅ Git Signoff Attestation verified via tree note fallback (GSA §5.1)."
                 IS_VALID=1
               fi
