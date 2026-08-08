@@ -42,6 +42,14 @@ Parent agents MUST include a compacted context block (≤ 30 lines / ~400 words)
 - **Target Artifact Paths**: <file links>
 ```
 
+### Mandatory Terse Audit Summary Output
+Every review subagent verdict (`APPROVE` or `REJECT`) MUST include a 3-5 line **Adversarial Audit Summary** detailing exactly what was caught and remediated during the audit loop:
+```markdown
+### 🛡️ Adversarial Audit Summary (What Was Caught & Fixed)
+- **[Mode]**: <Concise bullet describing bug, missing edge case, weak assertion, or path issue resolved>
+- **[Mode]**: <Concise bullet describing remediation proof>
+```
+
 ## Core Workflow Rules
 > [!IMPORTANT]
 > - **Reference Branch (Baseline)**: The branch currently checked out in the user's active workspace represents the baseline reference code. If the checked-out branch is itself the selected feature branch (or HEAD is detached), the script falls back to the default integration branch (e.g. `origin/main`) as the baseline instead.
