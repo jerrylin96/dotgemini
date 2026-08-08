@@ -47,34 +47,48 @@ jobs:
           IS_VALID=0
 
           # --- Check 1: Commit trailer on HEAD ---
-          TRAILER_STATUS=$(git log -1 --format="%(trailers:key=Signoff-Status,valueonly=true)" HEAD | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
-          TRAILER_TREE=$(git log -1 --format="%(trailers:key=Signoff-Reviewed-Tree-SHA,valueonly=true)" HEAD | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
-          TRAILER_COMMIT=$(git log -1 --format="%(trailers:key=Signoff-Reviewed-Commit-SHA,valueonly=true)" HEAD | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+          TRAILERS=$(git log -1 --format="%(trailers:key=Signoff-Status,valueonly=true)" HEAD | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | (grep -v '^$' || true))
+          NUM_TRAILERS=$(echo "$TRAILERS" | (grep -c . || true))
 
-          if [ "$TRAILER_STATUS" = "VERIFIED_BY_HUMAN" ] || [ "$TRAILER_STATUS" = "VERIFIED_BY_HUMAN_NO_TRANSCRIPT_DIGEST" ]; then
-            if [ -z "$TRAILER_TREE" ] || [ "$TRAILER_TREE" = "$HEAD_TREE" ] || [ "$TRAILER_COMMIT" = "$HEAD_SHA" ]; then
-              echo "✅ Git Signoff Attestation verified via commit trailer."
-              IS_VALID=1
-            else
-              echo "⚠️ Commit trailer found but tree SHA (${TRAILER_TREE}) does not match HEAD tree (${HEAD_TREE})."
+          if [ "$NUM_TRAILERS" -eq 1 ]; then
+            TRAILER_STATUS="$TRAILERS"
+            TRAILER_TREE=$(git log -1 --format="%(trailers:key=Signoff-Reviewed-Tree-SHA,valueonly=true)" HEAD | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+            TRAILER_COMMIT=$(git log -1 --format="%(trailers:key=Signoff-Reviewed-Commit-SHA,valueonly=true)" HEAD | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+
+            if [ "$TRAILER_STATUS" = "VERIFIED_BY_HUMAN" ] || [ "$TRAILER_STATUS" = "VERIFIED_BY_HUMAN_NO_TRANSCRIPT_DIGEST" ]; then
+              if [ -z "$TRAILER_TREE" ] || [ "$TRAILER_TREE" = "$HEAD_TREE" ] || [ "$TRAILER_COMMIT" = "$HEAD_SHA" ]; then
+                echo "✅ Git Signoff Attestation verified via commit trailer."
+                IS_VALID=1
+              else
+                echo "⚠️ Commit trailer found but tree SHA (${TRAILER_TREE}) does not match HEAD tree (${HEAD_TREE})."
+              fi
             fi
+          elif [ "$NUM_TRAILERS" -gt 1 ]; then
+            echo "⚠️ Rejecting HEAD: conflicting multiple Signoff-Status trailers found."
           fi
 
           # --- Check 2: Git note on HEAD commit SHA ---
           if [ "$IS_VALID" -eq 0 ]; then
             NOTE_COMMIT=$(git notes --ref=signoff show HEAD 2>/dev/null || true)
             if [ -n "$NOTE_COMMIT" ]; then
-              NOTE_STATUS=$(echo "$NOTE_COMMIT" | (grep -E "^Signoff-Status:" || true) | head -n 1 | cut -d':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
-              NOTE_TREE=$(echo "$NOTE_COMMIT" | (grep -E "^Signoff-Reviewed-Tree-SHA:" || true) | head -n 1 | cut -d':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
-              NOTE_COMMIT_SHA=$(echo "$NOTE_COMMIT" | (grep -E "^Signoff-Reviewed-Commit-SHA:" || true) | head -n 1 | cut -d':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+              NOTE_STATUSES=$(echo "$NOTE_COMMIT" | (grep -E "^Signoff-Status:" || true) | cut -d':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | (grep -v '^$' || true))
+              NUM_NOTE_STATUSES=$(echo "$NOTE_STATUSES" | (grep -c . || true))
 
-              if [ "$NOTE_STATUS" = "VERIFIED_BY_HUMAN" ] || [ "$NOTE_STATUS" = "VERIFIED_BY_HUMAN_NO_TRANSCRIPT_DIGEST" ]; then
-                if [ -z "$NOTE_TREE" ] || [ "$NOTE_TREE" = "$HEAD_TREE" ] || [ "$NOTE_COMMIT_SHA" = "$HEAD_SHA" ]; then
-                  echo "✅ Git Signoff Attestation verified via commit note."
-                  IS_VALID=1
-                else
-                  echo "⚠️ Commit note found but tree SHA (${NOTE_TREE}) does not match HEAD tree (${HEAD_TREE})."
+              if [ "$NUM_NOTE_STATUSES" -eq 1 ]; then
+                NOTE_STATUS="$NOTE_STATUSES"
+                NOTE_TREE=$(echo "$NOTE_COMMIT" | (grep -E "^Signoff-Reviewed-Tree-SHA:" || true) | head -n 1 | cut -d':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+                NOTE_COMMIT_SHA=$(echo "$NOTE_COMMIT" | (grep -E "^Signoff-Reviewed-Commit-SHA:" || true) | head -n 1 | cut -d':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+
+                if [ "$NOTE_STATUS" = "VERIFIED_BY_HUMAN" ] || [ "$NOTE_STATUS" = "VERIFIED_BY_HUMAN_NO_TRANSCRIPT_DIGEST" ]; then
+                  if [ -z "$NOTE_TREE" ] || [ "$NOTE_TREE" = "$HEAD_TREE" ] || [ "$NOTE_COMMIT_SHA" = "$HEAD_SHA" ]; then
+                    echo "✅ Git Signoff Attestation verified via commit note."
+                    IS_VALID=1
+                  else
+                    echo "⚠️ Commit note found but tree SHA (${NOTE_TREE}) does not match HEAD tree (${HEAD_TREE})."
+                  fi
                 fi
+              elif [ "$NUM_NOTE_STATUSES" -gt 1 ]; then
+                echo "⚠️ Rejecting commit note: conflicting multiple Signoff-Status lines found."
               fi
             fi
           fi
@@ -83,10 +97,15 @@ jobs:
           if [ "$IS_VALID" -eq 0 ]; then
             NOTE_TREE_PAYLOAD=$(git notes --ref=signoff show "$HEAD_TREE" 2>/dev/null || true)
             if [ -n "$NOTE_TREE_PAYLOAD" ]; then
-              NOTE_TREE_STATUS=$(echo "$NOTE_TREE_PAYLOAD" | (grep -E "^Signoff-Status:" || true) | head -n 1 | cut -d':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
-              if [ "$NOTE_TREE_STATUS" = "VERIFIED_BY_HUMAN" ] || [ "$NOTE_TREE_STATUS" = "VERIFIED_BY_HUMAN_NO_TRANSCRIPT_DIGEST" ]; then
-                echo "✅ Git Signoff Attestation verified via tree note fallback (GSA §5.1)."
-                IS_VALID=1
+              NOTE_TREE_STATUSES=$(echo "$NOTE_TREE_PAYLOAD" | (grep -E "^Signoff-Status:" || true) | cut -d':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | (grep -v '^$' || true))
+              NUM_TREE_STATUSES=$(echo "$NOTE_TREE_STATUSES" | (grep -c . || true))
+
+              if [ "$NUM_TREE_STATUSES" -eq 1 ]; then
+                NOTE_TREE_STATUS="$NOTE_TREE_STATUSES"
+                if [ "$NOTE_TREE_STATUS" = "VERIFIED_BY_HUMAN" ] || [ "$NOTE_TREE_STATUS" = "VERIFIED_BY_HUMAN_NO_TRANSCRIPT_DIGEST" ]; then
+                  echo "✅ Git Signoff Attestation verified via tree note fallback (GSA §5.1)."
+                  IS_VALID=1
+                fi
               fi
             fi
           fi

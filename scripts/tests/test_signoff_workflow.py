@@ -118,16 +118,29 @@ def test_commit_trailer_no_digest_attestation_passes(tmp_path):
 
 
 def test_commit_trailer_prefix_bypass_fails(tmp_path):
-    """Verify that a commit with a prefix bypass (e.g. VERIFIED_BY_HUMAN_FAKE) fails with exit 1."""
+    """Verify that a commit with a prefix bypass (e.g. VERIFIED_BY_HUMAN_REVOKED / VERIFIED_BY_HUMAN_FAKE) fails with exit 1."""
     repo = str(tmp_path)
     setup_git_repo(repo)
     
-    msg = "Bypass commit\n\nSignoff-Status: VERIFIED_BY_HUMAN_FAKE\nSignoff-Verified-By: test@example.com"
+    msg = "Bypass commit\n\nSignoff-Status: VERIFIED_BY_HUMAN_REVOKED\nSignoff-Verified-By: test@example.com"
     subprocess.run(["git", "commit", "--allow-empty", "-m", msg], cwd=repo, check=True)
     
     res = run_verification_in_repo(repo)
     assert res.returncode == 1
     assert "::error::Missing or stale Git Signoff Attestation" in res.stdout or "::error::Missing or stale Git Signoff Attestation" in res.stderr
+
+
+def test_commit_trailer_conflicting_multi_trailer_fails(tmp_path):
+    """Verify that a commit containing conflicting multiple Signoff-Status trailers fails verification with exit 1."""
+    repo = str(tmp_path)
+    setup_git_repo(repo)
+    
+    msg = "Conflicting commit\n\nSignoff-Status: VERIFIED_BY_HUMAN\nSignoff-Status: REJECTED"
+    subprocess.run(["git", "commit", "--allow-empty", "-m", msg], cwd=repo, check=True)
+    
+    res = run_verification_in_repo(repo)
+    assert res.returncode == 1
+    assert "Conflicting multiple Signoff-Status trailers" in res.stdout or "::error::Missing or stale Git Signoff Attestation" in res.stdout
 
 
 def test_commit_trailer_mismatched_tree_fails(tmp_path):
