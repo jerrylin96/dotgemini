@@ -34,7 +34,7 @@ SPLIT_WT=$(mktemp -d)/split-wt
 git worktree add --detach -q "$SPLIT_WT" "$FETCHED"
 trap 'git worktree remove --force "$SPLIT_WT" >/dev/null 2>&1 || true' EXIT
 
-for prefix in skills/signoff signoff_mcp; do
+for prefix in skills/signoff signoff_mcp conformance; do
     split=$(git -C "$SPLIT_WT" subtree split --prefix="$prefix" HEAD)
     # Tracked-content check: ignored debris (e.g. __pycache__) must not make
     # a removed prefix look adopted.

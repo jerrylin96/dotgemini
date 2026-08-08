@@ -251,8 +251,29 @@ def test_duplicate_status_fails(tmp_path):
     assert "::error::Missing, incomplete, or mismatched" in res.stdout or "::error::Missing, incomplete, or mismatched" in res.stderr
 
 
-def test_duplicate_tree_sha_fails(tmp_path):
-    """Verify that a payload with duplicate Signoff-Reviewed-Tree-SHA lines fails verification."""
+def test_malformed_tree_sha_in_note_fails(tmp_path):
+    """Verify that a note payload containing a non-40-hex Signoff-Reviewed-Tree-SHA fails verification."""
+    repo = str(tmp_path)
+    setup_git_repo(repo)
+
+    subprocess.run(["git", "commit", "--allow-empty", "-m", "Base commit"], cwd=repo, check=True)
+    head_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+
+    note_content = (
+        f"Signoff-Spec-Version: 1.0\n"
+        f"Signoff-Status: VERIFIED_BY_HUMAN\n"
+        f"Signoff-Reviewed-Commit-SHA: {head_sha}\n"
+        f"Signoff-Reviewed-Tree-SHA: not-a-valid-40-hex-tree-sha"
+    )
+    subprocess.run(["git", "notes", "--ref=signoff", "add", "-m", note_content], cwd=repo, check=True)
+
+    res = run_verification_in_repo(repo)
+    assert res.returncode == 1
+    assert "::error::Missing, incomplete, or mismatched" in res.stdout or "::error::Missing, incomplete, or mismatched" in res.stderr
+
+
+def test_appended_valid_notes_pass(tmp_path):
+    """Verify that a note built by appending two valid attestations passes verification (Task 1)."""
     repo = str(tmp_path)
     setup_git_repo(repo)
 
@@ -260,18 +281,62 @@ def test_duplicate_tree_sha_fails(tmp_path):
     head_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
     tree_sha = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
 
-    note_content = (
+    attestation1 = (
+        f"[SIGNOFF {head_sha[:7]}]: first attestation\n\n"
         f"Signoff-Spec-Version: 1.0\n"
         f"Signoff-Status: VERIFIED_BY_HUMAN\n"
         f"Signoff-Reviewed-Commit-SHA: {head_sha}\n"
         f"Signoff-Reviewed-Tree-SHA: {tree_sha}\n"
-        f"Signoff-Reviewed-Tree-SHA: 0000000000000000000000000000000000000000"
+        f"Signoff-Verified-By: alice@example.com"
     )
-    subprocess.run(["git", "notes", "--ref=signoff", "add", "-m", note_content], cwd=repo, check=True)
+    attestation2 = (
+        f"[SIGNOFF {head_sha[:7]}]: second attestation\n\n"
+        f"Signoff-Spec-Version: 1.0\n"
+        f"Signoff-Status: VERIFIED_BY_HUMAN\n"
+        f"Signoff-Reviewed-Commit-SHA: {head_sha}\n"
+        f"Signoff-Reviewed-Tree-SHA: {tree_sha}\n"
+        f"Signoff-Verified-By: bob@example.com"
+    )
+
+    subprocess.run(["git", "notes", "--ref=signoff", "add", "-m", attestation1], cwd=repo, check=True)
+    subprocess.run(["git", "notes", "--ref=signoff", "append", "-m", attestation2], cwd=repo, check=True)
+
+    res = run_verification_in_repo(repo)
+    assert res.returncode == 0
+    assert "verified via commit note" in res.stdout.lower() or "verified" in res.stdout.lower()
+
+
+def test_individually_malformed_notes_fail(tmp_path):
+    """Verify that a note payload with two attestations that are individually malformed fails verification."""
+    repo = str(tmp_path)
+    setup_git_repo(repo)
+
+    subprocess.run(["git", "commit", "--allow-empty", "-m", "Base commit"], cwd=repo, check=True)
+    head_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+    tree_sha = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+
+    bad_attestation1 = (
+        f"[SIGNOFF {head_sha[:7]}]: bad status\n\n"
+        f"Signoff-Spec-Version: 1.0\n"
+        f"Signoff-Status: REJECTED\n"
+        f"Signoff-Reviewed-Commit-SHA: {head_sha}\n"
+        f"Signoff-Reviewed-Tree-SHA: {tree_sha}"
+    )
+    bad_attestation2 = (
+        f"[SIGNOFF {head_sha[:7]}]: bad tree sha\n\n"
+        f"Signoff-Spec-Version: 1.0\n"
+        f"Signoff-Status: VERIFIED_BY_HUMAN\n"
+        f"Signoff-Reviewed-Commit-SHA: {head_sha}\n"
+        f"Signoff-Reviewed-Tree-SHA: not-a-sha"
+    )
+
+    subprocess.run(["git", "notes", "--ref=signoff", "add", "-m", bad_attestation1], cwd=repo, check=True)
+    subprocess.run(["git", "notes", "--ref=signoff", "append", "-m", bad_attestation2], cwd=repo, check=True)
 
     res = run_verification_in_repo(repo)
     assert res.returncode == 1
     assert "::error::Missing, incomplete, or mismatched" in res.stdout or "::error::Missing, incomplete, or mismatched" in res.stderr
+
 
 
 def test_valid_head_note_passes(tmp_path):

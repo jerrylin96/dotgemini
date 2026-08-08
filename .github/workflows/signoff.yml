@@ -102,6 +102,16 @@ jobs:
             return 0
           }
 
+          validate_note_payload() {
+            local payload="$1"
+            local expected_tree="$2"
+            local expected_commit="$3"
+
+            [ -n "$payload" ] || return 1
+
+            python3 -c "import sys, re; payload, tree, commit = sys.argv[1], sys.argv[2], sys.argv[3]; statuses = {'VERIFIED_BY_HUMAN', 'VERIFIED_BY_HUMAN_NO_TRANSCRIPT_DIGEST'}; sha_re = re.compile(r'^[0-9a-fA-F]{40}$'); blocks = ['[SIGNOFF ' + b for b in payload.split('[SIGNOFF ') if b.strip()] if '[SIGNOFF ' in payload else [payload]; parse = lambda b: {k: [v.strip() for v in re.findall(r'^' + k + r':\s*(.*)$', b, re.M)] for k in ['Signoff-Spec-Version', 'Signoff-Status', 'Signoff-Reviewed-Tree-SHA', 'Signoff-Reviewed-Commit-SHA']}; valid = lambda b: (lambda t: bool(t['Signoff-Spec-Version'] and t['Signoff-Status'] and t['Signoff-Reviewed-Tree-SHA'] and t['Signoff-Reviewed-Commit-SHA'] and all(s == '1.0' for s in t['Signoff-Spec-Version']) and all(st in statuses for st in t['Signoff-Status']) and all(sha_re.match(x) for x in t['Signoff-Reviewed-Tree-SHA']) and all(sha_re.match(x) for x in t['Signoff-Reviewed-Commit-SHA']) and (not tree or tree in t['Signoff-Reviewed-Tree-SHA']) and (not commit or commit in t['Signoff-Reviewed-Commit-SHA'])))(parse(b)); sys.exit(0 if any(valid(b) for b in blocks) or valid(payload) else 1)" "$payload" "$expected_tree" "$expected_commit"
+          }
+
           # --- Check 1: Empty GSA Attestation Commit on HEAD ---
           HEAD_PAYLOAD=$(git log -1 --format="%(trailers:only=true)" HEAD)
           if [ -n "$HEAD_PAYLOAD" ] && git rev-parse --verify -q HEAD~1 >/dev/null; then
@@ -119,7 +129,7 @@ jobs:
           if [ "$IS_VALID" -eq 0 ]; then
             NOTE_COMMIT=$(git notes --ref=signoff show HEAD 2>/dev/null || true)
             if [ -n "$NOTE_COMMIT" ]; then
-              if validate_payload "$NOTE_COMMIT" "$HEAD_TREE" "$HEAD_SHA"; then
+              if validate_note_payload "$NOTE_COMMIT" "$HEAD_TREE" "$HEAD_SHA"; then
                 echo "✅ Git Signoff Attestation verified via commit note."
                 IS_VALID=1
               fi
@@ -130,7 +140,7 @@ jobs:
           if [ "$IS_VALID" -eq 0 ]; then
             NOTE_TREE_PAYLOAD=$(git notes --ref=signoff show "$HEAD_TREE" 2>/dev/null || true)
             if [ -n "$NOTE_TREE_PAYLOAD" ]; then
-              if validate_payload "$NOTE_TREE_PAYLOAD" "$HEAD_TREE" ""; then
+              if validate_note_payload "$NOTE_TREE_PAYLOAD" "$HEAD_TREE" ""; then
                 echo "✅ Git Signoff Attestation verified via tree note fallback (GSA §5.1)."
                 IS_VALID=1
               fi
