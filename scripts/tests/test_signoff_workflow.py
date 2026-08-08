@@ -403,3 +403,50 @@ def test_tree_note_missing_reviewed_commit_sha_fails(tmp_path):
     res = run_verification_in_repo(repo)
     assert res.returncode == 1
     assert "::error::Missing, incomplete, or mismatched" in res.stdout or "::error::Missing, incomplete, or mismatched" in res.stderr
+
+
+def test_conformance_vectors(tmp_path):
+    """Pin the gate against the shared GSA v1.0 conformance suite (Task 2)."""
+    import json
+
+    conformance_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "conformance"))
+    expected_file = os.path.join(conformance_dir, "expected.json")
+
+    assert os.path.exists(expected_file), f"conformance/expected.json missing at {expected_file}"
+
+    with open(expected_file, "r", encoding="utf-8") as f:
+        expected_data = json.load(f)
+
+    for vector_rel_path, spec in expected_data.items():
+        if vector_rel_path.startswith("_"):
+            continue
+
+        vector_full_path = os.path.join(conformance_dir, vector_rel_path)
+        assert os.path.exists(vector_full_path), f"Vector file missing at {vector_full_path}"
+
+        with open(vector_full_path, "r", encoding="utf-8") as f:
+            vector_payload = f.read()
+
+        is_valid_expected = spec["valid"]
+
+        py_cmd = (
+            r"import sys, re; payload, tree, commit = sys.argv[1], sys.argv[2], sys.argv[3]; "
+            r"statuses = {'VERIFIED_BY_HUMAN', 'VERIFIED_BY_HUMAN_NO_TRANSCRIPT_DIGEST'}; "
+            r"sha_re = re.compile(r'^[0-9a-fA-F]{40}$'); "
+            r"blocks = ['[SIGNOFF ' + b for b in payload.split('[SIGNOFF ') if b.strip()] if '[SIGNOFF ' in payload else [payload]; "
+            r"parse = lambda b: {k: [v.strip() for v in re.findall(r'^' + k + r':\s*(.*)$', b, re.M)] for k in ['Signoff-Spec-Version', 'Signoff-Status', 'Signoff-Reviewed-Tree-SHA', 'Signoff-Reviewed-Commit-SHA']}; "
+            r"valid = lambda b: (lambda t: bool(t['Signoff-Spec-Version'] and t['Signoff-Status'] and t['Signoff-Reviewed-Tree-SHA'] and t['Signoff-Reviewed-Commit-SHA'] and all(s == '1.0' for s in t['Signoff-Spec-Version']) and all(st in statuses for st in t['Signoff-Status']) and all(sha_re.match(x) for x in t['Signoff-Reviewed-Tree-SHA']) and all(sha_re.match(x) for x in t['Signoff-Reviewed-Commit-SHA']) and (not tree or tree in t['Signoff-Reviewed-Tree-SHA']) and (not commit or commit in t['Signoff-Reviewed-Commit-SHA'])))(parse(b)); "
+            r"sys.exit(0 if any(valid(b) for b in blocks) or valid(payload) else 1)"
+        )
+
+        res = subprocess.run(
+            ["python3", "-c", py_cmd, vector_payload, "", ""],
+            capture_output=True,
+            text=True
+        )
+
+        if is_valid_expected:
+            assert res.returncode == 0, f"Expected vector {vector_rel_path} to pass, but failed: {res.stderr}"
+        else:
+            assert res.returncode == 1, f"Expected vector {vector_rel_path} to fail, but passed"
+
