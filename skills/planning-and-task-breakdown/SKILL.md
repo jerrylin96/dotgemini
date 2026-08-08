@@ -68,6 +68,7 @@ When Sequential Subagents strategy is selected:
 #### Strategy Triggers & Conventions:
 - **Auto-Recommendation**: Agent recommends `Sequential Subagents` if the task breakdown contains 5 or more complex multi-file slices.
 - **User Override Conventions**: If user prompt includes intent signals (`heavy`, `subagent per slice`, or external plan handoff) or command invocation conventions (`/plan heavy`, `/make-feature heavy`), agent proactively selects `Sequential Subagents` execution strategy.
+- **Per-Slice Review Gate**: Under `Sequential Subagents` (Heavy Mode), each slice builder subagent undergoes a per-slice `Adversarial Test Reviewer` gate after writing RED tests, and a per-slice `Adversarial Code Reviewer` gate after writing GREEN implementation before committing and handing off to the next slice subagent.
 - **External Plan Handoff Definition**: An external plan handoff refers to a plan produced outside this repository's `/plan` process, including pre-architected plans imported from frontier models.
 
 ### Step 2c: Subagent Adversarial Plan Review

@@ -11,7 +11,7 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
 
 - **Always.** Mandatory entry point for any file modification in a repository.
 - **Standard Invocation**: Trigger with `/make-feature` (or automatically whenever preparing to write or edit codebase files).
-- **Heavy Mode (`/make-feature heavy`)**: Use for complex multi-slice features. In Phase 1 (`/plan`), the agent proactively selects `Sequential Subagents` execution strategy across task slices.
+- **Heavy Mode (`/make-feature heavy`)**: Use for complex multi-slice features. In Phase 1 (`/plan`), the agent proactively selects `Sequential Subagents` execution strategy across task slices. In Phase 2, each task slice undergoes per-slice RED test review (`Adversarial Test Reviewer`) and per-slice code review (`Adversarial Code Reviewer`) before advancing to the next slice.
 - The only exception: changes to Antigravity artifacts, scratch files, or non-repo files.
 
 ## Core Rules
@@ -55,7 +55,7 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
      > [!IMPORTANT]
      > **Empirical Grounding Directive**: Prohibit declaring success, test passes, or schema validity without empirical execution output present in the context window.
      > [!TIP]
-     > **Sequential Subagent Delegation**: If the approved `/plan` specifies `Sequential Subagents`, execution subagents MUST run sequentially using `Workspace: inherit` (or target worktree path) so all slice commits land on `gemini/<feature-name>`.
+     > **Heavy Mode Subagent Loop**: In Heavy Mode (`Sequential Subagents`), each task slice executes sequentially using `Workspace: inherit`. For each slice, the builder subagent writes RED tests, triggers `Adversarial Test Reviewer` subagent, writes GREEN implementation, triggers slice `Adversarial Code Reviewer` subagent, updates `scratchpad.md`, and commits the slice before advancing to the next slice.
    - **Step 4e (Builder Pre-Review Quality Check & Manifest Creation)**:
      - Update `<appDataDir>/brain/<conversation-id>/scratch/scratchpad.md` with build step findings and empirical test logs.
      - Create review manifest artifact in conversation artifact directory (`<appDataDir>/brain/<conversation-id>/review_manifest_<feature>.md`).
