@@ -1,0 +1,17 @@
+[SIGNOFF e836eea]: human comprehension and risk attestation
+
+Signoff-Spec-Version: 1.0
+Signoff-Status: VERIFIED_BY_HUMAN
+Signoff-Timestamp: 2026-08-08T20:18:50Z
+Signoff-Base-SHA: 928996cf37009540173850b1e412fc80d25d5ae9
+Signoff-Reviewed-Commit-SHA: e836eea9e06847ea9b1b070e7dadf62c95bf470a
+Signoff-Reviewed-Tree-SHA: b889b2734965b2d8e811bc777c901fb8aff69d8d
+Signoff-Harness-ID: antigravity-cli
+Signoff-Conversation-ID: 3040e416-ce86-4fa1-854e-38c76985e56a
+Signoff-Transcript-Digest: sha256:754f0e5be53e1c88343cf5a77aaf1a2f7bfbd925df123039c9ef6bf304096dda
+Signoff-Transcript-Bytes: 84697
+Signoff-Tradeoff: push_notes(repo, remote) uses check=False for branch push so remote branch push errors do not interrupt refs/notes/signoff synchronization
+Signoff-Tradeoff: Detached HEAD skips feature branch push and logs branch_push_warning while allowing notes sync to proceed cleanly
+Signoff-Risk: Remote branch protection or non-fast-forward conflicts will prevent remote feature branch update while attestation notes still upload successfully
+Signoff-Verified-By: jerrylin247365@gmail.com
+Signoff-Agent: harness=antigravity-cli/N/A model=Gemini-3.6-Flash reasoning=N/A interview=standard/software-general
