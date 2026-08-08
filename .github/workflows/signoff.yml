@@ -1,0 +1,146 @@
+name: Signoff Verification Gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-signoff:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Fetch Git Notes
+        run: |
+          # Fetch notes from remote into tracking ref and merge via cat_sort_uniq strategy per GSA §2.5
+          # Note for Fork PRs: Fork PRs require notes pushed to base repository or PR head refs.
+          git fetch origin +refs/notes/signoff:refs/notes/signoff-remote 2>/dev/null || true
+          git notes --ref=signoff merge -s cat_sort_uniq refs/notes/signoff-remote 2>/dev/null || true
+
+      - name: Verify Git Signoff Attestation
+        run: |
+          # Trust & Authenticity Model:
+          # Unsigned trailers and notes verify only that a syntactically valid, self-attested GSA record is present.
+          # They do not prove that a Socratic review occurred or establish independent human identity.
+          # Cryptographic signing (git commit -S) and trusted reviewer verification remain required if independent identity assurance is intended.
+          # REAL ENFORCEMENT REQUIRES A GITHUB BRANCH PROTECTION RULE requiring 'Signoff Verification Gate' on 'main'.
+          # Note on Commit Trailers (Check 1): Empty attestation commits must be the HEAD commit on the PR branch. Pushing new code commits after signing requires re-attestation or Git Notes (Check 2/3).
+
+          set -eo pipefail
+
+          HEAD_SHA=$(git rev-parse HEAD)
+          HEAD_TREE=$(git rev-parse HEAD^{tree})
+          echo "Verifying signoff attestation for PR HEAD SHA (${HEAD_SHA}) / TREE (${HEAD_TREE})..."
+
+          IS_VALID=0
+
+          validate_payload() {
+            local payload="$1"
+            local expected_tree="$2"
+            local expected_commit="$3"
+
+            # Require exactly one occurrence of each mandatory GSA field (reject duplicates & conflicts)
+            local c_spec c_status c_tree c_commit
+            c_spec=$(echo "$payload" | (grep -c -E "^Signoff-Spec-Version:" || true))
+            c_status=$(echo "$payload" | (grep -c -E "^Signoff-Status:" || true))
+            c_tree=$(echo "$payload" | (grep -c -E "^Signoff-Reviewed-Tree-SHA:" || true))
+            c_commit=$(echo "$payload" | (grep -c -E "^Signoff-Reviewed-Commit-SHA:" || true))
+
+            if [ "$c_spec" -ne 1 ] || [ "$c_status" -ne 1 ] || [ "$c_tree" -ne 1 ] || [ "$c_commit" -ne 1 ]; then
+              return 1
+            fi
+
+            local spec_ver status rev_tree rev_commit
+            spec_ver=$(echo "$payload" | (grep -E "^Signoff-Spec-Version:" || true) | cut -d':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+            status=$(echo "$payload" | (grep -E "^Signoff-Status:" || true) | cut -d':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+            rev_tree=$(echo "$payload" | (grep -E "^Signoff-Reviewed-Tree-SHA:" || true) | cut -d':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+            rev_commit=$(echo "$payload" | (grep -E "^Signoff-Reviewed-Commit-SHA:" || true) | cut -d':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+
+            # 1. Spec version must be 1.0
+            if [ "$spec_ver" != "1.0" ]; then
+              return 1
+            fi
+
+            # 2. Status must be exact GSA enum
+            if [ "$status" != "VERIFIED_BY_HUMAN" ] && [ "$status" != "VERIFIED_BY_HUMAN_NO_TRANSCRIPT_DIGEST" ]; then
+              return 1
+            fi
+
+            # 3. Reviewed tree SHA must be present, 40-hex, and match expected_tree
+            if ! [[ "$rev_tree" =~ ^[0-9a-fA-F]{40}$ ]]; then
+              return 1
+            fi
+            if [ "$rev_tree" != "$expected_tree" ]; then
+              return 1
+            fi
+
+            # 4. Reviewed commit SHA must be present and valid 40-hex
+            if ! [[ "$rev_commit" =~ ^[0-9a-fA-F]{40}$ ]]; then
+              return 1
+            fi
+
+            # 5. If expected_commit is supplied, rev_commit must match expected_commit
+            if [ -n "$expected_commit" ]; then
+              if [ "$rev_commit" != "$expected_commit" ]; then
+                return 1
+              fi
+            fi
+
+            return 0
+          }
+
+          # --- Check 1: Empty GSA Attestation Commit on HEAD ---
+          HEAD_PAYLOAD=$(git log -1 --format="%(trailers:only=true)" HEAD)
+          if [ -n "$HEAD_PAYLOAD" ] && git rev-parse --verify -q HEAD~1 >/dev/null; then
+            PARENT_TREE=$(git rev-parse HEAD~1^{tree} 2>/dev/null || true)
+            PARENT_SHA=$(git rev-parse HEAD~1 2>/dev/null || true)
+            if [ "$PARENT_TREE" = "$HEAD_TREE" ]; then
+              if validate_payload "$HEAD_PAYLOAD" "$HEAD_TREE" "$PARENT_SHA"; then
+                echo "✅ Git Signoff Attestation verified via empty attestation commit on HEAD."
+                IS_VALID=1
+              fi
+            fi
+          fi
+
+          # --- Check 2: Git note on HEAD commit SHA ---
+          if [ "$IS_VALID" -eq 0 ]; then
+            NOTE_COMMIT=$(git notes --ref=signoff show HEAD 2>/dev/null || true)
+            if [ -n "$NOTE_COMMIT" ]; then
+              if validate_payload "$NOTE_COMMIT" "$HEAD_TREE" "$HEAD_SHA"; then
+                echo "✅ Git Signoff Attestation verified via commit note."
+                IS_VALID=1
+              fi
+            fi
+          fi
+
+          # --- Check 3: Git note on HEAD tree SHA (GSA §5.1 Tree Fallback for Post-Squash/Rebase) ---
+          if [ "$IS_VALID" -eq 0 ]; then
+            NOTE_TREE_PAYLOAD=$(git notes --ref=signoff show "$HEAD_TREE" 2>/dev/null || true)
+            if [ -n "$NOTE_TREE_PAYLOAD" ]; then
+              if validate_payload "$NOTE_TREE_PAYLOAD" "$HEAD_TREE" ""; then
+                echo "✅ Git Signoff Attestation verified via tree note fallback (GSA §5.1)."
+                IS_VALID=1
+              fi
+            fi
+          fi
+
+          if [ "$IS_VALID" -eq 1 ]; then
+            echo "✅ Git Signoff Attestation gate PASSED for SHA ${HEAD_SHA}."
+            exit 0
+          else
+            echo "::error::Missing, incomplete, or mismatched Git Signoff Attestation on PR head (${HEAD_SHA})! Run /signoff on latest head and push refs/notes/signoff before merging."
+            exit 1
+          fi
