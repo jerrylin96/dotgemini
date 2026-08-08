@@ -312,6 +312,15 @@ def test_multi_stage_adversarial_gates_contract():
     assert "Worktree RED Test Review Path" in adv_c, "Missing Worktree RED Test Review Path section in adversarial-review SKILL.md"
     assert "Do NOT require the full test suite to pass at this gate" in adv_c, "Missing RED test full suite pass exemption in adversarial-review SKILL.md"
 
+    # RED Test Review Path contract assertions
+    assert "Target Worktree Path" in adv_c, "Missing Target Worktree Path required input in test-review"
+    assert "Designated RED Test Paths" in adv_c, "Missing Designated RED Test Paths required input in test-review"
+    assert "Approved Spec Path" in adv_c, "Missing Approved Spec Path required input in test-review"
+    assert "Spec Parity" in adv_c, "Missing Spec Parity check in test-review"
+    assert "Assertion Rigor" in adv_c, "Missing Assertion Rigor check in test-review"
+    assert "Edge, Boundary & Error Coverage" in adv_c, "Missing Edge, Boundary & Error Coverage check in test-review"
+    assert "Expected Behavioral Failure" in adv_c, "Missing Expected Behavioral Failure check in test-review"
+
     # Verify Step 0 appears before Worktree Code Review Path
     step0_idx = adv_c.find("Step 0: Select Review Mode and Route")
     worktree_path_idx = adv_c.find("Worktree Code Review Path")

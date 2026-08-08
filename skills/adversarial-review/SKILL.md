@@ -51,14 +51,38 @@ Applicable **ONLY** to `spec-review` and `plan-review` modes.
 
 Applicable **ONLY** to `test-review` mode.
 
-1. **Worktree Context**: Operates inside target worktree path (`~/.gemini/tmp/worktrees/...`).
-2. **Test Execution**: Run designated failing RED test files via:
-   ```bash
-   python3 ~/.gemini/scripts/run_in_env.py <worktree_path> pytest <test_path>
-   ```
-3. **Behavioral Failure Validation**: Verify tests fail for expected behavioral/architectural reasons (not syntax, import, collection, or environment failures).
-4. **Full Suite Exemption**: Do NOT require the full test suite to pass at this gate — RED tests should fail cleanly.
-5. **Verdict Output**: Emit `APPROVE` or `REJECT` verdict with 3-5 line **Adversarial Audit Summary**, and terminate turn immediately. Max 3 REJECT cycles per gate before escalating to human engineer.
+### 1. Required Inputs:
+The review subagent MUST be provided with:
+- **Target Worktree Path**: Absolute path under `~/.gemini/tmp/worktrees/`.
+- **Designated RED Test Paths**: Specific test file path(s) or pytest node IDs.
+- **Approved Spec Path**: Target `/spec` artifact path.
+- **Task Slice Info**: (Optional) Relevant plan task item.
+
+> [!IMPORTANT]
+> If any required input (worktree path, test path, spec path) is missing or ambiguous, the reviewer MUST stop immediately and ask the parent agent for explicit input parameters.
+
+### 2. Mandatory Source-Review & Assertion Rigor Audit:
+Before running tests, the reviewer MUST view the test source code and spec artifact via `view_file` to evaluate:
+- **Spec Parity**: Verify every relevant requirement and non-negotiable in the spec is represented by a substantive test case.
+- **Assertion Rigor**: Reject weak assertions (e.g. trivial `assert result is not None` or generic type checks when value, state, or error semantics are required).
+- **Edge, Boundary & Error Coverage**: Verify edge cases, boundary limits, and expected failure modes specified in the spec are tested (or explicitly explain why inapplicable).
+- **Trivial-Implementation Resilience**: Reject tests that can pass after unrelated or minimal incorrect implementations.
+
+### 3. Empirical Test Execution & Behavioral Failure Validation:
+Run ONLY the designated RED test file(s) inside the worktree using the environment runner:
+```bash
+python3 ~/.gemini/scripts/run_in_env.py <worktree_path> pytest <designated_test_path>
+```
+- **Expected Behavioral Failure**: APPROVE only if tests fail for legitimate expected architectural or behavioral reasons.
+- **Reject Syntax/Import/Env Errors**: REJECT if tests fail due to syntax errors, import bugs, collection failures, or environment issues.
+- **Full Suite Exemption**: Do NOT require the full test suite to pass at this gate — RED tests should fail cleanly.
+
+### 4. Verdict Report & Audit Summary:
+Emit `APPROVE` or `REJECT` verdict detailing:
+- Test command executed and observed failure traceback/reason.
+- Spec requirements checked and assertion/coverage findings.
+- Required 3-5 line **Adversarial Audit Summary**.
+- **TERMINATE TURN**: Stop calling tools immediately after posting report. Max 3 REJECT cycles per gate before escalating to human engineer.
 
 ---
 
