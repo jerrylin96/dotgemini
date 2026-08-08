@@ -36,11 +36,13 @@ Write the test first. It must fail. A test that passes immediately proves nothin
 
 ### Step 1b: Subagent Adversarial RED Test Review
 
-Parent agent invokes `invoke_subagent` (`TypeName: self`, `Role: Adversarial Test Reviewer`). Subagent audits written RED tests to verify:
+When executing under `/make-feature` Phase 2 (Build & Worktree - Adversarial RED Test Review Gate) or Heavy Mode per-slice flow, parent agent invokes `invoke_subagent` (`TypeName: self`, `Role: Adversarial Test Reviewer`). Subagent audits written RED tests to verify:
 - Tests fail for the correct architectural reason (not syntax or import bugs).
 - Assertions are rigorous (testing business logic boundaries, not weak non-null checks).
 - 100% parity with requirements and edge cases defined in `/spec`.
-- Repeat fix-verify loop until verdict is `APPROVE`.
+- Max 3 REJECT cycles per gate before escalating to human engineer.
+
+(For standalone TDD usage outside `/make-feature` e.g., quick single-file bugfix via `/test`, self-review using checklist in this skill is sufficient; subagent optional. Full test suite pass is NOT required at this gate — RED tests should fail cleanly).
 
 ### Step 2: GREEN — Make It Pass
 

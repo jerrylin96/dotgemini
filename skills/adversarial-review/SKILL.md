@@ -1,45 +1,70 @@
 ---
 name: adversarial-review
-description: Adversarial review of two git worktrees to find bugs/quality issues before merge. Do not use for simple diffs or neutral walkthroughs.
+description: Multi-stage adversarial review of specifications, plans, RED tests, and code worktrees to catch edge cases, non-negotiables, and bugs across the software lifecycle.
 ---
 
 # Adversarial Review
 
-Automatically resolve context, create/update feature branch worktree, and perform adversarial diff review across 4 distinct lifecycle gates.
+Automatically route review mode, perform artifact audits (Spec/Plan) or worktree diff audits (Test/Code) across 4 distinct lifecycle gates.
 
-## Operational Review Modes & Roles
+## Step 0: Select Review Mode and Route (Mandatory Dispatch)
 
-The adversarial review subagent loop operates in 4 distinct lifecycle review modes:
+The review subagent MUST first inspect its prompt inputs / Context Compaction Block to determine its target review mode:
+1. **Spec Reviewer Mode (`spec-review`, Role: Adversarial Spec Reviewer)** -> Execute **Artifact Review Path (Spec & Plan)**.
+2. **Plan Reviewer Mode (`plan-review`, Role: Adversarial Plan Reviewer)** -> Execute **Artifact Review Path (Spec & Plan)**.
+3. **RED Test Reviewer Mode (`test-review`, Role: Adversarial Test Reviewer)** -> Execute **Worktree RED Test Review Path**.
+4. **Code Reviewer Mode (`code-review`, Role: Adversarial Code Reviewer)** -> Execute **Worktree Code Review Path**.
 
-### Artifact Review Modes (Spec & Plan)
-For `spec-review` and `plan-review`, review subagents operate directly on markdown artifacts. **SKIP `resolve_branches.py` worktree creation, git diff, and test runner setup.** Target artifact path is passed in the Context Compaction Block.
+> [!IMPORTANT]
+> If the review mode is missing or ambiguous, the reviewer MUST stop immediately and ask the parent agent for explicit mode selection.
 
-1. **Spec Reviewer Mode (`Role: Adversarial Spec Reviewer`)**:
-   - **Target**: `/spec` artifact path.
-   - **Checks**: Scope completeness, unstated assumptions, missing edge cases, security/architectural risks, non-negotiables.
-   - **Commands**: Read artifact via `view_file`.
-   - **Verdict**: `APPROVE` or `REJECT` with specific required spec fixes.
+---
 
-2. **Plan Reviewer Mode (`Role: Adversarial Plan Reviewer`)**:
-   - **Target**: `/plan` artifact path.
-   - **Checks**: Atomic task decomposition, explicit TDD RED/GREEN specs, executable verify commands, dependency ordering, worktree/env isolation safety.
-   - **Commands**: Read artifact via `view_file`.
-   - **Verdict**: `APPROVE` or `REJECT` with specific plan fixes.
+## Artifact Review Path (Spec & Plan)
 
-### Worktree Review Modes (RED Test & Code)
-For `test-review` and `code-review`, review subagents operate inside the feature worktree path (`~/.gemini/tmp/worktrees/...`).
+Applicable **ONLY** to `spec-review` and `plan-review` modes.
 
-3. **RED Test Reviewer Mode (`Role: Adversarial Test Reviewer`)**:
-   - **Target**: Written RED test suite in worktree.
-   - **Checks**: Verification that tests fail for the correct architectural reason (not syntax/import bugs), assertion rigor (no weak `assert result is not None`), edge case coverage, boundary/error testing, and 100% spec requirement parity. Full test suite pass is NOT required at this gate.
-   - **Commands**: Run failing RED tests via `python3 ~/.gemini/scripts/run_in_env.py <worktree_path> pytest <test_path>`.
-   - **Verdict**: `APPROVE` or `REJECT` with required test additions/fixes.
+> [!CAUTION]
+> **Artifact Mode Bypass Rules**: When executing `spec-review` or `plan-review`, the review subagent MUST NOT:
+> - Ask the user or parent agent to select a feature branch.
+> - Invoke `resolve_branches.py`.
+> - Create or use a git worktree.
+> - Generate or read a git diff.
+> - Run test, linter, or environment setup scripts (`setup_review_env.py`, `run_in_env.py`).
 
-4. **Code Reviewer Mode (`Role: Adversarial Code Reviewer`)**:
-   - **Target**: Worktree changeset & pushed feature branch.
-   - **Checks**: Empirical test pass proof, linter results, ponytail reusability, zero unrequested abstractions, zero regressions.
-   - **Commands**: Run full test suite and linter via `run_in_env.py`.
-   - **Verdict**: `APPROVE` or `REJECT` with blocking findings.
+### Execution Procedure for Spec & Plan Artifacts:
+1. Read the target artifact directly via `view_file` using the file path provided under `Target Artifact Paths` in the Context Compaction Block.
+2. Apply mode-specific checklist:
+   - **`spec-review` Checklist**: Scope completeness, unstated assumptions, missing edge cases, security/architectural risks, non-negotiables.
+   - **`plan-review` Checklist**: Atomic task decomposition, explicit TDD RED/GREEN specs, executable verify commands, dependency ordering, worktree/env isolation safety.
+3. Output verdict (`APPROVE` or `REJECT`) with required 3-5 line **Adversarial Audit Summary** (state clean compliance honestly if zero blocking issues found):
+   ```markdown
+   ### Adversarial Audit Summary (What Was Caught & Fixed)
+   - **[Mode]**: <Concise bullet describing bug, missing edge case, weak assertion, or path issue resolved>
+   - **[Mode]**: <If no blocking issues found: "No blocking issues found; verified clean compliance for [area/spec]">
+   ```
+4. **TERMINATE TURN**: Immediately stop calling tools upon posting the verdict report. Do NOT proceed to branch resolution or worktree review sections below.
+
+---
+
+## Worktree RED Test Review Path
+
+Applicable **ONLY** to `test-review` mode.
+
+1. **Worktree Context**: Operates inside target worktree path (`~/.gemini/tmp/worktrees/...`).
+2. **Test Execution**: Run designated failing RED test files via:
+   ```bash
+   python3 ~/.gemini/scripts/run_in_env.py <worktree_path> pytest <test_path>
+   ```
+3. **Behavioral Failure Validation**: Verify tests fail for expected behavioral/architectural reasons (not syntax, import, collection, or environment failures).
+4. **Full Suite Exemption**: Do NOT require the full test suite to pass at this gate — RED tests should fail cleanly.
+5. **Verdict Output**: Emit `APPROVE` or `REJECT` verdict with 3-5 line **Adversarial Audit Summary**, and terminate turn immediately. Max 3 REJECT cycles per gate before escalating to human engineer.
+
+---
+
+## Worktree Code Review Path
+
+The following `Core Workflow Rules`, `Context Resolution`, and `Execution Steps` apply **ONLY** to `code-review` mode.
 
 ### Subagent Context Compaction Template
 Parent agents MUST include a compacted context block (≤ 30 lines / ~400 words) when invoking review subagents:
@@ -56,8 +81,8 @@ Parent agents MUST include a compacted context block (≤ 30 lines / ~400 words)
 Every review subagent verdict (`APPROVE` or `REJECT`) MUST include a 3-5 line **Adversarial Audit Summary** detailing exactly what was caught and remediated during the audit loop. If zero issues were found, state clean compliance honestly without inventing findings:
 ```markdown
 ### Adversarial Audit Summary (What Was Caught & Fixed)
-- **[Mode]**: <Concise bullet describing bug, missing edge case, weak assertion, or path issue resolved>
-- **[Mode]**: <If no blocking issues found: "No blocking issues found; verified clean compliance for [area/spec]">
+- **[Code]**: <Concise bullet describing bug, missing edge case, weak assertion, or path issue resolved>
+- **[Code]**: <If no blocking issues found: "No blocking issues found; verified clean compliance for [area/spec]">
 ```
 
 ## Core Workflow Rules
@@ -220,4 +245,3 @@ The script returns JSON on stdout. The schema depends on the outcome:
 6. **Output Report & Terminate Turn**:
    - Output the final review report directly into the chat. Do not save to file unless requested.
    - **Turn Termination**: Immediately upon posting the review report, the subagent MUST stop calling tools to conclude its turn. Do not execute further steps or linger in an idle loop.
-

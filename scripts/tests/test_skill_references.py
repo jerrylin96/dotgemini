@@ -304,9 +304,18 @@ def test_multi_stage_adversarial_gates_contract():
     for mode in modes:
         assert mode in adv_c, f"Review mode '{mode}' missing from adversarial-review SKILL.md"
 
-    # 3. Artifact-only mode bypass assertion
-    assert "Artifact Review Modes (Spec & Plan)" in adv_c, "Missing Artifact Review Modes section in adversarial-review SKILL.md"
-    assert "SKIP `resolve_branches.py` worktree creation" in adv_c, "Missing artifact-only worktree bypass rule in adversarial-review SKILL.md"
+    # 3. Mode dispatch and routing assertions
+    assert "Step 0: Select Review Mode and Route (Mandatory Dispatch)" in adv_c, "Missing Step 0 Mode Dispatch in adversarial-review SKILL.md"
+    assert "Artifact Review Path (Spec & Plan)" in adv_c, "Missing Artifact Review Path section in adversarial-review SKILL.md"
+    assert "Artifact Mode Bypass Rules" in adv_c, "Missing Artifact Mode Bypass Rules in adversarial-review SKILL.md"
+    assert "Worktree Code Review Path" in adv_c, "Missing Worktree Code Review Path section in adversarial-review SKILL.md"
+    assert "Worktree RED Test Review Path" in adv_c, "Missing Worktree RED Test Review Path section in adversarial-review SKILL.md"
+    assert "Do NOT require the full test suite to pass at this gate" in adv_c, "Missing RED test full suite pass exemption in adversarial-review SKILL.md"
+
+    # Verify Step 0 appears before Worktree Code Review Path
+    step0_idx = adv_c.find("Step 0: Select Review Mode and Route")
+    worktree_path_idx = adv_c.find("Worktree Code Review Path")
+    assert step0_idx < worktree_path_idx, "Step 0 Mode Dispatch must appear before Worktree Code Review Path"
 
     # 4. Mandatory Adversarial Audit Summary in AGENTS.md & adversarial-review SKILL.md
     assert "Adversarial Audit Summary" in agents_c, "Missing Adversarial Audit Summary rule in AGENTS.md"
