@@ -1,38 +1,43 @@
 import os
 import subprocess
 
+
 WORKFLOW_PATH = os.path.join(os.path.dirname(__file__), "..", "..", ".github", "workflows", "signoff.yml")
 
-VERIFICATION_SCRIPT = r"""
-set -eo pipefail
 
-HEAD_SHA=$(git rev-parse HEAD)
-echo "Verifying signoff attestation for PR HEAD (${HEAD_SHA})..."
 
-# Check 1: Commit trailer on HEAD matching VERIFIED_BY_HUMAN*
-TRAILER=$(git log -1 --format="%(trailers:key=Signoff-Status,valueonly=true)" HEAD | xargs)
+def get_verification_script() -> str:
+    """Extract the Verify Git Signoff Attestation script directly from signoff.yml."""
+    with open(WORKFLOW_PATH, "r", encoding="utf-8") as f:
+        lines = f.readlines()
 
-# Check 2: Git note under refs/notes/signoff on HEAD matching VERIFIED_BY_HUMAN*
-NOTE=$(git notes --ref=signoff show HEAD 2>/dev/null | grep -E "^Signoff-Status:\s*VERIFIED_BY_HUMAN" || true)
+    script_lines = []
+    recording = False
+    base_indent = None
 
-IS_VALID=0
-case "$TRAILER" in
-  VERIFIED_BY_HUMAN*) IS_VALID=1 ;;
-  *) IS_VALID=0 ;;
-esac
+    for line in lines:
+        if "Verify Git Signoff Attestation" in line:
+            recording = True
+            continue
+        if recording:
+            if base_indent is None:
+                if line.strip().startswith("run:"):
+                    continue
+                if line.strip():
+                    base_indent = len(line) - len(line.lstrip())
 
-if [ "$IS_VALID" -eq 0 ] && [ -n "$NOTE" ]; then
-  IS_VALID=1
-fi
+            if base_indent is not None:
+                if line.strip() and (len(line) - len(line.lstrip())) < base_indent:
+                    break
+                script_lines.append(line[base_indent:] if len(line) >= base_indent else line)
 
-if [ "$IS_VALID" -eq 1 ]; then
-  echo "✅ Git Signoff Attestation verified for SHA ${HEAD_SHA}."
-  exit 0
-else
-  echo "::error::Missing Git Signoff Attestation on PR head (${HEAD_SHA})! Run /signoff and push attestation note/commit before merging."
-  exit 1
-fi
-"""
+    if not script_lines:
+        raise RuntimeError("Verify Git Signoff Attestation step not found in workflow")
+
+    return "".join(script_lines)
+
+
+
 
 
 def test_workflow_yaml_structure():
@@ -67,12 +72,13 @@ def run_verification_in_repo(repo_dir: str) -> subprocess.CompletedProcess:
     env = os.environ.copy()
     env["GIT_CONFIG_NOSYSTEM"] = "1"
     return subprocess.run(
-        ["bash", "-c", VERIFICATION_SCRIPT],
+        ["bash", "-c", get_verification_script()],
         cwd=repo_dir,
         capture_output=True,
         text=True,
         env=env
     )
+
 
 
 def test_unattested_commit_fails(tmp_path):
