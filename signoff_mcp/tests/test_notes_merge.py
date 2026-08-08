@@ -133,9 +133,13 @@ def test_push_notes_captures_branch_push_failure_non_blockingly(two_clones, tmp_
     # Create remote feature/conflict on origin with a diverging commit to force push failure
     seed = tmp_path / "diverger"
     git(tmp_path, "clone", "-q", str(origin), "diverger")
+    git(seed, "config", "user.email", "diverger@example.com")
+    git(seed, "config", "user.name", "diverger")
+    git(seed, "config", "commit.gpgsign", "false")
     git(seed, "checkout", "-b", "feature/conflict")
     commit_file(seed, "conflict.txt", "seed conflict\n", "remote conflict")
     git(seed, "push", "-q", "origin", "feature/conflict")
+
 
     # In alice clone, add different commit on feature/conflict
     commit_file(alice, "conflict.txt", "alice conflict\n", "local conflict")
