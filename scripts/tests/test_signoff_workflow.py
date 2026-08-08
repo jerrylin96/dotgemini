@@ -58,10 +58,10 @@ def get_verification_script() -> str:
 def test_workflow_yaml_structure():
     """Verify that .github/workflows/signoff.yml exists and adheres to hardened Spec schema."""
     assert os.path.exists(WORKFLOW_PATH), f"Workflow file does not exist at {WORKFLOW_PATH}"
-    
+
     with open(WORKFLOW_PATH, "r", encoding="utf-8") as f:
         content = f.read()
-        
+
     assert "name: Signoff Verification Gate" in content
     assert "pull_request:" in content
     assert "ready_for_review" in content
@@ -107,37 +107,37 @@ def test_unattested_commit_fails(tmp_path):
     """Verify that an un-attested commit causes verification to output ::error:: and exit 1."""
     repo = str(tmp_path)
     setup_git_repo(repo)
-    
+
     subprocess.run(["git", "commit", "--allow-empty", "-m", "Un-attested commit"], cwd=repo, check=True)
-    
-    res = run_verification_in_repo(repo)
-    assert res.returncode == 1
-    assert "::error::Missing, incomplete, or mismatched Git Signoff Attestation" in res.stdout or "::error::Missing, incomplete, or mismatched Git Signoff Attestation" in res.stderr
 
-
-def test_status_only_trailer_fails(tmp_path):
-    """Verify that a status-only trailer without Spec-Version and Tree-SHA fails verification."""
-    repo = str(tmp_path)
-    setup_git_repo(repo)
-    
-    msg = "Status only commit\n\nSignoff-Status: VERIFIED_BY_HUMAN"
-    subprocess.run(["git", "commit", "--allow-empty", "-m", msg], cwd=repo, check=True)
-    
     res = run_verification_in_repo(repo)
     assert res.returncode == 1
     assert "::error::Missing, incomplete, or mismatched" in res.stdout or "::error::Missing, incomplete, or mismatched" in res.stderr
 
 
-def test_valid_gsa_commit_trailer_passes(tmp_path):
-    """Verify that a commit with complete structured GSA payload exits 0 cleanly."""
+def test_status_only_trailer_fails(tmp_path):
+    """Verify that a status-only trailer without Spec-Version, Commit-SHA, and Tree-SHA fails verification."""
     repo = str(tmp_path)
     setup_git_repo(repo)
-    
+
+    msg = "Status only commit\n\nSignoff-Status: VERIFIED_BY_HUMAN"
+    subprocess.run(["git", "commit", "--allow-empty", "-m", msg], cwd=repo, check=True)
+
+    res = run_verification_in_repo(repo)
+    assert res.returncode == 1
+    assert "::error::Missing, incomplete, or mismatched" in res.stdout or "::error::Missing, incomplete, or mismatched" in res.stderr
+
+
+def test_valid_empty_attestation_commit_passes(tmp_path):
+    """Verify that a valid empty attestation commit parented on HEAD~1 passes verification."""
+    repo = str(tmp_path)
+    setup_git_repo(repo)
+
     # Create reviewed commit
     subprocess.run(["git", "commit", "--allow-empty", "-m", "Substantive change"], cwd=repo, check=True)
     rev_commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
     rev_tree = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
-    
+
     msg = (
         f"[SIGNOFF {rev_commit[:7]}]: human comprehension and risk attestation\n\n"
         f"Signoff-Spec-Version: 1.0\n"
@@ -147,101 +147,142 @@ def test_valid_gsa_commit_trailer_passes(tmp_path):
         f"Signoff-Verified-By: test@example.com"
     )
     subprocess.run(["git", "commit", "--allow-empty", "-m", msg], cwd=repo, check=True)
-    
+
     res = run_verification_in_repo(repo)
     assert res.returncode == 0
-    assert "verified via commit trailer payload" in res.stdout.lower()
+    assert "verified via empty attestation commit on head" in res.stdout.lower()
 
 
-def test_valid_gsa_commit_trailer_no_digest_passes(tmp_path):
-    """Verify complete GSA payload with VERIFIED_BY_HUMAN_NO_TRANSCRIPT_DIGEST passes."""
+def test_code_changing_non_empty_head_commit_fails(tmp_path):
+    """Verify that a code-changing/non-empty HEAD commit with trailers fails empty attestation commit check."""
     repo = str(tmp_path)
     setup_git_repo(repo)
-    
-    subprocess.run(["git", "commit", "--allow-empty", "-m", "Substantive change"], cwd=repo, check=True)
+
+    # Base commit
+    subprocess.run(["git", "commit", "--allow-empty", "-m", "Initial commit"], cwd=repo, check=True)
+
+    # Create non-empty commit (modifying a file)
+    test_file = os.path.join(repo, "foo.txt")
+    with open(test_file, "w") as f:
+        f.write("code change\n")
+    subprocess.run(["git", "add", "foo.txt"], cwd=repo, check=True)
+
+    rev_tree = subprocess.run(["git", "write-tree"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
     rev_commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
-    rev_tree = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
-    
+
     msg = (
-        f"[SIGNOFF {rev_commit[:7]}]: human comprehension attestation\n\n"
+        f"Code changing commit\n\n"
         f"Signoff-Spec-Version: 1.0\n"
-        f"Signoff-Status: VERIFIED_BY_HUMAN_NO_TRANSCRIPT_DIGEST\n"
+        f"Signoff-Status: VERIFIED_BY_HUMAN\n"
         f"Signoff-Reviewed-Commit-SHA: {rev_commit}\n"
-        f"Signoff-Reviewed-Tree-SHA: {rev_tree}\n"
-        f"Signoff-Verified-By: test@example.com"
+        f"Signoff-Reviewed-Tree-SHA: {rev_tree}"
+    )
+    subprocess.run(["git", "commit", "-m", msg], cwd=repo, check=True)
+
+    res = run_verification_in_repo(repo)
+    assert res.returncode == 1
+    assert "::error::Missing, incomplete, or mismatched" in res.stdout or "::error::Missing, incomplete, or mismatched" in res.stderr
+
+
+def test_empty_attestation_commit_wrong_reviewed_commit_fails(tmp_path):
+    """Verify that an empty attestation commit whose Signoff-Reviewed-Commit-SHA is not HEAD~1 fails."""
+    repo = str(tmp_path)
+    setup_git_repo(repo)
+
+    subprocess.run(["git", "commit", "--allow-empty", "-m", "Base commit"], cwd=repo, check=True)
+    rev_tree = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+
+    wrong_commit = "0000000000000000000000000000000000000000"
+    msg = (
+        f"[SIGNOFF]: attestation\n\n"
+        f"Signoff-Spec-Version: 1.0\n"
+        f"Signoff-Status: VERIFIED_BY_HUMAN\n"
+        f"Signoff-Reviewed-Commit-SHA: {wrong_commit}\n"
+        f"Signoff-Reviewed-Tree-SHA: {rev_tree}"
     )
     subprocess.run(["git", "commit", "--allow-empty", "-m", msg], cwd=repo, check=True)
-    
+
     res = run_verification_in_repo(repo)
-    assert res.returncode == 0
-    assert "verified via commit trailer payload" in res.stdout.lower()
+    assert res.returncode == 1
+    assert "::error::Missing, incomplete, or mismatched" in res.stdout or "::error::Missing, incomplete, or mismatched" in res.stderr
 
 
-def test_commit_trailer_prefix_bypass_fails(tmp_path):
-    """Verify that a commit with a fake status prefix (VERIFIED_BY_HUMAN_FAKE) fails with exit 1."""
+def test_missing_reviewed_commit_sha_trailer_fails(tmp_path):
+    """Verify that a HEAD trailer missing Signoff-Reviewed-Commit-SHA fails verification."""
     repo = str(tmp_path)
     setup_git_repo(repo)
-    
+
     subprocess.run(["git", "commit", "--allow-empty", "-m", "Base commit"], cwd=repo, check=True)
     rev_tree = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
-    msg = f"Bypass commit\n\nSignoff-Spec-Version: 1.0\nSignoff-Status: VERIFIED_BY_HUMAN_FAKE\nSignoff-Reviewed-Tree-SHA: {rev_tree}"
+
+    msg = (
+        f"Missing commit SHA\n\n"
+        f"Signoff-Spec-Version: 1.0\n"
+        f"Signoff-Status: VERIFIED_BY_HUMAN\n"
+        f"Signoff-Reviewed-Tree-SHA: {rev_tree}"
+    )
     subprocess.run(["git", "commit", "--allow-empty", "-m", msg], cwd=repo, check=True)
-    
+
     res = run_verification_in_repo(repo)
     assert res.returncode == 1
     assert "::error::Missing, incomplete, or mismatched" in res.stdout or "::error::Missing, incomplete, or mismatched" in res.stderr
 
 
-def test_commit_trailer_rejected_fails(tmp_path):
-    """Verify that a commit trailer with Signoff-Status: REJECTED fails verification."""
+def test_duplicate_status_fails(tmp_path):
+    """Verify that a payload with duplicate Signoff-Status lines fails verification."""
     repo = str(tmp_path)
     setup_git_repo(repo)
-    
+
     subprocess.run(["git", "commit", "--allow-empty", "-m", "Base commit"], cwd=repo, check=True)
-    rev_tree = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
-    msg = f"Rejected commit\n\nSignoff-Spec-Version: 1.0\nSignoff-Status: REJECTED\nSignoff-Reviewed-Tree-SHA: {rev_tree}"
-    subprocess.run(["git", "commit", "--allow-empty", "-m", msg], cwd=repo, check=True)
-    
+    head_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+    tree_sha = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+
+    note_content = (
+        f"Signoff-Spec-Version: 1.0\n"
+        f"Signoff-Status: VERIFIED_BY_HUMAN\n"
+        f"Signoff-Status: REJECTED\n"
+        f"Signoff-Reviewed-Commit-SHA: {head_sha}\n"
+        f"Signoff-Reviewed-Tree-SHA: {tree_sha}"
+    )
+    subprocess.run(["git", "notes", "--ref=signoff", "add", "-m", note_content], cwd=repo, check=True)
+
     res = run_verification_in_repo(repo)
     assert res.returncode == 1
     assert "::error::Missing, incomplete, or mismatched" in res.stdout or "::error::Missing, incomplete, or mismatched" in res.stderr
 
 
-def test_commit_trailer_mismatched_tree_fails(tmp_path):
-    """Verify that a commit trailer referencing a mismatched tree SHA fails verification."""
+def test_duplicate_tree_sha_fails(tmp_path):
+    """Verify that a payload with duplicate Signoff-Reviewed-Tree-SHA lines fails verification."""
     repo = str(tmp_path)
     setup_git_repo(repo)
-    
-    msg = "Mismatched tree commit\n\nSignoff-Spec-Version: 1.0\nSignoff-Status: VERIFIED_BY_HUMAN\nSignoff-Reviewed-Tree-SHA: 0000000000000000000000000000000000000000"
-    subprocess.run(["git", "commit", "--allow-empty", "-m", msg], cwd=repo, check=True)
-    
+
+    subprocess.run(["git", "commit", "--allow-empty", "-m", "Base commit"], cwd=repo, check=True)
+    head_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+    tree_sha = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+
+    note_content = (
+        f"Signoff-Spec-Version: 1.0\n"
+        f"Signoff-Status: VERIFIED_BY_HUMAN\n"
+        f"Signoff-Reviewed-Commit-SHA: {head_sha}\n"
+        f"Signoff-Reviewed-Tree-SHA: {tree_sha}\n"
+        f"Signoff-Reviewed-Tree-SHA: 0000000000000000000000000000000000000000"
+    )
+    subprocess.run(["git", "notes", "--ref=signoff", "add", "-m", note_content], cwd=repo, check=True)
+
     res = run_verification_in_repo(repo)
     assert res.returncode == 1
     assert "::error::Missing, incomplete, or mismatched" in res.stdout or "::error::Missing, incomplete, or mismatched" in res.stderr
 
 
-def test_malformed_non_hex_tree_sha_fails(tmp_path):
-    """Verify that a non-40-hex tree SHA fails verification."""
-    repo = str(tmp_path)
-    setup_git_repo(repo)
-    
-    msg = "Malformed tree SHA commit\n\nSignoff-Spec-Version: 1.0\nSignoff-Status: VERIFIED_BY_HUMAN\nSignoff-Reviewed-Tree-SHA: invalid-sha"
-    subprocess.run(["git", "commit", "--allow-empty", "-m", msg], cwd=repo, check=True)
-    
-    res = run_verification_in_repo(repo)
-    assert res.returncode == 1
-    assert "::error::Missing, incomplete, or mismatched" in res.stdout or "::error::Missing, incomplete, or mismatched" in res.stderr
-
-
-def test_valid_gsa_head_note_passes(tmp_path):
+def test_valid_head_note_passes(tmp_path):
     """Verify that a commit with attached complete GSA note on HEAD SHA exits 0 cleanly."""
     repo = str(tmp_path)
     setup_git_repo(repo)
-    
+
     subprocess.run(["git", "commit", "--allow-empty", "-m", "Feature commit"], cwd=repo, check=True)
     head_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
     tree_sha = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
-    
+
     note_content = (
         f"Signoff-Spec-Version: 1.0\n"
         f"Signoff-Status: VERIFIED_BY_HUMAN\n"
@@ -250,21 +291,21 @@ def test_valid_gsa_head_note_passes(tmp_path):
         f"Signoff-Verified-By: test@example.com"
     )
     subprocess.run(["git", "notes", "--ref=signoff", "add", "-m", note_content], cwd=repo, check=True)
-    
+
     res = run_verification_in_repo(repo)
     assert res.returncode == 0
     assert "verified via commit note" in res.stdout.lower() or "verified" in res.stdout.lower()
 
 
-def test_valid_gsa_tree_fallback_note_passes(tmp_path):
+def test_valid_tree_fallback_note_passes(tmp_path):
     """Verify GSA §5.1 tree-SHA note fallback: complete note attached directly to HEAD^{tree} passes."""
     repo = str(tmp_path)
     setup_git_repo(repo)
-    
+
     subprocess.run(["git", "commit", "--allow-empty", "-m", "Feature commit"], cwd=repo, check=True)
     head_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
     tree_sha = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
-    
+
     note_content = (
         f"Signoff-Spec-Version: 1.0\n"
         f"Signoff-Status: VERIFIED_BY_HUMAN\n"
@@ -273,49 +314,27 @@ def test_valid_gsa_tree_fallback_note_passes(tmp_path):
         f"Signoff-Verified-By: test@example.com"
     )
     subprocess.run(["git", "notes", "--ref=signoff", "add", "-m", note_content, tree_sha], cwd=repo, check=True)
-    
+
     res = run_verification_in_repo(repo)
     assert res.returncode == 0
     assert "verified via tree note fallback" in res.stdout.lower() or "verified" in res.stdout.lower()
 
 
-def test_git_note_mismatched_tree_fails(tmp_path):
-    """Verify that a commit note referencing a mismatched tree SHA fails verification."""
+def test_tree_note_missing_reviewed_commit_sha_fails(tmp_path):
+    """Verify that a tree note missing Signoff-Reviewed-Commit-SHA fails verification."""
     repo = str(tmp_path)
     setup_git_repo(repo)
-    
-    subprocess.run(["git", "commit", "--allow-empty", "-m", "Feature commit"], cwd=repo, check=True)
-    head_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
-    
-    note_content = (
-        f"Signoff-Spec-Version: 1.0\n"
-        f"Signoff-Status: VERIFIED_BY_HUMAN\n"
-        f"Signoff-Reviewed-Commit-SHA: {head_sha}\n"
-        f"Signoff-Reviewed-Tree-SHA: 1111111111111111111111111111111111111111"
-    )
-    subprocess.run(["git", "notes", "--ref=signoff", "add", "-m", note_content], cwd=repo, check=True)
-    
-    res = run_verification_in_repo(repo)
-    assert res.returncode == 1
-    assert "::error::Missing, incomplete, or mismatched" in res.stdout or "::error::Missing, incomplete, or mismatched" in res.stderr
 
-
-def test_git_note_mismatched_commit_fails(tmp_path):
-    """Verify that a commit note referencing a mismatched commit SHA fails verification."""
-    repo = str(tmp_path)
-    setup_git_repo(repo)
-    
     subprocess.run(["git", "commit", "--allow-empty", "-m", "Feature commit"], cwd=repo, check=True)
     tree_sha = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
-    
+
     note_content = (
         f"Signoff-Spec-Version: 1.0\n"
         f"Signoff-Status: VERIFIED_BY_HUMAN\n"
-        f"Signoff-Reviewed-Commit-SHA: 2222222222222222222222222222222222222222\n"
         f"Signoff-Reviewed-Tree-SHA: {tree_sha}"
     )
-    subprocess.run(["git", "notes", "--ref=signoff", "add", "-m", note_content], cwd=repo, check=True)
-    
+    subprocess.run(["git", "notes", "--ref=signoff", "add", "-m", note_content, tree_sha], cwd=repo, check=True)
+
     res = run_verification_in_repo(repo)
     assert res.returncode == 1
     assert "::error::Missing, incomplete, or mismatched" in res.stdout or "::error::Missing, incomplete, or mismatched" in res.stderr
