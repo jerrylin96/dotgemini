@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from signoff_mcp.adapters import TranscriptProvider, resolve_adapter
+from signoff_mcp.profile import ProfileOverrideError, detect_science_signals, resolve_profile
 
 SPEC_VERSION = "1.0"
 NOTES_REF = "refs/notes/signoff"
@@ -71,6 +72,15 @@ class PrepareState:
     harness_id: str
     conversation_id: str
     transcript_available: bool
+    # Phase 3e mirrors of SKILL.md Section 1 step 5 and the science guard
+    # (informative; the skill layer conducts the interview). profile_digest is
+    # the 12-hex $PROFILE_DIGEST prefix, None when the embedded default runs.
+    profile_source: str = "embedded-default"
+    profile_path: str | None = None
+    profile_id: str = "software-general"
+    profile_digest: str | None = None
+    profile_fallback_reason: str | None = None
+    science_signals: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -119,6 +129,11 @@ def prepare(
     # Informative only (§4.1); the binding snapshot happens inside commit (§2.3).
     transcript_available = bool(adapter and adapter.fetch_transcript_bytes() is not None)
 
+    try:
+        prof = resolve_profile(repo.out("rev-parse", "--show-toplevel"))
+    except ProfileOverrideError as e:
+        raise SignoffError(str(e)) from e
+
     return PrepareState(
         reviewed_commit_sha=reviewed,
         base_sha=base,
@@ -130,6 +145,12 @@ def prepare(
         harness_id=harness_id,
         conversation_id=conversation_id,
         transcript_available=transcript_available,
+        profile_source=prof.source,
+        profile_path=prof.path,
+        profile_id=prof.profile_id,
+        profile_digest=prof.digest,
+        profile_fallback_reason=prof.fallback_reason,
+        science_signals=detect_science_signals(diff),
     )
 
 
