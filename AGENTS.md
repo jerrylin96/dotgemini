@@ -59,12 +59,12 @@ Use the following commands to navigate the development lifecycle:
 
 ### Mandatory Default Execution Pipeline & Milestone Gates
 For any code modification, feature addition, refactor, or skill creation:
-1. **Automatic Unified Trigger**: The agent MUST automatically initiate the unified `/make-feature` lifecycle sequence across five distinct, sequential milestone phases.
+1. **Automatic Unified Trigger**: The agent MUST automatically initiate the unified `/make-feature` lifecycle sequence across six distinct milestone phases (Stage 0 alignment plus Phases 1a, 1b, 2, 3, 4). (For trivial edits such as single-line typo or documentation fixes, Stage 0 Q&A is fast-tracked directly into `/spec` drafting).
 2. **Pre-Execution Worktree Circuit Breaker (Hard Stop)**:
    - Before invoking any file modification tool (`replace_file_content`, `write_to_file`, etc.) on a git repository file, the agent MUST verify that `TargetFile` is inside `~/.gemini/tmp/worktrees/`.
-   - Modifying files directly in the primary working tree is **STRICTLY PROHIBITED**. If `TargetFile` is in the primary workspace, HALT immediately and initiate Stage 0 (`/grillme`) and Phase 1 (`/spec` & `/plan`).
+   - Modifying files directly in the primary working tree is **STRICTLY PROHIBITED**. If `TargetFile` is in the primary workspace, HALT immediately and initiate Stage 0 (`/grill-me`) and Phase 1 (`/spec` & `/plan`).
 3. **Sequential Milestone Goals & Stop Gates**:
-   - **Stage 0 (Interactive Alignment Gate - `/grillme`)**: Goal = Clarify non-negotiables, edge cases, scope boundaries, and user preferences through interactive interview before drafting `/spec`.
+   - **Stage 0 (Interactive Alignment Gate - `/grill-me`)**: Goal = Clarify non-negotiables, edge cases, scope boundaries, and user preferences through interactive interview before drafting `/spec`. Transition proactively to `/spec` once ~95% confidence is reached.
    - **Phase 1a (Spec & Adversarial Spec Review Gate)**: Goal = Draft `/spec` artifact and run subagent `Adversarial Spec Reviewer` loop until `APPROVE`. PAUSE for explicit human approval of `/spec`.
    - **Phase 1b (Plan & Adversarial Plan Review Gate)**: Goal = Draft `/plan` artifact (with TDD targets) and run subagent `Adversarial Plan Reviewer` loop until `APPROVE`. PAUSE for explicit human approval of `/plan`.
    - **Phase 2 (Build & Worktree - Adversarial RED Test Review Gate)**: Goal = Create isolated worktree branch (`gemini/<feature-name>`), write RED test suite, run subagent `Adversarial Test Reviewer` loop until `APPROVE`, write GREEN implementation code, verify 100% test pass.

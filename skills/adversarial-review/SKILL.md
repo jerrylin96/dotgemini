@@ -11,24 +11,34 @@ Automatically resolve context, create/update feature branch worktree, and perfor
 
 The adversarial review subagent loop operates in 4 distinct lifecycle review modes:
 
+### Artifact Review Modes (Spec & Plan)
+For `spec-review` and `plan-review`, review subagents operate directly on markdown artifacts. **SKIP `resolve_branches.py` worktree creation, git diff, and test runner setup.** Target artifact path is passed in the Context Compaction Block.
+
 1. **Spec Reviewer Mode (`Role: Adversarial Spec Reviewer`)**:
-   - **Target**: `/spec` artifact.
-   - **Checklist**: Scope completeness, unstated assumptions, missing edge cases, security/architectural risks, non-negotiables.
+   - **Target**: `/spec` artifact path.
+   - **Checks**: Scope completeness, unstated assumptions, missing edge cases, security/architectural risks, non-negotiables.
+   - **Commands**: Read artifact via `view_file`.
    - **Verdict**: `APPROVE` or `REJECT` with specific required spec fixes.
 
 2. **Plan Reviewer Mode (`Role: Adversarial Plan Reviewer`)**:
-   - **Target**: `/plan` artifact.
-   - **Checklist**: Atomic task decomposition, explicit TDD RED/GREEN specs, executable verify commands, dependency ordering, worktree/env isolation safety.
+   - **Target**: `/plan` artifact path.
+   - **Checks**: Atomic task decomposition, explicit TDD RED/GREEN specs, executable verify commands, dependency ordering, worktree/env isolation safety.
+   - **Commands**: Read artifact via `view_file`.
    - **Verdict**: `APPROVE` or `REJECT` with specific plan fixes.
+
+### Worktree Review Modes (RED Test & Code)
+For `test-review` and `code-review`, review subagents operate inside the feature worktree path (`~/.gemini/tmp/worktrees/...`).
 
 3. **RED Test Reviewer Mode (`Role: Adversarial Test Reviewer`)**:
    - **Target**: Written RED test suite in worktree.
-   - **Checklist**: Verification that tests fail for the correct architectural reason (not syntax/import bugs), assertion rigor (no weak `assert result is not None`), edge case coverage, boundary/error testing, and 100% spec requirement parity.
+   - **Checks**: Verification that tests fail for the correct architectural reason (not syntax/import bugs), assertion rigor (no weak `assert result is not None`), edge case coverage, boundary/error testing, and 100% spec requirement parity. Full test suite pass is NOT required at this gate.
+   - **Commands**: Run failing RED tests via `python3 ~/.gemini/scripts/run_in_env.py <worktree_path> pytest <test_path>`.
    - **Verdict**: `APPROVE` or `REJECT` with required test additions/fixes.
 
 4. **Code Reviewer Mode (`Role: Adversarial Code Reviewer`)**:
    - **Target**: Worktree changeset & pushed feature branch.
-   - **Checklist**: Empirical test pass proof, linter results, ponytail reusability, zero unrequested abstractions, zero regressions.
+   - **Checks**: Empirical test pass proof, linter results, ponytail reusability, zero unrequested abstractions, zero regressions.
+   - **Commands**: Run full test suite and linter via `run_in_env.py`.
    - **Verdict**: `APPROVE` or `REJECT` with blocking findings.
 
 ### Subagent Context Compaction Template
@@ -43,11 +53,11 @@ Parent agents MUST include a compacted context block (≤ 30 lines / ~400 words)
 ```
 
 ### Mandatory Terse Audit Summary Output
-Every review subagent verdict (`APPROVE` or `REJECT`) MUST include a 3-5 line **Adversarial Audit Summary** detailing exactly what was caught and remediated during the audit loop:
+Every review subagent verdict (`APPROVE` or `REJECT`) MUST include a 3-5 line **Adversarial Audit Summary** detailing exactly what was caught and remediated during the audit loop. If zero issues were found, state clean compliance honestly without inventing findings:
 ```markdown
-### 🛡️ Adversarial Audit Summary (What Was Caught & Fixed)
+### Adversarial Audit Summary (What Was Caught & Fixed)
 - **[Mode]**: <Concise bullet describing bug, missing edge case, weak assertion, or path issue resolved>
-- **[Mode]**: <Concise bullet describing remediation proof>
+- **[Mode]**: <If no blocking issues found: "No blocking issues found; verified clean compliance for [area/spec]">
 ```
 
 ## Core Workflow Rules
@@ -56,7 +66,7 @@ Every review subagent verdict (`APPROVE` or `REJECT`) MUST include a 3-5 line **
 > - **Feature Branch (Target)**: The branch containing the new changes to review. The agent must ALWAYS ask the user to select this branch.
 > - **Worktree Checkout**: The resolver script creates/updates a managed worktree checked out to the selected **feature branch** at `worktree_path`.
 > - **Testing/Inspecting**: All testing, linting, or inspection of the feature branch code must be run inside the resolved `worktree_path` (by executing `cd <worktree_path>` first), leaving the active workspace untouched on the reference branch.
-> - **Subagent Delegation & Recursion Guardrail**: Subagent delegation is initiated by the main/parent agent (`invoke_subagent` using `TypeName: self` with `Workspace: inherit` on `worktree_path`). **If the current agent is ALREADY executing as a review subagent inside `worktree_path`, it must NOT spawn nested subagents**; it executes Steps 1–5 directly.
+> - **Subagent Delegation & Recursion Guardrail**: Subagent delegation is initiated by the main/parent agent (`invoke_subagent` using `TypeName: self` with `Workspace: inherit` on `worktree_path`). **If the current agent is ALREADY executing as a review subagent inside `worktree_path`, it must NOT spawn nested subagents**; it executes review checks directly. Max 3 REJECT cycles per gate before escalating to human engineer.
 > - **Ephemeral Scratch files**: Creating temporary scratch files under the conversation's scratch directory for diff reading is permitted and does not violate repository/worktree read-only constraints, provided cleanup only removes those generated scratch files.
 
 ## Context Resolution
@@ -177,7 +187,7 @@ The script returns JSON on stdout. The schema depends on the outcome:
    - The file lock only serializes concurrent `resolve_branches.py` runs. Do not run git worktree commands against `~/.gemini/tmp/worktrees/` manually while a review is in progress.
    - Note: Git fetches are best-effort. If network resolution fails, the review may run against stale local tracking references.
 4. **Subagent Execution & Environment Setup**:
-   - The main agent should delegate the review execution to a background subagent (`invoke_subagent`), supplying a compacted context summary block (per AGENTS.md §10 / make-feature SKILL.md Step 7), to keep its context clean and eliminate author bias.
+   - The main agent should delegate the review execution to a background subagent (`invoke_subagent`), supplying a compacted context summary block (per AGENTS.md §10 / make-feature SKILL.md Phase 3), to keep its context clean and eliminate author bias.
      - **Subagent Selection**: Use `TypeName: self` with `Workspace: inherit` inside `<worktree_path>` (since `self` possesses the necessary write/execution tools to run environment setup and tests). Use `research` subagent ONLY for read-only static analysis.
      - **Recursion Prevention**: If you are already running as the invoked review subagent, execute the steps below directly without spawning further subagents.
    - **Headless Execution Guardrail (No `ctrl+k` Prompts)**: All test, linter, compilation, and setup commands MUST be run using `python3 ~/.gemini/scripts/run_in_env.py <worktree_path> <cmd>` (or whitelisted file/git tools). Direct execution of bare un-wrapped terminal commands (`pytest`, `mkdir`, bare `python`, etc.) is strictly forbidden as it triggers interactive permission prompts.

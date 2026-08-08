@@ -73,7 +73,7 @@ When Sequential Subagents strategy is selected:
 
 ### Step 2c: Subagent Adversarial Plan Review
 
-Parent agent invokes `invoke_subagent` (`TypeName: self`, `Role: Adversarial Plan Reviewer`). Subagent audits `/plan` for atomic task decomposition, explicit TDD RED/GREEN specifications, executable verify commands, dependency ordering, and worktree/env isolation safety until `APPROVE`.
+When executing under `/make-feature` Phase 1b, parent agent invokes `invoke_subagent` (`TypeName: self`, `Role: Adversarial Plan Reviewer`). Subagent audits `/plan` for atomic task decomposition, explicit TDD RED/GREEN specifications, executable verify commands, dependency ordering, and worktree/env isolation safety until `APPROVE`. (For standalone plan usage outside `/make-feature`, self-review checklist is sufficient).
 
 ### Step 3: Output & Human Approval Gate
 
@@ -111,5 +111,5 @@ Parent agent invokes `invoke_subagent` (`TypeName: self`, `Role: Adversarial Pla
 - [ ] Dependencies identified and ordered
 - [ ] No task touches >5 files
 - [ ] Checkpoints between major phases
-- [ ] Plan reviewed and explicitly approved by human engineer (`make-feature` Step 3 pause)
+- [ ] Plan reviewed and explicitly approved by human engineer (`make-feature` Step 3c pause)
 

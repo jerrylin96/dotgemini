@@ -10,7 +10,7 @@ Quick reference for `/make-feature` milestone gates and associated slash command
 
 All codebase modifications (features, bug fixes, refactors, config edits, and skill updates) follow the unified `/make-feature` sequential milestone pipeline without exception:
 
-1. **Stage 0 (Interactive Alignment)**: Conduct interactive Q&A (`/grillme`) to resolve unknowns and scope.
+1. **Stage 0 (Interactive Alignment)**: Conduct interactive Q&A (`/grill-me`) to resolve unknowns and scope.
 2. **Phase 1a (Spec & Spec Review)**: Draft `/spec`, run `Adversarial Spec Reviewer` subagent loop until `APPROVE`. **PAUSE** for explicit human approval.
 3. **Phase 1b (Plan & Plan Review)**: Draft `/plan`, run `Adversarial Plan Reviewer` subagent loop until `APPROVE`. **PAUSE** for explicit human approval.
 4. **Phase 2 (Build & RED Test Review)**: Create isolated worktree branch (`gemini/<feature-name>`), write RED test suite, run `Adversarial Test Reviewer` subagent loop until `APPROVE`, write GREEN code, test via `run_in_env.py`, commit locally.
@@ -23,7 +23,7 @@ All codebase modifications (features, bug fixes, refactors, config edits, and sk
 
 | Gate | Slash Command / Role | Skill | What It Produces |
 |---|---|---|---|
-| **Align** | `/grillme` | [spec-driven-development](../../spec-driven-development/SKILL.md) | Clarified scope & user constraints |
+| **Align** | `/grill-me` | [spec-driven-development](../../spec-driven-development/SKILL.md) | Clarified scope & user constraints |
 | **Spec** | `/spec` | [spec-driven-development](../../spec-driven-development/SKILL.md) | Requirements artifact (Pauses for human approval) |
 | **Spec Review** | `Adversarial Spec Reviewer` | [adversarial-review](../../adversarial-review/SKILL.md) | Verified spec free of scope gaps & ambiguity |
 | **Plan** | `/plan` | [planning-and-task-breakdown](../../planning-and-task-breakdown/SKILL.md) | Ordered task list (Pauses for human approval) |

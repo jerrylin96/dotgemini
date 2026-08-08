@@ -26,8 +26,8 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
 > **Pre-Execution Worktree Circuit Breaker (Hard Stop)**:
 > Before calling any file edit tool (`replace_file_content`, `write_to_file`, etc.) on a repository file, verify `TargetFile` is under `~/.gemini/tmp/worktrees/`. Modifying files directly in the primary workspace is **STRICTLY PROHIBITED**. If target is in the primary workspace, HALT immediately and initiate Stage 0 (`/grillme`) and Phase 1 (`/spec` & `/plan`).
 
-0. **Stage 0 (Interactive Alignment Gate - `/grillme`)**:
-   - **Goal**: Clarify scope boundaries, non-negotiables, technical constraints, and edge cases through interactive Q&A alignment before drafting `/spec`.
+0. **Stage 0 (Interactive Alignment Gate - `/grill-me`)**:
+   - **Goal**: Clarify scope boundaries, non-negotiables, technical constraints, and edge cases through interactive Q&A alignment before drafting `/spec`. Transition proactively to `/spec` once ~95% confidence is reached. (If `/grill-me` is unavailable or for trivial typo fixes, embed clarifying Q&A directly into `/spec` drafting).
 
 1. **Phase 1a (Spec & Adversarial Spec Review Gate)**:
    - **Goal**: Sequential user approval of `/spec` after subagent adversarial spec audit.
@@ -55,7 +55,7 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
      > [!IMPORTANT]
      > **Empirical Grounding Directive**: Prohibit declaring success, test passes, or schema validity without empirical execution output present in the context window.
      > [!TIP]
-     > **Heavy Mode Subagent Loop**: In Heavy Mode (`Sequential Subagents`), each task slice executes sequentially using `Workspace: inherit`. For each slice, the builder subagent writes RED tests, triggers `Adversarial Test Reviewer` subagent, writes GREEN implementation, triggers slice `Adversarial Code Reviewer` subagent, updates `scratchpad.md`, and commits the slice before advancing to the next slice.
+     > **Sequential Subagent Delegation**: If the approved `/plan` specifies `Sequential Subagents`, execution subagents MUST run sequentially using `Workspace: inherit` (or target worktree path) so all slice commits land on `gemini/<feature-name>`. In Heavy Mode (`/make-feature heavy`), each task slice builder writes RED tests, triggers `Adversarial Test Reviewer` subagent, writes GREEN implementation, triggers slice `Adversarial Code Reviewer` subagent (unless slice touches ≤1 file and ≤10 LOC), updates `scratchpad.md`, and commits the slice before advancing to the next slice. Parent agent MUST clean up review subagents via `manage_subagents` (`Action: "kill"`). Max 3 REJECT cycles per review gate before escalating to human engineer.
    - **Step 4e (Builder Pre-Review Quality Check & Manifest Creation)**:
      - Update `<appDataDir>/brain/<conversation-id>/scratch/scratchpad.md` with build step findings and empirical test logs.
      - Create review manifest artifact in conversation artifact directory (`<appDataDir>/brain/<conversation-id>/review_manifest_<feature>.md`).
@@ -67,7 +67,7 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
      git commit -m "<descriptive commit message>"
      ```
 
-3. **Phase 3 (Push & Adversarial Review)**:
+4. **Phase 3 (Push & Adversarial Code Review Gate)**:
    - **Goal**: Feature branch pushed to `origin`, subagent `/adversarial-review` executed using review manifest artifact, and post-review report artifact created.
    - **Step 6 (Push to Remote)**: Push feature branch to remote origin:
      ```bash
@@ -94,7 +94,7 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
        - *What was changed* (file diff breakdown and architectural decisions)
        - *Human Review Attention Points* (edge cases, potential risks, or recommendations for signoff)
 
-4. **Phase 4 (Human Signoff, PR Creation & Manual Merge)**:
+5. **Phase 4 (Human Signoff, PR Creation & Manual Merge)**:
    - **Goal**: Human engineer reviews post-review audit report artifact, creates Pull Request, and manually merges feature branch to target integration branch (`<base_branch>`).
    - **Step 8 (Human Review, PR Creation & Integration Gate)**: **PAUSE**. Update `<appDataDir>/brain/<conversation-id>/scratch/scratchpad.md` pre-signoff with final completion status. Present review report artifact, diff summary, and remote feature branch link to user.
    - **Human Ownership of PR Creation & Integration**:

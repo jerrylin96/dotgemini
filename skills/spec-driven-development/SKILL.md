@@ -15,12 +15,12 @@ Write the spec before the code. Every non-trivial change follows the unified [ma
 
 ## Process
 
-### 1. Stage 0: Clarify Requirements (`/grillme`)
+### 1. Stage 0: Clarify Requirements (`/grill-me`)
 
 Define what to build. Identify ambiguities, missing requirements, assumptions.
 
 > [!TIP]
-> Use `/grillme` to run an interactive interview until you hit ~95% confidence on scope, non-negotiables, technical constraints, and edge cases before drafting the spec.
+> Use `/grill-me` to run an interactive interview until you hit ~95% confidence on scope, non-negotiables, technical constraints, and edge cases before drafting the spec. (When executing under `/make-feature`, Stage 0 is the interactive alignment gate; for standalone spec usage or trivial typo edits, self-clarification is sufficient).
 
 ### 2. Draft the Spec
 
@@ -31,7 +31,7 @@ Cover: **Objectives**, **Scope**, **Project Structure**, **Code Style**, **Testi
 
 ### 2b. Subagent Adversarial Spec Review
 
-Parent agent invokes `invoke_subagent` (`TypeName: self`, `Role: Adversarial Spec Reviewer`). Subagent audits `/spec` for unstated assumptions, missing edge cases, security/architectural risks, and scope creep until `APPROVE`.
+When executing under `/make-feature` Phase 1a, parent agent invokes `invoke_subagent` (`TypeName: self`, `Role: Adversarial Spec Reviewer`). Subagent audits `/spec` for unstated assumptions, missing edge cases, security/architectural risks, and scope creep until `APPROVE`. (For standalone spec usage outside `/make-feature`, self-review checklist is sufficient).
 
 ### 3. Human Approval (Sequential Pause)
 
@@ -63,7 +63,7 @@ Break the approved spec into small, verifiable tasks.
 ## Verification
 
 - [ ] Spec covers: objectives, scope, structure, testing, boundaries
-- [ ] Human has reviewed and explicitly approved spec (`make-feature` Step 2 pause)
+- [ ] Human has reviewed and explicitly approved spec (`make-feature` Step 2c pause)
 - [ ] Success criteria are specific, measurable, testable
 - [ ] Constraints explicitly defined
 - [ ] Spec persisted (artifact, vault, or repo document such as `SPEC.md`)
