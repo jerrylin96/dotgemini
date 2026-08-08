@@ -1,0 +1,58 @@
+name: Signoff Verification Gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-signoff:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Fetch Git Notes
+        run: |
+          git fetch origin +refs/notes/signoff:refs/notes/signoff || true
+
+      - name: Verify Git Signoff Attestation
+        run: |
+          set -eo pipefail
+
+          HEAD_SHA=$(git rev-parse HEAD)
+          echo "Verifying signoff attestation for PR HEAD (${HEAD_SHA})..."
+
+          # Check 1: Commit trailer on HEAD matching VERIFIED_BY_HUMAN*
+          TRAILER=$(git log -1 --format="%(trailers:key=Signoff-Status,valueonly=true)" HEAD | xargs)
+
+          # Check 2: Git note under refs/notes/signoff on HEAD matching VERIFIED_BY_HUMAN*
+          NOTE=$(git notes --ref=signoff show HEAD 2>/dev/null | grep -E "^Signoff-Status:\s*VERIFIED_BY_HUMAN" || true)
+
+          IS_VALID=0
+          case "$TRAILER" in
+            VERIFIED_BY_HUMAN*) IS_VALID=1 ;;
+            *) IS_VALID=0 ;;
+          esac
+
+          if [ "$IS_VALID" -eq 0 ] && [ -n "$NOTE" ]; then
+            IS_VALID=1
+          fi
+
+          if [ "$IS_VALID" -eq 1 ]; then
+            echo "✅ Git Signoff Attestation verified for SHA ${HEAD_SHA}."
+            exit 0
+          else
+            echo "::error::Missing Git Signoff Attestation on PR head (${HEAD_SHA})! Run /signoff and push attestation note/commit before merging."
+            exit 1
+          fi
