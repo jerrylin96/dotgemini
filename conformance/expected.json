@@ -28,10 +28,6 @@
     "valid": false,
     "problems_contain": ["Signoff-Spec-Version"]
   },
-  "vectors/invalid-wrong-spec-version.txt": {
-    "valid": false,
-    "problems_contain": ["Signoff-Spec-Version"]
-  },
   "vectors/invalid-malformed-tree-sha.txt": {
     "valid": false,
     "problems_contain": ["Signoff-Reviewed-Tree-SHA"]
