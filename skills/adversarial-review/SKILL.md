@@ -9,11 +9,18 @@ Automatically route review mode, perform artifact audits (Spec/Plan) or worktree
 
 ## Step 0: Select Review Mode and Route (Mandatory Dispatch)
 
-The review subagent MUST first inspect its prompt inputs / Context Compaction Block to determine its target review mode:
+The review subagent MUST first inspect its prompt inputs / Context Compaction Block to determine its target review mode and execution context:
+
+### Mode Precedence Hierarchy:
+1. **Explicit CLI Flag**: `--mode=external` or `--mode=pipeline` passed to `resolve_branches.py` or subagent.
+2. **Compaction Block Marker**: `Review Mode Context: internal-pipeline` (set when invoked by `/make-feature`).
+3. **Default Fallback**: **External Standalone Mode**.
+
+### Mode Targets:
 1. **Spec Reviewer Mode (`spec-review`, Role: Adversarial Spec Reviewer)** -> Execute **Artifact Review Path (Spec & Plan)**.
 2. **Plan Reviewer Mode (`plan-review`, Role: Adversarial Plan Reviewer)** -> Execute **Artifact Review Path (Spec & Plan)**.
 3. **RED Test Reviewer Mode (`test-review`, Role: Adversarial Test Reviewer)** -> Execute **Worktree RED Test Review Path**.
-4. **Code Reviewer Mode (`code-review`, Role: Adversarial Code Reviewer)** -> Execute **Worktree Code Review Path**.
+4. **Code Reviewer Mode (`code-review`, Role: Adversarial Code Reviewer)** -> Execute **Worktree Code Review Path** (using resolved External Standalone Mode or Internal Pipeline Mode rules).
 
 > [!IMPORTANT]
 > If the review mode is missing or ambiguous, the reviewer MUST stop immediately and ask the parent agent for explicit mode selection.
@@ -90,6 +97,17 @@ Emit `APPROVE` or `REJECT` verdict detailing:
 
 The following `Core Workflow Rules`, `Context Resolution`, and `Execution Steps` apply **ONLY** to `code-review` mode.
 
+### Execution Context & Mode Rules
+
+#### 1. External Standalone Mode (User-Triggered `/adversarial-review`)
+- **Strict Read-Only Worktree Isolation**: The reviewer MUST NOT invoke file modification tools (`replace_file_content`, `write_to_file`) on repository or worktree files under `~/.gemini/tmp/worktrees/`. Writing temporary scratch files or report artifacts under conversation directories (`<appDataDir>/brain/<conversation-id>/`) remains permitted.
+- **Mandatory Remote Fetch & SHA Guard**: Run `resolve_branches.py [target] [--last-sha=<sha>] [--force]`. If `resolve_branches.py` returns `"sha_changed": false` (and `--force` was not set), halt immediately and notify the user: `"Remote branch commit SHA has not changed since last review (<sha>). No new updates detected."`
+- **Single-Pass Turn Termination**: Perform **exactly 1 audit pass**. Output must begin with a top-level `VERDICT: [APPROVE | NEEDS_REVISION | REJECT]` followed by a dedicated `### External PR Action Plan (Copy-Paste for PR Comments)` section with ready-to-copy code blocks/diffs. Terminate turn immediately after posting.
+
+#### 2. Internal Pipeline Mode (Invoked by `/make-feature` Phase 3)
+- **Review Mode Context**: Set to `internal-pipeline` in compaction block.
+- **Builder-Reviewer Loop**: Parent builder agent handles code edits; reviewer subagent audits and emits `APPROVE` or `REJECT` up to max 3 cycles.
+
 ### Subagent Context Compaction Template
 Parent agents MUST include a compacted context block (≤ 30 lines / ~400 words) when invoking review subagents:
 ```markdown
@@ -99,15 +117,19 @@ Parent agents MUST include a compacted context block (≤ 30 lines / ~400 words)
 - **Active Constraints**: <bulleted list>
 - **Prior Step Findings**: <empirical summary>
 - **Target Artifact Paths**: <file links>
+- **Review Mode Context**: <external-standalone | internal-pipeline>
 ```
 
 ### Mandatory Terse Audit Summary Output
-Every review subagent verdict (`APPROVE` or `REJECT`) MUST include a 3-5 line **Adversarial Audit Summary** detailing exactly what was caught and remediated during the audit loop. If zero issues were found, state clean compliance honestly without inventing findings:
+Every review subagent verdict (`APPROVE`, `NEEDS_REVISION`, or `REJECT`) MUST include a top-level `VERDICT:` line and a 3-5 line **Adversarial Audit Summary** detailing exactly what was caught and remediated during the audit loop:
 ```markdown
+VERDICT: APPROVE
+
 ### Adversarial Audit Summary (What Was Caught & Fixed)
 - **[Code]**: <Concise bullet describing bug, missing edge case, weak assertion, or path issue resolved>
 - **[Code]**: <If no blocking issues found: "No blocking issues found; verified clean compliance for [area/spec]">
 ```
+
 
 ## Core Workflow Rules
 > [!IMPORTANT]

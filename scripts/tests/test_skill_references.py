@@ -312,6 +312,12 @@ def test_multi_stage_adversarial_gates_contract():
     assert "Worktree Code Review Path" in adv_c, "Missing Worktree Code Review Path section in adversarial-review SKILL.md"
     assert "Worktree RED Test Review Path" in adv_c, "Missing Worktree RED Test Review Path section in adversarial-review SKILL.md"
     assert "Do NOT require the full test suite to pass at this gate" in adv_c, "Missing RED test full suite pass exemption in adversarial-review SKILL.md"
+    assert "External Standalone Mode" in adv_c, "Missing External Standalone Mode in adversarial-review SKILL.md"
+    assert "Internal Pipeline Mode" in adv_c, "Missing Internal Pipeline Mode in adversarial-review SKILL.md"
+    assert "--last-sha" in adv_c, "Missing --last-sha in adversarial-review SKILL.md"
+    assert "--force" in adv_c, "Missing --force in adversarial-review SKILL.md"
+    assert "External PR Action Plan" in adv_c, "Missing External PR Action Plan in adversarial-review SKILL.md"
+
 
     # RED Test Review Path contract assertions
     assert "Target Worktree Path" in adv_c, "Missing Target Worktree Path required input in test-review"

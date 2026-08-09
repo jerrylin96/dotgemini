@@ -791,5 +791,80 @@ class TestResolveBranches(unittest.TestCase):
         finally:
             shutil.rmtree(test_wt_root)
 
+    def test_mode_flag_parsing_and_precedence(self):
+        import io
+        stdout_capture = io.StringIO()
+        cand = [{"branch_name": "my-feature", "full_name": "origin/my-feature", "commit_hash": "1111222233334444555566667777888899990000", "subject": "commit subject", "timestamp": 12345}]
+        with patch("sys.stdout", stdout_capture), patch("sys.exit", side_effect=SystemExit):
+            with patch("sys.argv", ["resolve_branches.py", "my-feature", "--mode=external"]):
+                with patch("resolve_branches.run_git") as mock_git, patch("resolve_branches.fetch_all", return_value=None), patch("resolve_branches.setup_worktree", return_value="/tmp/wt"), patch("resolve_branches.get_recent_branches", return_value=cand):
+                    def git_router(cmd, cwd=None, timeout=None):
+                        cmd_str = " ".join(cmd)
+                        if "rev-parse --show-toplevel" in cmd_str:
+                            return "/Users/user/repo"
+                        if "rev-parse" in cmd_str:
+                            return "1111222233334444555566667777888899990000"
+                        if "show-ref" in cmd_str:
+                            return "refs/heads/main"
+                        if "log" in cmd_str:
+                            return "commit subject"
+                        return ""
+                    mock_git.side_effect = git_router
+                    resolve_branches.main()
+        result = json.loads(stdout_capture.getvalue())
+        self.assertEqual(result.get("mode"), "external")
+
+    def test_last_sha_comparison_and_sha_changed_false(self):
+        import io
+        stdout_capture = io.StringIO()
+        target_sha = "1111222233334444555566667777888899990000"
+        cand = [{"branch_name": "my-feature", "full_name": "origin/my-feature", "commit_hash": target_sha, "subject": "commit subject", "timestamp": 12345}]
+        with patch("sys.stdout", stdout_capture), patch("sys.exit", side_effect=SystemExit):
+            with patch("sys.argv", ["resolve_branches.py", "my-feature", f"--last-sha={target_sha}"]):
+                with patch("resolve_branches.run_git") as mock_git, patch("resolve_branches.fetch_all", return_value=None), patch("resolve_branches.setup_worktree", return_value="/tmp/wt"), patch("resolve_branches.get_recent_branches", return_value=cand):
+                    def git_router(cmd, cwd=None, timeout=None):
+                        cmd_str = " ".join(cmd)
+                        if "rev-parse --show-toplevel" in cmd_str:
+                            return "/Users/user/repo"
+                        if "rev-parse" in cmd_str:
+                            return target_sha
+                        if "show-ref" in cmd_str:
+                            return "refs/heads/main"
+                        if "log" in cmd_str:
+                            return "commit subject"
+                        return ""
+                    mock_git.side_effect = git_router
+                    resolve_branches.main()
+        result = json.loads(stdout_capture.getvalue())
+        self.assertFalse(result.get("sha_changed"))
+        self.assertIn("has not changed", result.get("message", ""))
+
+    def test_force_flag_bypasses_unchanged_sha_check(self):
+        import io
+        stdout_capture = io.StringIO()
+        target_sha = "1111222233334444555566667777888899990000"
+        cand = [{"branch_name": "my-feature", "full_name": "origin/my-feature", "commit_hash": target_sha, "subject": "commit subject", "timestamp": 12345}]
+        with patch("sys.stdout", stdout_capture), patch("sys.exit", side_effect=SystemExit):
+            with patch("sys.argv", ["resolve_branches.py", "my-feature", f"--last-sha={target_sha}", "--force"]):
+                with patch("resolve_branches.run_git") as mock_git, patch("resolve_branches.fetch_all", return_value=None), patch("resolve_branches.setup_worktree", return_value="/tmp/wt"), patch("resolve_branches.get_recent_branches", return_value=cand):
+                    def git_router(cmd, cwd=None, timeout=None):
+                        cmd_str = " ".join(cmd)
+                        if "rev-parse --show-toplevel" in cmd_str:
+                            return "/Users/user/repo"
+                        if "rev-parse" in cmd_str:
+                            return target_sha
+                        if "show-ref" in cmd_str:
+                            return "refs/heads/main"
+                        if "log" in cmd_str:
+                            return "commit subject"
+                        return ""
+                    mock_git.side_effect = git_router
+                    resolve_branches.main()
+        result = json.loads(stdout_capture.getvalue())
+        self.assertTrue(result.get("sha_changed"))
+
 if __name__ == "__main__":
     unittest.main()
+
+
+
