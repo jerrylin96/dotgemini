@@ -12,11 +12,11 @@ Automatically route review mode, perform artifact audits (Spec/Plan) or worktree
 The review subagent MUST first inspect its prompt inputs / Context Compaction Block to determine its target review mode and execution context:
 
 ### Mode Precedence Hierarchy:
-1. **Explicit CLI Flag**: `--mode=external` or `--mode=pipeline` passed to `resolve_branches.py` or subagent.
+1. **Explicit CLI Flag**: `--mode=external` or `--mode=pipeline` passed to `resolve_branches.py` or subagent (accepted aliases: `external-standalone`, `internal-pipeline`, `internal`).
 2. **Compaction Block Marker**: `Review Mode Context: internal-pipeline` (set when invoked by `/make-feature`).
 3. **Default Fallback**: **External Standalone Mode**.
 
-> Note: CLI `--mode` aliases: `external` == `external-standalone` (default), `pipeline` == `internal-pipeline`. Compaction Block uses the long form.
+> Note: Canonical mode names are `external` (External Standalone) and `pipeline` (Internal Pipeline). Long forms (`external-standalone`, `internal-pipeline`) are accepted as aliases everywhere; Compaction Blocks SHOULD use the long form for clarity, but short forms are also accepted.
 
 ### Mode Targets:
 1. **Spec Reviewer Mode (`spec-review`, Role: Adversarial Spec Reviewer)** -> Execute **Artifact Review Path (Spec & Plan)**.

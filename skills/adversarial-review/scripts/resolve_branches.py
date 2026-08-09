@@ -558,6 +558,11 @@ def setup_worktree(cwd, branch_name, remote_ref=None, commit_hash=None):
     return target_path
 
 def _sha_changed(commit_hash: str, last_sha: str, force: bool):
+    """
+    Compare current 40-char commit_hash against last_sha.
+    Uses case-insensitive prefix matching (commit_hash.lower().startswith(last_sha.lower()))
+    so both full 40-char SHAs and short 7+ char SHA prefixes work seamlessly.
+    """
     if not last_sha or force:
         return True, None
     changed = not commit_hash.lower().startswith(last_sha.lower())
@@ -653,9 +658,10 @@ def main():
         "external-standalone": "external",
         "pipeline": "pipeline",
         "internal-pipeline": "pipeline",
+        "internal": "pipeline",
     }
     if mode_flag not in _mode_aliases:
-        print(json.dumps({"error": f"Invalid --mode '{mode_flag}': expected 'external' or 'pipeline' (aliases: external-standalone, internal-pipeline)"}))
+        print(json.dumps({"error": f"Invalid --mode '{mode_flag}': expected 'external' or 'pipeline' (aliases: external-standalone, internal-pipeline, internal)"}))
         sys.exit(1)
     mode_flag = _mode_aliases[mode_flag]
 
@@ -663,7 +669,6 @@ def main():
         if not re.fullmatch(r"[0-9a-fA-F]{7,40}", last_sha_flag):
             print(json.dumps({"error": f"Invalid --last-sha '{last_sha_flag}': expected 7-40 hex chars (full 40 recommended)"}))
             sys.exit(1)
-
 
     pr_number = None
     pr_repo_url = None
@@ -809,12 +814,11 @@ def main():
                 print(json.dumps(res_dict, indent=2))
                 sys.exit(0)
 
-
-
             branches = get_recent_branches(cwd, ref_branch)
 
             if not branches:
                 print(json.dumps({
+                    "mode": mode_flag,
                     "reference_branch": ref_branch,
                     "reference_ref": ref_branch,
                     "reference_commit_hash": reference_commit_hash,
@@ -838,6 +842,7 @@ def main():
             if not target_input:
                 # Always prompt user to select target branch if not explicitly provided
                 print(json.dumps({
+                    "mode": mode_flag,
                     "reference_branch": ref_branch,
                     "reference_ref": ref_branch,
                     "reference_commit_hash": reference_commit_hash,

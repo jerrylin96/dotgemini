@@ -317,9 +317,11 @@ def test_multi_stage_adversarial_gates_contract():
     assert "--last-sha" in adv_c, "Missing --last-sha in adversarial-review SKILL.md"
     assert "--force" in adv_c, "Missing --force in adversarial-review SKILL.md"
     assert "External PR Action Plan" in adv_c, "Missing External PR Action Plan in adversarial-review SKILL.md"
+    assert "Review Mode Context: internal-pipeline" in mf_c or ("Review Mode Context" in mf_c and "internal-pipeline" in mf_c), "Missing 'Review Mode Context: internal-pipeline' in make-feature SKILL.md Phase 3 compaction block"
     assert '"sha_changed"' in adv_c or "sha_changed" in adv_c, "Missing sha_changed in adversarial-review SKILL.md"
     assert '"mode"' in adv_c or "mode" in adv_c, "Missing mode schema in adversarial-review SKILL.md"
     assert "--mode" in adv_c and "Script Flags" in adv_c, "Missing --mode in Script Flags section"
+
 
 
 
