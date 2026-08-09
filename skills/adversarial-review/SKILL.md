@@ -199,6 +199,7 @@ The script returns JSON on stdout. The schema depends on the outcome:
 * **Ambiguous Candidates (Need user clarification)**
    ```json
    {
+     "mode": "external",
      "reference_branch": "origin/main",
      "reference_ref": "origin/main",
      "reference_commit_hash": "b2c3d4e5...",
@@ -219,6 +220,7 @@ The script returns JSON on stdout. The schema depends on the outcome:
 * **No Branches Found**
    ```json
    {
+     "mode": "external",
      "reference_branch": "origin/main",
      "reference_ref": "origin/main",
      "reference_commit_hash": "b2c3d4e5...",
