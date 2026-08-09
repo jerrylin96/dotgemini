@@ -159,7 +159,7 @@ VERDICT: APPROVE
 
 ### Script Flags
 - `[optional_target]`: Explicitly specify the feature branch to review. Accepts short names (`feat/x`), remote-qualified names (`origin/feat/x`), or fully qualified refs (`refs/heads/feat/x`); a remote-qualified name reviews that exact remote ref even when a same-named local branch exists. `#42` or a PR/MR web URL is treated as a pull request target (see `--pr`); a URL also selects the matching remote by comparing remote URLs.
-- `--mode=<mode>`: Execution context. `external` (default) for user-triggered `/adversarial-review` (strict read-only, single-pass) or `pipeline` for `/make-feature` Phase 3 (builder-reviewer loop). Aliases `external-standalone` and `internal-pipeline` are accepted and normalized.
+- `--mode=<mode>`: Execution context. `external` (default) for user-triggered `/adversarial-review` (strict read-only, single-pass) or `pipeline` for `/make-feature` Phase 3 (builder-reviewer loop). Aliases `external-standalone`, `internal-pipeline`, and `internal` are accepted and normalized to canonical `external`/`pipeline`.
 - `--last-sha=<sha>`: Full 40-char commit SHA (or 7-40 hex prefix) from previous review. When it matches the resolved `commit_hash` and `--force` is not set, the script returns `"sha_changed": false` and skips worktree creation.
 - `--force`: Bypass the `--last-sha` unchanged guard. Forces a re-review even when SHA has not changed.
 - `--pr <N>`: Review a pull/merge request by number instead of a branch. The script fetches the PR head ref directly from the remote (`refs/pull/N/head` on GitHub/Gitea/Forgejo, `refs/merge-requests/N/head` on GitLab) into `refs/gemini-review/<remote>/pr/N`, so it works even for fork PRs whose head branch is not in any configured remote, and for merged/closed PRs. Unsupported on remotes that do not expose PR refs (e.g. Bitbucket). Unlike branch fetches, a failed PR fetch is a fatal error — there is no stale local fallback.
@@ -195,7 +195,7 @@ The script returns JSON on stdout. The schema depends on the outcome:
    - `feature_ref` is the exact ref the review targets (local name, or remote-qualified like `origin/feat/my-feature`), so you can tell whether a local or remote branch was resolved.
    - `fetch_error` is `null` when the best-effort `git fetch` succeeded; otherwise it holds the fetch failure message and the results may be based on stale local tracking refs. Mention this in the review report if set.
    - **PR mode** returns the same success schema plus `"pr_number"`, with `feature_branch` like `"pr-42"` and `feature_ref` like `"origin/pull/42/head"`.
-   - Note: ambiguous and no branches responses do not include `mode` or `sha_changed` (no target resolved).
+   - Note: `mode` is now always present (even on ambiguous / no-branches responses, since it reflects the requested execution context); `sha_changed` is only present on success responses where a target was resolved (absent on ambiguous / no-branches).
 * **Ambiguous Candidates (Need user clarification)**
    ```json
    {
