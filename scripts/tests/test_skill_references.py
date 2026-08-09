@@ -317,6 +317,10 @@ def test_multi_stage_adversarial_gates_contract():
     assert "--last-sha" in adv_c, "Missing --last-sha in adversarial-review SKILL.md"
     assert "--force" in adv_c, "Missing --force in adversarial-review SKILL.md"
     assert "External PR Action Plan" in adv_c, "Missing External PR Action Plan in adversarial-review SKILL.md"
+    assert '"sha_changed"' in adv_c or "sha_changed" in adv_c, "Missing sha_changed in adversarial-review SKILL.md"
+    assert '"mode"' in adv_c or "mode" in adv_c, "Missing mode schema in adversarial-review SKILL.md"
+    assert "--mode" in adv_c and "Script Flags" in adv_c, "Missing --mode in Script Flags section"
+
 
 
     # RED Test Review Path contract assertions

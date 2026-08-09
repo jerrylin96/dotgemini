@@ -821,7 +821,7 @@ class TestResolveBranches(unittest.TestCase):
         cand = [{"branch_name": "my-feature", "full_name": "origin/my-feature", "commit_hash": target_sha, "subject": "commit subject", "timestamp": 12345}]
         with patch("sys.stdout", stdout_capture), patch("sys.exit", side_effect=SystemExit):
             with patch("sys.argv", ["resolve_branches.py", "my-feature", f"--last-sha={target_sha}"]):
-                with patch("resolve_branches.run_git") as mock_git, patch("resolve_branches.fetch_all", return_value=None), patch("resolve_branches.setup_worktree", return_value="/tmp/wt"), patch("resolve_branches.get_recent_branches", return_value=cand):
+                with patch("resolve_branches.run_git") as mock_git, patch("resolve_branches.fetch_all", return_value=None), patch("resolve_branches.setup_worktree") as mock_wt, patch("resolve_branches.get_recent_branches", return_value=cand):
                     def git_router(cmd, cwd=None, timeout=None):
                         cmd_str = " ".join(cmd)
                         if "rev-parse --show-toplevel" in cmd_str:
@@ -835,9 +835,49 @@ class TestResolveBranches(unittest.TestCase):
                         return ""
                     mock_git.side_effect = git_router
                     resolve_branches.main()
+                    mock_wt.assert_not_called()
         result = json.loads(stdout_capture.getvalue())
         self.assertFalse(result.get("sha_changed"))
+        self.assertIsNone(result.get("worktree_path"))
         self.assertIn("has not changed", result.get("message", ""))
+
+    def test_invalid_mode_returns_error(self):
+        import io
+        stdout_capture = io.StringIO()
+        with patch("sys.stdout", stdout_capture), patch("sys.exit", side_effect=SystemExit):
+            with patch("sys.argv", ["resolve_branches.py", "my-feature", "--mode=invalid"]):
+                with patch("resolve_branches.run_git") as mock_git:
+                    mock_git.return_value = "/Users/user/repo"
+                    with self.assertRaises(SystemExit):
+                        resolve_branches.main()
+        result = json.loads(stdout_capture.getvalue())
+        self.assertIn("error", result)
+        self.assertIn("Invalid --mode", result["error"])
+
+    def test_last_sha_prefix_match(self):
+        import io
+        stdout_capture = io.StringIO()
+        target_sha = "1111222233334444555566667777888899990000"
+        cand = [{"branch_name": "my-feature", "full_name": "origin/my-feature", "commit_hash": target_sha, "subject": "commit subject", "timestamp": 12345}]
+        with patch("sys.stdout", stdout_capture), patch("sys.exit", side_effect=SystemExit):
+            with patch("sys.argv", ["resolve_branches.py", "my-feature", "--last-sha=1111222"]):
+                with patch("resolve_branches.run_git") as mock_git, patch("resolve_branches.fetch_all", return_value=None), patch("resolve_branches.setup_worktree") as mock_wt, patch("resolve_branches.get_recent_branches", return_value=cand):
+                    def git_router(cmd, cwd=None, timeout=None):
+                        cmd_str = " ".join(cmd)
+                        if "rev-parse --show-toplevel" in cmd_str:
+                            return "/Users/user/repo"
+                        if "rev-parse" in cmd_str:
+                            return target_sha
+                        if "show-ref" in cmd_str:
+                            return "refs/heads/main"
+                        if "log" in cmd_str:
+                            return "commit subject"
+                        return ""
+                    mock_git.side_effect = git_router
+                    resolve_branches.main()
+                    mock_wt.assert_not_called()
+        result = json.loads(stdout_capture.getvalue())
+        self.assertFalse(result.get("sha_changed"))
 
     def test_force_flag_bypasses_unchanged_sha_check(self):
         import io
@@ -865,6 +905,7 @@ class TestResolveBranches(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
 
 
 

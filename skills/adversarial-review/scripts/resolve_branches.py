@@ -557,6 +557,13 @@ def setup_worktree(cwd, branch_name, remote_ref=None, commit_hash=None):
         
     return target_path
 
+def _sha_changed(commit_hash: str, last_sha: str, force: bool):
+    if not last_sha or force:
+        return True, None
+    changed = not commit_hash.lower().startswith(last_sha.lower())
+    msg = None if changed else f"Remote branch commit SHA has not changed since last review ({commit_hash}). No new updates detected."
+    return changed, msg
+
 def main():
     if not HAS_FCNTL:
         print(json.dumps({"error": "Platform support: fcntl is required for file locking. This configuration is only supported on macOS and Linux."}))
@@ -623,7 +630,6 @@ def main():
         elif arg.startswith("--pr="):
             pr_flag = arg[len("--pr="):]
             i += 1
-
         elif arg == "--reference":
             if i + 1 < len(args):
                 reference_override = args[i+1]
@@ -640,6 +646,24 @@ def main():
         else:
             target_input = arg
             i += 1
+
+    # Normalize mode aliases and validate
+    _mode_aliases = {
+        "external": "external",
+        "external-standalone": "external",
+        "pipeline": "pipeline",
+        "internal-pipeline": "pipeline",
+    }
+    if mode_flag not in _mode_aliases:
+        print(json.dumps({"error": f"Invalid --mode '{mode_flag}': expected 'external' or 'pipeline' (aliases: external-standalone, internal-pipeline)"}))
+        sys.exit(1)
+    mode_flag = _mode_aliases[mode_flag]
+
+    if last_sha_flag is not None:
+        if not re.fullmatch(r"[0-9a-fA-F]{7,40}", last_sha_flag):
+            print(json.dumps({"error": f"Invalid --last-sha '{last_sha_flag}': expected 7-40 hex chars (full 40 recommended)"}))
+            sys.exit(1)
+
 
     pr_number = None
     pr_repo_url = None
@@ -761,13 +785,9 @@ def main():
                 commit_hash = run_git(["rev-parse", "--verify", f"{pr_local_ref}^{{commit}}"], cwd=cwd)
                 subject = run_git(["log", "-1", "--format=%s", commit_hash], cwd=cwd)
                 branch_name = f"pr-{pr_number}"
-                wt_path = setup_worktree(cwd, branch_name, None, commit_hash)
 
-                sha_changed = True
-                sha_msg = None
-                if last_sha_flag and commit_hash == last_sha_flag and not force_flag:
-                    sha_changed = False
-                    sha_msg = f"Remote branch commit SHA has not changed since last review ({commit_hash}). No new updates detected."
+                sha_changed, sha_msg = _sha_changed(commit_hash, last_sha_flag, force_flag)
+                wt_path = setup_worktree(cwd, branch_name, None, commit_hash) if sha_changed else None
 
                 res_dict = {
                     "mode": mode_flag,
@@ -788,6 +808,7 @@ def main():
                     res_dict["message"] = sha_msg
                 print(json.dumps(res_dict, indent=2))
                 sys.exit(0)
+
 
 
             branches = get_recent_branches(cwd, ref_branch)
@@ -889,13 +910,8 @@ def main():
                     except GitError:
                         pass
                         
-            wt_path = setup_worktree(cwd, selected_branch["branch_name"], remote_ref, selected_branch["commit_hash"])
-            
-            sha_changed = True
-            sha_msg = None
-            if last_sha_flag and selected_branch["commit_hash"] == last_sha_flag and not force_flag:
-                sha_changed = False
-                sha_msg = f"Remote branch commit SHA has not changed since last review ({selected_branch['commit_hash']}). No new updates detected."
+            sha_changed, sha_msg = _sha_changed(selected_branch["commit_hash"], last_sha_flag, force_flag)
+            wt_path = setup_worktree(cwd, selected_branch["branch_name"], remote_ref, selected_branch["commit_hash"]) if sha_changed else None
 
             res_dict = {
                 "mode": mode_flag,
@@ -914,11 +930,8 @@ def main():
             if sha_msg:
                 res_dict["message"] = sha_msg
             print(json.dumps(res_dict, indent=2))
-
-
-
-            
     except Exception as e:
+
         print(json.dumps({"error": str(e)}))
         sys.exit(1)
 
