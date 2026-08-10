@@ -9,11 +9,20 @@ Automatically route review mode, perform artifact audits (Spec/Plan) or worktree
 
 ## Step 0: Select Review Mode and Route (Mandatory Dispatch)
 
-The review subagent MUST first inspect its prompt inputs / Context Compaction Block to determine its target review mode:
+The review subagent MUST first inspect its prompt inputs / Context Compaction Block to determine its target review mode and execution context:
+
+### Mode Precedence Hierarchy:
+1. **Explicit CLI Flag**: `--mode=external` or `--mode=pipeline` passed to `resolve_branches.py` or subagent (accepted aliases: `external-standalone`, `internal-pipeline`, `internal`).
+2. **Compaction Block Marker**: `Review Mode Context: internal-pipeline` (set when invoked by `/make-feature`).
+3. **Default Fallback**: **External Standalone Mode**.
+
+> Note: Canonical mode names are `external` (External Standalone) and `pipeline` (Internal Pipeline). Long forms (`external-standalone`, `internal-pipeline`) are accepted as aliases everywhere; Compaction Blocks SHOULD use the long form for clarity, but short forms are also accepted.
+
+### Mode Targets:
 1. **Spec Reviewer Mode (`spec-review`, Role: Adversarial Spec Reviewer)** -> Execute **Artifact Review Path (Spec & Plan)**.
 2. **Plan Reviewer Mode (`plan-review`, Role: Adversarial Plan Reviewer)** -> Execute **Artifact Review Path (Spec & Plan)**.
 3. **RED Test Reviewer Mode (`test-review`, Role: Adversarial Test Reviewer)** -> Execute **Worktree RED Test Review Path**.
-4. **Code Reviewer Mode (`code-review`, Role: Adversarial Code Reviewer)** -> Execute **Worktree Code Review Path**.
+4. **Code Reviewer Mode (`code-review`, Role: Adversarial Code Reviewer)** -> Execute **Worktree Code Review Path** (using resolved External Standalone Mode or Internal Pipeline Mode rules).
 
 > [!IMPORTANT]
 > If the review mode is missing or ambiguous, the reviewer MUST stop immediately and ask the parent agent for explicit mode selection.
@@ -90,6 +99,25 @@ Emit `APPROVE` or `REJECT` verdict detailing:
 
 The following `Core Workflow Rules`, `Context Resolution`, and `Execution Steps` apply **ONLY** to `code-review` mode.
 
+### Execution Context & Mode Rules
+
+#### 1. External Standalone Mode (User-Triggered `/adversarial-review`)
+- **Strict Read-Only Worktree Isolation**: The reviewer MUST NOT invoke file modification tools (`replace_file_content`, `write_to_file`) on repository or worktree files under `~/.gemini/tmp/worktrees/`. Writing temporary scratch files or report artifacts under conversation directories (`<appDataDir>/brain/<conversation-id>/`) remains permitted.
+- **Mandatory Remote Fetch & SHA Guard**: Run `resolve_branches.py [target] [--last-sha=<sha>] [--force]`. If `resolve_branches.py` returns `"sha_changed": false` (and `--force` was not set), halt immediately and notify the user: `"Remote branch commit SHA has not changed since last review (<sha>). No new updates detected."`
+- **Single-Pass Turn Termination**: Perform **exactly 1 audit pass**. Output must begin with a top-level `VERDICT: [APPROVE | NEEDS_REVISION | REJECT]` followed by a dedicated `### External PR Action Plan (Copy-Paste for PR Comments)` section with ready-to-copy code blocks/diffs:
+  ```markdown
+  ### External PR Action Plan (Copy-Paste for PR Comments)
+  **Verdict:** NEEDS_REVISION — 2 issues
+  **1. [file:line] Title** — explanation + ```suggestion diff```
+  **2. [file:line] Title** — explanation
+  **Tests to run:** `pytest path/to/test`
+  ```
+  Terminate turn immediately after posting.
+
+#### 2. Internal Pipeline Mode (Invoked by `/make-feature` Phase 3)
+- **Review Mode Context**: Set to `internal-pipeline` in compaction block.
+- **Builder-Reviewer Loop**: Parent builder agent handles code edits; reviewer subagent audits and emits `APPROVE` or `REJECT` up to max 3 cycles.
+
 ### Subagent Context Compaction Template
 Parent agents MUST include a compacted context block (≤ 30 lines / ~400 words) when invoking review subagents:
 ```markdown
@@ -99,15 +127,19 @@ Parent agents MUST include a compacted context block (≤ 30 lines / ~400 words)
 - **Active Constraints**: <bulleted list>
 - **Prior Step Findings**: <empirical summary>
 - **Target Artifact Paths**: <file links>
+- **Review Mode Context**: <external-standalone | internal-pipeline>
 ```
 
 ### Mandatory Terse Audit Summary Output
-Every review subagent verdict (`APPROVE` or `REJECT`) MUST include a 3-5 line **Adversarial Audit Summary** detailing exactly what was caught and remediated during the audit loop. If zero issues were found, state clean compliance honestly without inventing findings:
+Every review subagent verdict MUST include a top-level `VERDICT:` line and a 3-5 line **Adversarial Audit Summary**. For **External Standalone code-review** the allowed verdicts are `APPROVE`, `NEEDS_REVISION`, or `REJECT`; for **Internal Pipeline code-review** and for spec-review/plan-review/test-review the allowed verdicts remain `APPROVE` or `REJECT` only:
 ```markdown
+VERDICT: APPROVE
+
 ### Adversarial Audit Summary (What Was Caught & Fixed)
 - **[Code]**: <Concise bullet describing bug, missing edge case, weak assertion, or path issue resolved>
 - **[Code]**: <If no blocking issues found: "No blocking issues found; verified clean compliance for [area/spec]">
 ```
+
 
 ## Core Workflow Rules
 > [!IMPORTANT]
@@ -122,11 +154,14 @@ Every review subagent verdict (`APPROVE` or `REJECT`) MUST include a 3-5 line **
 
 1. Run the helper branch resolution script to discover branches and manage worktree.
    ```bash
-   python3 ~/.gemini/skills/adversarial-review/scripts/resolve_branches.py [optional_target] [--pr <N>] [--reference <branch>] [--prune] [--prune-all]
+   python3 ~/.gemini/skills/adversarial-review/scripts/resolve_branches.py [optional_target] [--mode=external|pipeline] [--last-sha=<sha>] [--force] [--pr <N>] [--reference <branch>] [--prune] [--prune-all]
    ```
 
 ### Script Flags
 - `[optional_target]`: Explicitly specify the feature branch to review. Accepts short names (`feat/x`), remote-qualified names (`origin/feat/x`), or fully qualified refs (`refs/heads/feat/x`); a remote-qualified name reviews that exact remote ref even when a same-named local branch exists. `#42` or a PR/MR web URL is treated as a pull request target (see `--pr`); a URL also selects the matching remote by comparing remote URLs.
+- `--mode=<mode>`: Execution context. `external` (default) for user-triggered `/adversarial-review` (strict read-only, single-pass) or `pipeline` for `/make-feature` Phase 3 (builder-reviewer loop). Aliases `external-standalone`, `internal-pipeline`, and `internal` are accepted and normalized to canonical `external`/`pipeline`.
+- `--last-sha=<sha>`: Full 40-char commit SHA (or 7-40 hex prefix) from previous review. When it matches the resolved `commit_hash` and `--force` is not set, the script returns `"sha_changed": false` and skips worktree creation.
+- `--force`: Bypass the `--last-sha` unchanged guard. Forces a re-review even when SHA has not changed.
 - `--pr <N>`: Review a pull/merge request by number instead of a branch. The script fetches the PR head ref directly from the remote (`refs/pull/N/head` on GitHub/Gitea/Forgejo, `refs/merge-requests/N/head` on GitLab) into `refs/gemini-review/<remote>/pr/N`, so it works even for fork PRs whose head branch is not in any configured remote, and for merged/closed PRs. Unsupported on remotes that do not expose PR refs (e.g. Bitbucket). Unlike branch fetches, a failed PR fetch is a fatal error — there is no stale local fallback.
 - `--reference <branch>`: Override the default integration branch to compare against.
 - `--prune`: Prune cached review worktrees for this repository.
@@ -138,6 +173,7 @@ The script returns JSON on stdout. The schema depends on the outcome:
 * **Success (Worktree Created/Updated)**
    ```json
    {
+     "mode": "external",
      "reference_branch": "origin/main",
      "reference_ref": "origin/main",
      "reference_commit_hash": "b2c3d4e5...",
@@ -147,16 +183,23 @@ The script returns JSON on stdout. The schema depends on the outcome:
      "worktree_path": "/Users/user/.gemini/tmp/worktrees/a1b2c3d4_feat-my-feature_e5f6g7",
      "commit_hash": "a1b2c3d4...",
      "subject": "commit message subject",
+     "sha_changed": true,
      "fetch_error": null
    }
    ```
+   - `mode` — echoed, normalized `--mode` value (`external` default, or `pipeline`). Always present on success.
+   - `sha_changed` — `true` if review should proceed; `false` when `--last-sha` matches `commit_hash` and `--force` not set.
+   - `message` — present only when `sha_changed == false`, value: `"Remote branch commit SHA has not changed since last review (<sha>). No new updates detected."`
+   - `worktree_path` — path to created worktree, or `null` when `sha_changed == false`.
    - `reference_ref` currently always mirrors `reference_branch`.
    - `feature_ref` is the exact ref the review targets (local name, or remote-qualified like `origin/feat/my-feature`), so you can tell whether a local or remote branch was resolved.
    - `fetch_error` is `null` when the best-effort `git fetch` succeeded; otherwise it holds the fetch failure message and the results may be based on stale local tracking refs. Mention this in the review report if set.
    - **PR mode** returns the same success schema plus `"pr_number"`, with `feature_branch` like `"pr-42"` and `feature_ref` like `"origin/pull/42/head"`.
+   - Note: `mode` is now always present (even on ambiguous / no-branches responses, since it reflects the requested execution context); `sha_changed` is only present on success responses where a target was resolved (absent on ambiguous / no-branches).
 * **Ambiguous Candidates (Need user clarification)**
    ```json
    {
+     "mode": "external",
      "reference_branch": "origin/main",
      "reference_ref": "origin/main",
      "reference_commit_hash": "b2c3d4e5...",
@@ -177,6 +220,7 @@ The script returns JSON on stdout. The schema depends on the outcome:
 * **No Branches Found**
    ```json
    {
+     "mode": "external",
      "reference_branch": "origin/main",
      "reference_ref": "origin/main",
      "reference_commit_hash": "b2c3d4e5...",

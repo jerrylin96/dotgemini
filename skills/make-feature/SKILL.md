@@ -83,6 +83,7 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
        - **Active Constraints**: <bulleted list>
        - **Prior Step Findings**: <empirical summary>
        - **Target Artifact Paths**: <file links>
+       - Review Mode Context: internal-pipeline
        ```
        *(Prohibition: NEVER include secrets, tokens, credentials, or `.env` contents in the compaction block)*. Specify the `<appDataDir>/brain/<conversation-id>/review_manifest_<feature>.md` path to preserve reasoning state across context isolation.
      - The subagent runs isolated review on the worktree, reading `review_manifest_<feature>.md` first to target diff inspection. Repeat fix-commit-push loop until verdict is `APPROVE` with zero open `[CRITICAL]` findings. Post review report in chat.
