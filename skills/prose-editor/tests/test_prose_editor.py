@@ -1,4 +1,5 @@
 import importlib.util
+import json
 from pathlib import Path
 import re
 import pytest
@@ -7,6 +8,7 @@ WORKTREE_ROOT = Path(__file__).resolve().parents[3]
 SKILL_DIR = WORKTREE_ROOT / "skills" / "prose-editor"
 SKILL_FILE = SKILL_DIR / "SKILL.md"
 VALIDATOR_PATH = SKILL_DIR / "resources" / "validator.py"
+SCHEMA_PATH = SKILL_DIR / "resources" / "suggestion_schema.json"
 
 
 def get_validator():
@@ -25,22 +27,25 @@ def test_skill_metadata_and_frontmatter():
     """Verify that SKILL.md exists and contains valid YAML frontmatter and required sections."""
     assert SKILL_FILE.exists(), f"SKILL.md not found at {SKILL_FILE}"
     content = SKILL_FILE.read_text(encoding="utf-8")
-    
+
     # Check frontmatter
     assert content.startswith("---\n"), "SKILL.md must start with YAML frontmatter delimiter '---'"
     frontmatter_match = re.search(r"^---\n(.*?)\n---", content, re.DOTALL)
     assert frontmatter_match is not None, "Missing closing YAML frontmatter delimiter"
     frontmatter = frontmatter_match.group(1)
-    
+
     assert "name: prose-editor" in frontmatter, "Frontmatter must define name: prose-editor"
     assert "description:" in frontmatter, "Frontmatter must define a description"
-    
+    assert "/edit-prose" in frontmatter, "Frontmatter description must mention command trigger /edit-prose"
+
     # Check core section headings
     required_sections = [
+        "## Command Triggers",
         "## Core Principles",
         "## Editing Tiers",
         "## Suggestion Card Schema",
         "## Syntax & Structure Preservation",
+        "## Validation & Tooling",
         "## Large Document Chunking",
         "## Diff Mode Filtering",
         "## Clean Document State",
@@ -49,11 +54,33 @@ def test_skill_metadata_and_frontmatter():
         assert section in content, f"Missing required section '{section}' in SKILL.md"
 
 
+def test_enum_source_of_truth_sync():
+    """Assert that category and impact enums stay synchronized across schema, validator, and docs."""
+    validator = get_validator()
+    assert validator is not None, "Validator module not loaded"
+    assert SCHEMA_PATH.exists(), f"Schema file not found at {SCHEMA_PATH}"
+
+    with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
+        schema = json.load(f)
+
+    schema_categories = set(schema["properties"]["category"]["enum"])
+    schema_impacts = set(schema["properties"]["impact"]["enum"])
+
+    assert validator.ALLOWED_CATEGORIES == schema_categories
+    assert validator.ALLOWED_IMPACTS == schema_impacts
+
+    skill_text = SKILL_FILE.read_text(encoding="utf-8")
+    for cat in schema_categories:
+        assert f"`[{cat}]`" in skill_text or cat in skill_text
+    for imp in schema_impacts:
+        assert f"`[{imp}]`" in skill_text or imp in skill_text
+
+
 def test_suggestion_card_format_validator():
     """Verify suggestion card parsing and validation against allowed schema, including negative cases."""
     validator = get_validator()
     assert validator is not None, "Validator module not implemented yet"
-    
+
     valid_card_text = """### Suggestion #1 `[Brevity]` `[Minor]`
 - **Anchor:** `Introduction` (Lines 10-12)
 - **Original:** "It is important to note that the primary function of this module is"
@@ -68,7 +95,7 @@ def test_suggestion_card_format_validator():
 """
     cards = validator.parse_suggestion_cards(valid_card_text)
     assert len(cards) == 2
-    
+
     card1 = cards[0]
     assert card1["id"] == 1
     assert card1["category"] == "Brevity"
@@ -85,46 +112,143 @@ def test_suggestion_card_format_validator():
 
     assert card1["category"] in validator.ALLOWED_CATEGORIES
     assert card1["impact"] in validator.ALLOWED_IMPACTS
-    
-    # Negative test: Invalid category
-    invalid_cat_card = """### Suggestion #3 `[Style]` `[Minor]`
+
+
+def test_parser_quote_edge_cases():
+    """Verify trailing space handling, multiline quotes, and curly quotes in parser."""
+    validator = get_validator()
+    assert validator is not None, "Validator module not loaded"
+
+    # Trailing space after closing quote
+    trailing_space_card = (
+        "### Suggestion #1 `[Brevity]` `[Minor]`\n"
+        "- **Anchor:** `Intro`\n"
+        '- **Original:** "The primary function of this module is"   \n'
+        '- **Proposed:** "This module functions to"   \n'
+        "- **Rationale:** Brevity.\n"
+    )
+    cards = validator.parse_suggestion_cards(trailing_space_card)
+    assert len(cards) == 1
+    assert cards[0]["original"] == "The primary function of this module is"
+    assert cards[0]["proposed"] == "This module functions to"
+
+    # Curly quotes
+    curly_card = (
+        "### Suggestion #1 `[Clarity]` `[Minor]`\n"
+        "- **Anchor:** `Intro`\n"
+        "- **Original:** “The primary function of this module is”\n"
+        "- **Proposed:** “This module functions to”\n"
+        "- **Rationale:** Clarity.\n"
+    )
+    curly_parsed = validator.parse_suggestion_cards(curly_card)
+    assert len(curly_parsed) == 1
+    assert curly_parsed[0]["original"] == "The primary function of this module is"
+
+    # Multiline quotes
+    multiline_card = (
+        "### Suggestion #1 `[Flow]` `[Major]`\n"
+        "- **Anchor:** `Section 1`\n"
+        '- **Original:** "First paragraph sentence.\nSecond paragraph sentence."\n'
+        '- **Proposed:** "Combined fluid sentence."\n'
+        "- **Rationale:** Flow improvement.\n"
+    )
+    multi_parsed = validator.parse_suggestion_cards(multiline_card)
+    assert len(multi_parsed) == 1
+    assert multi_parsed[0]["original"] == "First paragraph sentence.\nSecond paragraph sentence."
+
+    # Unterminated quote raises ValueError
+    unterminated_card = (
+        "### Suggestion #1 `[Brevity]` `[Minor]`\n"
+        "- **Anchor:** `Intro`\n"
+        '- **Original:** "Unterminated quote without closing\n'
+        '- **Proposed:** "Valid"\n'
+        "- **Rationale:** Test.\n"
+    )
+    with pytest.raises(ValueError, match="Unterminated or malformed quoted 'Original'"):
+        validator.parse_suggestion_cards(unterminated_card)
+
+
+def test_malformed_suggestion_header_rejection():
+    """Verify that malformed headers are rejected with ValueError rather than silently ignored."""
+    validator = get_validator()
+    assert validator is not None, "Validator module not loaded"
+
+    # Missing impact token
+    malformed_header = """### Suggestion #1 `[Clarity]`
 - **Anchor:** `Intro`
 - **Original:** "foo"
 - **Proposed:** "bar"
 - **Rationale:** baz
 """
-    with pytest.raises(ValueError, match="Invalid category"):
-        validator.parse_suggestion_cards(invalid_cat_card)
+    with pytest.raises(ValueError, match="Malformed suggestion header"):
+        validator.parse_suggestion_cards(malformed_header)
 
-    # Negative test: Invalid impact
-    invalid_impact_card = """### Suggestion #4 `[Brevity]` `[Urgent]`
+    # Missing ID #
+    missing_id_header = """### Suggestion `[Clarity]` `[Minor]`
 - **Anchor:** `Intro`
 - **Original:** "foo"
 - **Proposed:** "bar"
 - **Rationale:** baz
 """
-    with pytest.raises(ValueError, match="Invalid impact"):
-        validator.parse_suggestion_cards(invalid_impact_card)
+    with pytest.raises(ValueError, match="Malformed suggestion header"):
+        validator.parse_suggestion_cards(missing_id_header)
 
-    # Negative test: Missing required fields
-    missing_fields_card = """### Suggestion #5 `[Brevity]` `[Minor]`
+
+def test_card_id_sequencing_and_noop_rejection():
+    """Verify rejection of duplicate IDs, gaps in numbering, non-positive IDs, and no-op edits."""
+    validator = get_validator()
+    assert validator is not None, "Validator module not loaded"
+
+    # Duplicate IDs
+    duplicate_id_card = """### Suggestion #1 `[Brevity]` `[Minor]`
 - **Anchor:** `Intro`
+- **Original:** "foo"
 - **Proposed:** "bar"
 - **Rationale:** baz
+
+### Suggestion #1 `[Clarity]` `[Minor]`
+- **Anchor:** `Intro`
+- **Original:** "alpha"
+- **Proposed:** "beta"
+- **Rationale:** baz
 """
-    with pytest.raises(ValueError, match="Missing required field"):
-        validator.parse_suggestion_cards(missing_fields_card)
+    with pytest.raises(ValueError, match="Duplicate suggestion ID #1"):
+        validator.parse_suggestion_cards(duplicate_id_card)
+
+    # Non-sequential IDs (gap: 1, 3)
+    gap_card = """### Suggestion #1 `[Brevity]` `[Minor]`
+- **Anchor:** `Intro`
+- **Original:** "foo"
+- **Proposed:** "bar"
+- **Rationale:** baz
+
+### Suggestion #3 `[Clarity]` `[Minor]`
+- **Anchor:** `Intro`
+- **Original:** "alpha"
+- **Proposed:** "beta"
+- **Rationale:** baz
+"""
+    with pytest.raises(ValueError, match="Non-sequential suggestion ID: expected #2, got #3"):
+        validator.parse_suggestion_cards(gap_card)
+
+    # No-op edit
+    noop_card = """### Suggestion #1 `[Brevity]` `[Minor]`
+- **Anchor:** `Intro`
+- **Original:** "identical text"
+- **Proposed:** "identical text"
+- **Rationale:** baz
+"""
+    with pytest.raises(ValueError, match="No-op suggestion"):
+        validator.parse_suggestion_cards(noop_card)
 
 
-def test_verbatim_quote_fidelity():
-    """Ensure proposed cards fail validation if the original text is not a verbatim substring of source."""
+def test_verbatim_quote_fidelity_and_ambiguity():
+    """Ensure proposed cards fail validation if original is not in source, or occurs ambiguously multiple times."""
     validator = get_validator()
     assert validator is not None, "Validator module not implemented yet"
-    
-    source_text = """# Architecture Overview
-This module primarily serves to handle incoming event payloads from the client.
-All events are buffered before batch dispatching.
-"""
+
+    source_text = """# Architecture Overview\r\nThis module primarily serves to handle incoming event payloads from the client.\r\nAll events are buffered before batch dispatching.\r\n"""
+
     valid_card = {
         "id": 1,
         "original": "This module primarily serves to handle incoming event payloads from the client.",
@@ -132,39 +256,60 @@ All events are buffered before batch dispatching.
         "category": "Brevity",
         "impact": "Minor",
     }
-    
+
     invalid_card = {
         "id": 2,
-        "original": "This module primarily serves to handle incoming events from the client.",  # Missing 'payloads'
+        "original": "This module primarily serves to handle incoming events from the client.",
         "proposed": "This module handles incoming events.",
         "category": "Brevity",
         "impact": "Minor",
     }
-    
+
     assert validator.validate_verbatim_quotes([valid_card], source_text) is True
     with pytest.raises(ValueError, match="Verbatim quote mismatch for Suggestion #2"):
         validator.validate_verbatim_quotes([invalid_card], source_text)
+
+    # Ambiguous duplicate occurrence test
+    duplicate_source = "The system is online. The system is online."
+    ambiguous_card = {
+        "id": 1,
+        "original": "The system is online.",
+        "proposed": "The system runs.",
+        "category": "Brevity",
+        "impact": "Minor",
+    }
+    with pytest.raises(ValueError, match="Ambiguous verbatim quote for Suggestion #1"):
+        validator.validate_verbatim_quotes([ambiguous_card], duplicate_source)
 
 
 def test_syntax_preservation_parser():
     """Verify syntax elements like code blocks, math, tables, callouts, task lists, and footnotes are identified."""
     validator = get_validator()
     assert validator is not None, "Validator module not implemented yet"
-    
-    sample_doc = """# Document Title
 
-Here is a paragraph of regular prose with footnote[^1].
+    sample_doc = """---
+title: Sample Doc
+author: Test
+---
+
+# Document Title
+
+Here is a paragraph of regular prose with footnote[^1] and raw link https://example.com and [markdown link](https://test.org).
 
 ```python
 def foo():
     return "protected code"
 ```
 
+~~~bash
+echo "tilde fenced code block"
+~~~
+
 Another sentence with math block:
 $$
 \\sigma = \\sqrt{\\frac{1}{N}\\sum_{i=1}^N (x_i - \\mu)^2}
 $$
-and inline math $E=mc^2$ alongside inline `code_fn()`.
+and inline math $E=mc^2$ alongside inline `code_fn()` and <div class="test">HTML</div>.
 
 > [!NOTE]
 > Important callout alert content.
@@ -177,24 +322,30 @@ and inline math $E=mc^2$ alongside inline `code_fn()`.
 - [x] Completed task item
 - Regular bullet item
 
-[^1]: Footnote definition content.
-"""
+[^1]: Footnote definition content."""
+
     protected = validator.extract_protected_blocks(sample_doc)
-    
-    assert any("def foo():" in block["content"] for block in protected), "Code block not protected"
+
+    assert any("title: Sample Doc" in block["content"] for block in protected), "YAML frontmatter not protected"
+    assert any("def foo():" in block["content"] for block in protected), "Backtick code block not protected"
+    assert any("tilde fenced code" in block["content"] for block in protected), "Tilde code block not protected"
     assert any("\\sigma =" in block["content"] for block in protected), "LaTeX math block not protected"
+    assert any("E=mc^2" in block["content"] for block in protected), "Inline math not protected"
+    assert any("`code_fn()`" in block["content"] for block in protected), "Inline code not protected"
+    assert any("<div class=" in block["content"] for block in protected), "HTML tag not protected"
     assert any("[!NOTE]" in block["content"] for block in protected), "Alert callout not protected"
-    assert any("Header 1" in block["content"] for block in protected), "Markdown table not protected"
+    assert any("Header 1" in block["content"] for block in protected), "Markdown table without EOF newline not protected"
     assert any("- [ ]" in block["content"] for block in protected), "Unchecked task list not protected"
     assert any("- [x]" in block["content"] for block in protected), "Checked task list not protected"
     assert any("[^1]:" in block["content"] for block in protected), "Footnote definition not protected"
+    assert any("https://example.com" in block["content"] for block in protected), "Link URL not protected"
 
 
 def test_diff_prose_extension_filter():
     """Verify that only supported prose/documentation file extensions are allowed."""
     validator = get_validator()
     assert validator is not None, "Validator module not implemented yet"
-    
+
     prose_files = [
         "README.md",
         "docs/guide.markdown",
@@ -211,10 +362,10 @@ def test_diff_prose_extension_filter():
         "image.png",
         "binary.bin",
     ]
-    
+
     for path in prose_files:
         assert validator.is_prose_file(path) is True, f"Expected {path} to be recognized as prose"
-        
+
     for path in non_prose_files:
         assert validator.is_prose_file(path) is False, f"Expected {path} to be filtered out as non-prose"
 
@@ -223,7 +374,7 @@ def test_zero_finding_clean_state_formatter():
     """Verify that a document with 0 findings generates a clean, structured summary."""
     validator = get_validator()
     assert validator is not None, "Validator module not implemented yet"
-    
+
     summary = validator.format_clean_summary(total_words=1250, reading_time_min=5)
     assert "**Total Suggestions:** 0" in summary
     assert "1,250 words" in summary

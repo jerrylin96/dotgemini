@@ -1,11 +1,18 @@
 ---
 name: prose-editor
-description: Structured, high-clarity editing and review for prose, documentation, papers, and markdown essays using atomic suggestion cards.
+description: Maps to /edit-prose (or /prose). Use when the user asks to edit, proofread, or review prose, technical documentation, papers, or markdown essays using atomic suggestion cards.
 ---
 
-# Prose Editor
+# Prose Editor (`/edit-prose`)
 
 The `prose-editor` skill provides structured, granular editing feedback on prose, technical documentation, academic papers, and markdown essays. It solves the visual noise of git diffs on soft-wrapped paragraphs by presenting atomic, easily reviewable **Suggestion Cards**.
+
+## Command Triggers
+* `/edit-prose [file_path]` — Run structured review on the specified file.
+* `/edit-prose --diff` — Run structured review on modified prose files in the active git changeset.
+* `/prose [text_snippet]` — Review provided text snippet directly.
+
+---
 
 ## Core Principles
 
@@ -33,7 +40,7 @@ Select an editing tier based on user goals or flags:
 
 ## Suggestion Card Schema
 
-Every proposed edit must be formatted as an atomic card:
+Every proposed edit must be formatted as an atomic card adhering to [suggestion_schema.json](resources/suggestion_schema.json):
 
 ```markdown
 ### Suggestion #<ID> `[<Category>]` `[<Impact>]`
@@ -48,22 +55,36 @@ Every proposed edit must be formatted as an atomic card:
 * **`Impact`**: One of `[Major]` (meaning or structure shift), `[Minor]` (phrasing polish), `[Nit]` (punctuation/typo).
 * **`Anchor`**: Indicates where the edit belongs (e.g., `## Architecture Overview` or `Paragraph 3`).
 * **`Original`**: Quoted exact substring from the document.
-* **`Proposed`**: The replacement text.
+* **`Proposed`**: The replacement text (must differ from `Original`).
 * **`Rationale`**: Brief explanation of the improvement (e.g. "Eliminates passive filler", "Clarifies causal sequence").
+* **Card IDs**: Strictly positive, sequential integers starting at `#1` (`#1`, `#2`, `#3`...).
 
 ---
 
 ## Syntax & Structure Preservation
 
-The following non-prose elements must be protected and preserved verbatim unless the user explicitly requests syntax corrections:
+The following non-prose and structural elements must be protected and preserved verbatim unless the user explicitly requests syntax corrections:
 
-* **Code blocks** (` ```...``` `) and inline code (`` `code` ``)
+* **YAML frontmatter** (`--- ... ---`)
+* **Code blocks** (fenced with ``` or ~~~) and inline code (`` `code` ``)
 * **LaTeX math blocks** (`$$...$$`) and inline math (`$...$`)
 * **Markdown tables** (`| col1 | col2 |`)
 * **Alert callouts** (`> [!NOTE]`, `> [!WARNING]`, `> [!TIP]`, etc.)
 * **Task lists** (`- [ ]`, `- [x]`) and standard lists
 * **Footnotes** (`[^1]` and `[^1]: ...`)
-* **HTML tags**, YAML frontmatter, and URLs / link targets
+* **HTML tags**, raw URLs, and markdown link targets
+
+---
+
+## Validation & Tooling
+
+To ensure schema compliance and verbatim quote fidelity, validate output using the bundled resources:
+
+1. **Schema Reference**: Ensure all suggestion attributes match [resources/suggestion_schema.json](resources/suggestion_schema.json).
+2. **Runtime Verification Helper**: Run `resources/validator.py` functions:
+   - `parse_suggestion_cards(text)`: Verifies card syntax, positive sequential IDs, and valid enums.
+   - `validate_verbatim_quotes(cards, source_text)`: Guarantees that every `Original` quote exists verbatim and unambiguously in the source document.
+   - `extract_protected_blocks(text)`: Inspects protected code, math, table, and callout regions.
 
 ---
 
