@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ProseEditorSuggestion",
+  "type": "object",
+  "required": [
+    "id",
+    "category",
+    "impact",
+    "anchor",
+    "original",
+    "proposed",
+    "rationale"
+  ],
+  "properties": {
+    "id": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Sequential suggestion identifier (#1, #2, #3...)"
+    },
+    "category": {
+      "type": "string",
+      "enum": ["Clarity", "Brevity", "Flow", "Tone", "Grammar", "Structure"],
+      "description": "Primary editing dimension addressed by the suggestion"
+    },
+    "impact": {
+      "type": "string",
+      "enum": ["Major", "Minor", "Nit"],
+      "description": "Impact level of the proposed modification"
+    },
+    "anchor": {
+      "type": "string",
+      "description": "Context anchor indicating section, heading, paragraph, or line range"
+    },
+    "original": {
+      "type": "string",
+      "description": "Exact verbatim quoted substring from the source document"
+    },
+    "proposed": {
+      "type": "string",
+      "description": "Proposed revision replacing the original substring"
+    },
+    "rationale": {
+      "type": "string",
+      "description": "Terse, actionable explanation of why the modification improves the prose"
+    }
+  },
+  "additionalProperties": false
+}
