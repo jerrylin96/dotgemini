@@ -205,6 +205,41 @@ def test_parse_real_skill_md_without_crash():
     assert isinstance(cards, list)
 
 
+def test_unclosed_code_fence_rejection():
+    """Verify that an unclosed code fence raises an error rather than silently swallowing cards."""
+    validator = get_validator()
+    assert validator is not None, "Validator module not loaded"
+
+    unclosed_doc = """# Review
+
+```python
+def example():
+    pass
+
+### Suggestion #1 `[Clarity]` `[Major]`
+- **Anchor:** `Intro`
+- **Original:** "foo"
+- **Proposed:** "bar"
+- **Rationale:** baz
+"""
+    with pytest.raises(ValueError, match="Unterminated code fence"):
+        validator.parse_suggestion_cards(unclosed_doc)
+
+    # Stray backticks in regular prose should not cause unclosed fence errors
+    stray_backtick_doc = """# Review
+Here is some `inline code` and another stray ` backtick.
+
+### Suggestion #1 `[Clarity]` `[Major]`
+- **Anchor:** `Intro`
+- **Original:** "foo"
+- **Proposed:** "bar"
+- **Rationale:** baz
+"""
+    cards = validator.parse_suggestion_cards(stray_backtick_doc)
+    assert len(cards) == 1
+    assert cards[0]["id"] == 1
+
+
 def test_card_id_sequencing_and_chunking():
     """Verify chunked IDs starting at #5, filtered sets #1/#3, and rejection of duplicates / #0."""
     validator = get_validator()
@@ -324,20 +359,28 @@ def test_verbatim_quote_fidelity_and_ambiguity():
 
 
 def test_inline_math_vs_currency_isolation():
-    """Verify inline math does not capture prose between dollar currency amounts."""
+    """Verify inline math supports digit-leading LaTeX ($2x+1$, $100$) while rejecting currency."""
     validator = get_validator()
     assert validator is not None, "Validator module not loaded"
 
+    # Currency should not match
     currency_text = "The migration cost $5,000 in Q1 and the rollback cost $2,000 more, which was over budget."
     protected = validator.extract_protected_blocks(currency_text)
     math_blocks = [b for b in protected if b["type"] == "inline_math"]
     assert len(math_blocks) == 0, f"Expected 0 inline math blocks in currency text, found {math_blocks}"
 
-    math_text = "Here is formula $E=mc^2$ and variance $\\sigma = \\sqrt{N}$ in text."
+    # Single currency amount
+    single_curr = "Total is $5,000."
+    assert len([b for b in validator.extract_protected_blocks(single_curr) if b["type"] == "inline_math"]) == 0
+
+    # Legitimate digit-leading LaTeX math must match
+    math_text = "Here is formula $2x + 1$, coefficient $3\\alpha$, and value $100$ alongside $E=mc^2$."
     math_protected = validator.extract_protected_blocks(math_text)
     found_math = [b["content"] for b in math_protected if b["type"] == "inline_math"]
+    assert "$2x + 1$" in found_math
+    assert "$3\\alpha$" in found_math
+    assert "$100$" in found_math
     assert "$E=mc^2$" in found_math
-    assert "$\\sigma = \\sqrt{N}$" in found_math
 
 
 def test_syntax_preservation_parser():

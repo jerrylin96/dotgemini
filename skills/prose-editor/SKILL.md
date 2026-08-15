@@ -57,7 +57,7 @@ Every proposed edit must be formatted as an atomic card adhering to [suggestion_
 * **`Original`**: Quoted exact substring from the document.
 * **`Proposed`**: The replacement text (must differ from `Original`).
 * **`Rationale`**: Brief explanation of the improvement (e.g. "Eliminates passive filler", "Clarifies causal sequence").
-* **Card IDs**: Strictly positive, unique integers (`#1`, `#2`, `#3`...). When analyzing documents across multiple chunks, IDs increase monotonically across sections (e.g. chunk 2 starting at `#5`).
+* **Card IDs**: Strictly positive, unique integers (`#1`, `#2`, `#3`...). When analyzing documents across multiple chunks, IDs remain unique across sections (e.g. chunk 2 starting at `#5`).
 
 ---
 

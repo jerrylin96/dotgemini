@@ -30,6 +30,35 @@ def is_prose_file(file_path: str | Path) -> bool:
     return suffix in PROSE_EXTENSIONS
 
 
+def _get_code_fence_spans(text: str, strict: bool = False) -> List[tuple[int, int]]:
+    """Return start and end spans of fenced code blocks. If strict=True, raises ValueError on unclosed fence."""
+    spans: List[tuple[int, int]] = []
+    fence_pattern = re.compile(r"^(```|~~~)[^\r\n]*$", re.MULTILINE)
+    lines = list(fence_pattern.finditer(text))
+
+    i = 0
+    while i < len(lines):
+        open_match = lines[i]
+        fence_type = open_match.group(1)
+        close_found = False
+        for j in range(i + 1, len(lines)):
+            close_match = lines[j]
+            if close_match.group(1) == fence_type:
+                spans.append((open_match.start(), close_match.end()))
+                i = j + 1
+                close_found = True
+                break
+        if not close_found:
+            if strict:
+                raise ValueError(
+                    f"Unterminated code fence '{fence_type}' at character index {open_match.start()} "
+                    "— cannot reliably locate suggestion cards"
+                )
+            spans.append((open_match.start(), len(text)))
+            break
+    return spans
+
+
 def extract_protected_blocks(text: str) -> List[Dict[str, Any]]:
     """Extract syntax and structural blocks that must be preserved verbatim in prose."""
     protected: List[Dict[str, Any]] = []
@@ -39,10 +68,11 @@ def extract_protected_blocks(text: str) -> List[Dict[str, Any]]:
     if frontmatter_match:
         protected.append({"type": "frontmatter", "content": frontmatter_match.group(0), "span": frontmatter_match.span()})
 
-    # 2. Fenced code blocks (``` ... ``` or ~~~ ... ~~~, fail-closed for unclosed blocks to EOF)
-    for match in re.finditer(r"(?:```[\s\S]*?(?:```|$)|~~~[\s\S]*?(?:~~~|$))", text):
-        if match.group(0).strip():
-            protected.append({"type": "code_block", "content": match.group(0), "span": match.span()})
+    # 2. Fenced code blocks (reusing shared fence scanner)
+    for start, end in _get_code_fence_spans(text, strict=False):
+        block_text = text[start:end]
+        if block_text.strip():
+            protected.append({"type": "code_block", "content": block_text, "span": (start, end)})
 
     # 3. LaTeX math blocks ($$ ... $$, fail-closed to EOF)
     for match in re.finditer(r"\$\$[\s\S]*?(?:\$\$|$)", text):
@@ -71,8 +101,8 @@ def extract_protected_blocks(text: str) -> List[Dict[str, Any]]:
     for match in re.finditer(r"`[^`\r\n]+`", text):
         protected.append({"type": "inline_code", "content": match.group(0), "span": match.span()})
 
-    # 9. Inline math ($...$, non-currency: must not start with digit/whitespace or end with whitespace/dollar)
-    for match in re.finditer(r"(?<![\$\w])\$(?!\s|\d)(?:[^\$\r\n]|\\\$)+?(?<!\s|\$)\$(?![\$\w])", text):
+    # 9. Inline math ($...$, non-currency: must not start with whitespace, end with whitespace/$, or match currency digits with commas)
+    for match in re.finditer(r"(?<![\$\w])\$(?!\s)(?!\d{1,3}(?:,\d{3})+(?:\.\d+)?\$)(?:[^\$\r\n]|\\\$)+?(?<!\s|\$)\$(?![\$\w])", text):
         protected.append({"type": "inline_math", "content": match.group(0), "span": match.span()})
 
     # 10. HTML tags (<tag> ... </tag> or <tag/>)
@@ -84,14 +114,6 @@ def extract_protected_blocks(text: str) -> List[Dict[str, Any]]:
         protected.append({"type": "link_url", "content": match.group(0), "span": match.span()})
 
     return protected
-
-
-def _get_code_fence_spans(text: str) -> List[tuple[int, int]]:
-    """Return start and end spans of all fenced code blocks in text."""
-    spans: List[tuple[int, int]] = []
-    for match in re.finditer(r"(?:```[\s\S]*?(?:```|$)|~~~[\s\S]*?(?:~~~|$))", text):
-        spans.append(match.span())
-    return spans
 
 
 def _extract_quoted_field(field_name: str, body: str, card_id: int) -> str:
@@ -116,7 +138,7 @@ def _extract_quoted_field(field_name: str, body: str, card_id: int) -> str:
 
 def parse_suggestion_cards(text: str) -> List[Dict[str, Any]]:
     """Parse markdown suggestion cards into structured dicts with strict schema validation."""
-    code_spans = _get_code_fence_spans(text)
+    code_spans = _get_code_fence_spans(text, strict=True)
 
     def is_inside_code(pos: int) -> bool:
         return any(start <= pos < end for start, end in code_spans)
@@ -239,6 +261,9 @@ def main() -> None:
     content = file_path.read_text(encoding="utf-8")
     try:
         cards = parse_suggestion_cards(content)
+        if len(cards) == 0:
+            print(f"Warning: No valid suggestion cards found in {file_path}", file=sys.stderr)
+            sys.exit(1)
         if args.source:
             source_path = Path(args.source)
             if not source_path.exists():
@@ -246,7 +271,7 @@ def main() -> None:
                 sys.exit(1)
             source_text = source_path.read_text(encoding="utf-8")
             validate_verbatim_quotes(cards, source_text)
-        print(f"Validation successful: {len(cards)} valid suggestion card(s) found.")
+        print(f"Validation successful: {len(cards)} valid suggestion card(s) verified.")
     except Exception as err:
         print(f"Validation failed: {err}", file=sys.stderr)
         sys.exit(1)
