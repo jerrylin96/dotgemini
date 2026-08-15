@@ -417,11 +417,19 @@ def test_inline_math_vs_currency_isolation():
         math_blocks = [b for b in protected if b["type"] == "inline_math"]
         assert len(math_blocks) == 0, f"Expected 0 inline math blocks in '{sample}', found {math_blocks}"
 
-    # Legitimate digit-leading LaTeX math must match
-    math_text = "Here is formula $2x + 1$, coefficient $3\\alpha$, and value $100$ alongside $E=mc^2$."
+    # Legitimate digit-leading and command-bearing LaTeX math must match
+    math_text = (
+        "Here is formula $2x + 1$, mapping $x \\to y$, element $x \\in S$, limit $\\lim_{n \\to \\infty} a_n$, "
+        "subscript $v_{in}$, mapping $f \\colon A \\to B$, coefficient $3\\alpha$, and value $100$ alongside $E=mc^2$."
+    )
     math_protected = validator.extract_protected_blocks(math_text)
     found_math = [b["content"] for b in math_protected if b["type"] == "inline_math"]
     assert "$2x + 1$" in found_math
+    assert "$x \\to y$" in found_math
+    assert "$x \\in S$" in found_math
+    assert "$\\lim_{n \\to \\infty} a_n$" in found_math
+    assert "$v_{in}$" in found_math
+    assert "$f \\colon A \\to B$" in found_math
     assert "$3\\alpha$" in found_math
     assert "$100$" in found_math
     assert "$E=mc^2$" in found_math

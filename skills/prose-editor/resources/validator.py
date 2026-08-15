@@ -68,20 +68,6 @@ def _get_code_fence_spans(text: str, strict: bool = False) -> List[tuple[int, in
     return spans
 
 
-def _is_latex_math(content: str) -> bool:
-    """Return True if content is genuine LaTeX math rather than currency or natural prose."""
-    # Reject prose sentences with common English words
-    if re.search(r"\b(?:vs|then|to|and|or|more|in|for|from|is|was|were|the|of|budget|cost)\b", content, re.IGNORECASE):
-        return False
-    # Reject comma-grouped currency amounts (e.g. 5,000 or 1,000,000.00)
-    if re.match(r"^\d{1,3}(?:,\d{3})+(?:\.\d+)?$", content):
-        return False
-    # Reject range expressions between currency numbers (e.g. 100-200 or 100/200)
-    if re.search(r"\d+\s*[-/]\s*\$?\d+", content):
-        return False
-    return True
-
-
 def extract_protected_blocks(text: str) -> List[Dict[str, Any]]:
     """Extract syntax and structural blocks that must be preserved verbatim in prose."""
     protected: List[Dict[str, Any]] = []
@@ -124,11 +110,12 @@ def extract_protected_blocks(text: str) -> List[Dict[str, Any]]:
     for match in re.finditer(r"`[^`\r\n]+`", text):
         protected.append({"type": "inline_code", "content": match.group(0), "span": match.span()})
 
-    # 9. Inline math ($...$, non-currency)
-    for match in re.finditer(r"(?<![\$\w])\$(?!\s)(?:[^\$\r\n]|\\\$)+?(?<!\s|\$)\$(?![\$\w])", text):
-        raw_inner = match.group(0)[1:-1]
-        if _is_latex_math(raw_inner):
-            protected.append({"type": "inline_math", "content": match.group(0), "span": match.span()})
+    # 9. Inline math ($...$, non-currency: non-whitespace boundaries, excludes comma-formatted currency)
+    for match in re.finditer(
+        r"(?<![\$\w])\$(?!\s)(?!\d{1,3}(?:,\d{3})+(?:\.\d+)?\$)(?:[^\$\r\n]|\\\$)+?(?<!\s|\$)\$(?![\$\w])",
+        text,
+    ):
+        protected.append({"type": "inline_math", "content": match.group(0), "span": match.span()})
 
     # 10. HTML tags (<tag> ... </tag> or <tag/>)
     for match in re.finditer(r"<[a-zA-Z/][^>\r\n]*>", text):
