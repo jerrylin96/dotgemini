@@ -206,7 +206,7 @@ def test_parse_real_skill_md_without_crash():
 
 
 def test_unclosed_code_fence_rejection():
-    """Verify that an unclosed code fence raises an error rather than silently swallowing cards."""
+    """Verify that unclosed code fences raise an error for both column-0 and indented fences."""
     validator = get_validator()
     assert validator is not None, "Validator module not loaded"
 
@@ -225,6 +225,21 @@ def example():
     with pytest.raises(ValueError, match="Unterminated code fence"):
         validator.parse_suggestion_cards(unclosed_doc)
 
+    # Unclosed indented code fence inside a list
+    unclosed_indented_doc = """1. Step one:
+
+   ```bash
+   echo "hello"
+
+### Suggestion #1 `[Clarity]` `[Major]`
+- **Anchor:** `Intro`
+- **Original:** "foo"
+- **Proposed:** "bar"
+- **Rationale:** baz
+"""
+    with pytest.raises(ValueError, match="Unterminated code fence"):
+        validator.parse_suggestion_cards(unclosed_indented_doc)
+
     # Stray backticks in regular prose should not cause unclosed fence errors
     stray_backtick_doc = """# Review
 Here is some `inline code` and another stray ` backtick.
@@ -238,6 +253,31 @@ Here is some `inline code` and another stray ` backtick.
     cards = validator.parse_suggestion_cards(stray_backtick_doc)
     assert len(cards) == 1
     assert cards[0]["id"] == 1
+
+
+def test_indented_and_blockquoted_code_fences():
+    """Verify that indented and blockquoted code fences are protected."""
+    validator = get_validator()
+    assert validator is not None, "Validator module not loaded"
+
+    sample = """1. Run setup:
+
+   ```bash
+   rm -rf /var/data && ./setup.sh --force
+   ```
+
+2. Configuration:
+
+> ```python
+> x = 1
+> y = 2
+> ```
+"""
+    protected = validator.extract_protected_blocks(sample)
+    code_blocks = [b for b in protected if b["type"] == "code_block"]
+    assert len(code_blocks) == 2
+    assert any("rm -rf /var/data" in b["content"] for b in code_blocks)
+    assert any("x = 1" in b["content"] for b in code_blocks)
 
 
 def test_card_id_sequencing_and_chunking():
@@ -363,15 +403,19 @@ def test_inline_math_vs_currency_isolation():
     validator = get_validator()
     assert validator is not None, "Validator module not loaded"
 
-    # Currency should not match
-    currency_text = "The migration cost $5,000 in Q1 and the rollback cost $2,000 more, which was over budget."
-    protected = validator.extract_protected_blocks(currency_text)
-    math_blocks = [b for b in protected if b["type"] == "inline_math"]
-    assert len(math_blocks) == 0, f"Expected 0 inline math blocks in currency text, found {math_blocks}"
-
-    # Single currency amount
-    single_curr = "Total is $5,000."
-    assert len([b for b in validator.extract_protected_blocks(single_curr) if b["type"] == "inline_math"]) == 0
+    # Currency should not match across various formatting styles
+    currency_samples = [
+        "The migration cost $5,000 in Q1 and the rollback cost $2,000 more, which was over budget.",
+        "Total is $5000 vs $9000.",
+        "Budget $100 then $200.",
+        "Price ranges from $30 to $40.",
+        "Estimated at $100-$200 per unit.",
+        "Price is $5,000.",
+    ]
+    for sample in currency_samples:
+        protected = validator.extract_protected_blocks(sample)
+        math_blocks = [b for b in protected if b["type"] == "inline_math"]
+        assert len(math_blocks) == 0, f"Expected 0 inline math blocks in '{sample}', found {math_blocks}"
 
     # Legitimate digit-leading LaTeX math must match
     math_text = "Here is formula $2x + 1$, coefficient $3\\alpha$, and value $100$ alongside $E=mc^2$."

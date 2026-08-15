@@ -66,7 +66,7 @@ Every proposed edit must be formatted as an atomic card adhering to [suggestion_
 The following non-prose and structural elements must be protected and preserved verbatim unless the user explicitly requests syntax corrections:
 
 * **YAML frontmatter** (`--- ... ---`)
-* **Code blocks** (fenced with ``` or ~~~) and inline code (`` `code` ``)
+* **Code blocks** (fenced with ``` or ~~~, including indented list blocks and blockquoted fences `> ```python`) and inline code (`` `code` ``)
 * **LaTeX math blocks** (`$$...$$`) and inline math (`$...$`)
 * **Markdown tables** (`| col1 | col2 |`)
 * **Alert callouts** (`> [!NOTE]`, `> [!WARNING]`, `> [!TIP]`, etc.)
@@ -82,7 +82,9 @@ To ensure schema compliance and verbatim quote fidelity, validate generated sugg
 
 1. **Schema Reference**: Ensure all suggestion attributes match [resources/suggestion_schema.json](resources/suggestion_schema.json).
 2. **Runtime Verification**: Import or run `resources/validator.py`:
-   - CLI: `python3 skills/prose-editor/resources/validator.py <review_file> --source <source_file>`
+   - CLI: `python3 skills/prose-editor/resources/validator.py <review_file> [--source <source_file>] [--require-cards]`
+     - Exits 0 on valid cards or clean document (0 cards).
+     - With `--require-cards`, exits 1 if 0 cards are parsed.
    - `parse_suggestion_cards(text)`: Verifies card syntax, positive unique IDs, and valid schema enums.
    - `validate_verbatim_quotes(cards, source_text)`: Guarantees that every `Original` quote exists verbatim and unambiguously in the source document.
    - `extract_protected_blocks(text)`: Inspects protected code, math, table, and callout regions.
