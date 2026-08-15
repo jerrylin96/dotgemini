@@ -169,7 +169,7 @@ def test_parser_quote_edge_cases():
 
 
 def test_malformed_suggestion_header_rejection():
-    """Verify that malformed headers are rejected with ValueError rather than silently ignored."""
+    """Verify that malformed headers outside code blocks are rejected with ValueError."""
     validator = get_validator()
     assert validator is not None, "Validator module not loaded"
 
@@ -194,12 +194,59 @@ def test_malformed_suggestion_header_rejection():
         validator.parse_suggestion_cards(missing_id_header)
 
 
-def test_card_id_sequencing_and_noop_rejection():
-    """Verify rejection of duplicate IDs, gaps in numbering, non-positive IDs, and no-op edits."""
+def test_parse_real_skill_md_without_crash():
+    """Verify that parsing the skill's own SKILL.md does not crash on template headers in code fences."""
     validator = get_validator()
     assert validator is not None, "Validator module not loaded"
 
-    # Duplicate IDs
+    skill_content = SKILL_FILE.read_text(encoding="utf-8")
+    # Should not raise ValueError about malformed template header in code block
+    cards = validator.parse_suggestion_cards(skill_content)
+    assert isinstance(cards, list)
+
+
+def test_card_id_sequencing_and_chunking():
+    """Verify chunked IDs starting at #5, filtered sets #1/#3, and rejection of duplicates / #0."""
+    validator = get_validator()
+    assert validator is not None, "Validator module not loaded"
+
+    # Chunk starting at #5
+    chunk_card = """### Suggestion #5 `[Brevity]` `[Minor]`
+- **Anchor:** `Section 5`
+- **Original:** "Chunk original"
+- **Proposed:** "Chunk proposed"
+- **Rationale:** Brevity in chunk 2.
+
+### Suggestion #6 `[Clarity]` `[Minor]`
+- **Anchor:** `Section 6`
+- **Original:** "Chunk 6 original"
+- **Proposed:** "Chunk 6 proposed"
+- **Rationale:** Clarity in chunk 2.
+"""
+    chunk_parsed = validator.parse_suggestion_cards(chunk_card)
+    assert len(chunk_parsed) == 2
+    assert chunk_parsed[0]["id"] == 5
+    assert chunk_parsed[1]["id"] == 6
+
+    # Filtered cards #1 and #3 (gap allowed)
+    filtered_card = """### Suggestion #1 `[Brevity]` `[Minor]`
+- **Anchor:** `Intro`
+- **Original:** "foo"
+- **Proposed:** "bar"
+- **Rationale:** baz
+
+### Suggestion #3 `[Clarity]` `[Minor]`
+- **Anchor:** `Section 3`
+- **Original:** "alpha"
+- **Proposed:** "beta"
+- **Rationale:** baz
+"""
+    filtered_parsed = validator.parse_suggestion_cards(filtered_card)
+    assert len(filtered_parsed) == 2
+    assert filtered_parsed[0]["id"] == 1
+    assert filtered_parsed[1]["id"] == 3
+
+    # Duplicate IDs must still be rejected
     duplicate_id_card = """### Suggestion #1 `[Brevity]` `[Minor]`
 - **Anchor:** `Intro`
 - **Original:** "foo"
@@ -215,21 +262,15 @@ def test_card_id_sequencing_and_noop_rejection():
     with pytest.raises(ValueError, match="Duplicate suggestion ID #1"):
         validator.parse_suggestion_cards(duplicate_id_card)
 
-    # Non-sequential IDs (gap: 1, 3)
-    gap_card = """### Suggestion #1 `[Brevity]` `[Minor]`
+    # Non-positive ID must be rejected
+    zero_id_card = """### Suggestion #0 `[Brevity]` `[Minor]`
 - **Anchor:** `Intro`
 - **Original:** "foo"
 - **Proposed:** "bar"
 - **Rationale:** baz
-
-### Suggestion #3 `[Clarity]` `[Minor]`
-- **Anchor:** `Intro`
-- **Original:** "alpha"
-- **Proposed:** "beta"
-- **Rationale:** baz
 """
-    with pytest.raises(ValueError, match="Non-sequential suggestion ID: expected #2, got #3"):
-        validator.parse_suggestion_cards(gap_card)
+    with pytest.raises(ValueError, match="Suggestion ID must be positive"):
+        validator.parse_suggestion_cards(zero_id_card)
 
     # No-op edit
     noop_card = """### Suggestion #1 `[Brevity]` `[Minor]`
@@ -280,6 +321,23 @@ def test_verbatim_quote_fidelity_and_ambiguity():
     }
     with pytest.raises(ValueError, match="Ambiguous verbatim quote for Suggestion #1"):
         validator.validate_verbatim_quotes([ambiguous_card], duplicate_source)
+
+
+def test_inline_math_vs_currency_isolation():
+    """Verify inline math does not capture prose between dollar currency amounts."""
+    validator = get_validator()
+    assert validator is not None, "Validator module not loaded"
+
+    currency_text = "The migration cost $5,000 in Q1 and the rollback cost $2,000 more, which was over budget."
+    protected = validator.extract_protected_blocks(currency_text)
+    math_blocks = [b for b in protected if b["type"] == "inline_math"]
+    assert len(math_blocks) == 0, f"Expected 0 inline math blocks in currency text, found {math_blocks}"
+
+    math_text = "Here is formula $E=mc^2$ and variance $\\sigma = \\sqrt{N}$ in text."
+    math_protected = validator.extract_protected_blocks(math_text)
+    found_math = [b["content"] for b in math_protected if b["type"] == "inline_math"]
+    assert "$E=mc^2$" in found_math
+    assert "$\\sigma = \\sqrt{N}$" in found_math
 
 
 def test_syntax_preservation_parser():

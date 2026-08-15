@@ -1,21 +1,22 @@
 """Validation and parsing utilities for prose-editor skill."""
 
+import argparse
 import json
 from pathlib import Path
 import re
+import sys
 from typing import Any, Dict, List
 
 SCHEMA_PATH = Path(__file__).parent / "suggestion_schema.json"
 
 if SCHEMA_PATH.exists():
-    try:
-        with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
+    with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
+        try:
             _schema = json.load(f)
             ALLOWED_CATEGORIES = set(_schema["properties"]["category"]["enum"])
             ALLOWED_IMPACTS = set(_schema["properties"]["impact"]["enum"])
-    except Exception:
-        ALLOWED_CATEGORIES = {"Clarity", "Brevity", "Flow", "Tone", "Grammar", "Structure"}
-        ALLOWED_IMPACTS = {"Major", "Minor", "Nit"}
+        except (OSError, json.JSONDecodeError, KeyError) as err:
+            raise ValueError(f"Failed to load suggestion schema from {SCHEMA_PATH}: {err}") from err
 else:
     ALLOWED_CATEGORIES = {"Clarity", "Brevity", "Flow", "Tone", "Grammar", "Structure"}
     ALLOWED_IMPACTS = {"Major", "Minor", "Nit"}
@@ -70,8 +71,8 @@ def extract_protected_blocks(text: str) -> List[Dict[str, Any]]:
     for match in re.finditer(r"`[^`\r\n]+`", text):
         protected.append({"type": "inline_code", "content": match.group(0), "span": match.span()})
 
-    # 9. Inline math ($...$)
-    for match in re.finditer(r"(?<!\$)\$(?!\$)[^\$\r\n]+(?<!\$)\$(?!\$)", text):
+    # 9. Inline math ($...$, non-currency: must not start with digit/whitespace or end with whitespace/dollar)
+    for match in re.finditer(r"(?<![\$\w])\$(?!\s|\d)(?:[^\$\r\n]|\\\$)+?(?<!\s|\$)\$(?![\$\w])", text):
         protected.append({"type": "inline_math", "content": match.group(0), "span": match.span()})
 
     # 10. HTML tags (<tag> ... </tag> or <tag/>)
@@ -85,10 +86,18 @@ def extract_protected_blocks(text: str) -> List[Dict[str, Any]]:
     return protected
 
 
+def _get_code_fence_spans(text: str) -> List[tuple[int, int]]:
+    """Return start and end spans of all fenced code blocks in text."""
+    spans: List[tuple[int, int]] = []
+    for match in re.finditer(r"(?:```[\s\S]*?(?:```|$)|~~~[\s\S]*?(?:~~~|$))", text):
+        spans.append(match.span())
+    return spans
+
+
 def _extract_quoted_field(field_name: str, body: str, card_id: int) -> str:
     """Extract a quoted field value supporting multiline text, trailing whitespace, and curly quotes."""
     # Matches - **Field:** ["“]...["”][optional whitespace]$
-    # Negative lookahead (?!\\n-\\s+\\*\\*) ensures quote does not bleed into subsequent field definitions
+    # Negative lookahead (?!\n-\s+\*\*) ensures quote does not bleed into subsequent field definitions
     pattern = re.compile(
         r"^-\s+\*\*" + re.escape(field_name) + r":\*\*\s*[\"“]((?:(?!\n-\s+\*\*)[\s\S])*?)[\"”]\s*$",
         re.MULTILINE,
@@ -107,28 +116,34 @@ def _extract_quoted_field(field_name: str, body: str, card_id: int) -> str:
 
 def parse_suggestion_cards(text: str) -> List[Dict[str, Any]]:
     """Parse markdown suggestion cards into structured dicts with strict schema validation."""
-    # 1. Detect any malformed suggestion headers before parsing
-    for line in text.splitlines():
-        trimmed = line.strip()
-        if trimmed.startswith("### Suggestion"):
-            valid_header = re.match(
-                r"^###\s+Suggestion\s+#(\d+)\s+`\[([a-zA-Z]+)\]`\s+`\[([a-zA-Z]+)\]`\s*$",
-                trimmed,
-            )
-            if not valid_header:
-                raise ValueError(f"Malformed suggestion header: '{trimmed}'")
+    code_spans = _get_code_fence_spans(text)
+
+    def is_inside_code(pos: int) -> bool:
+        return any(start <= pos < end for start, end in code_spans)
+
+    # 1. Detect any malformed suggestion headers outside fenced code blocks
+    for line_match in re.finditer(r"^###\s*Suggestion[^\r\n]*", text, re.MULTILINE):
+        if is_inside_code(line_match.start()):
+            continue
+        trimmed = line_match.group(0).strip()
+        valid_header = re.match(
+            r"^###\s+Suggestion\s+#(\d+)\s+`\[([a-zA-Z]+)\]`\s+`\[([a-zA-Z]+)\]`\s*$",
+            trimmed,
+        )
+        if not valid_header:
+            raise ValueError(f"Malformed suggestion header: '{trimmed}'")
 
     card_header_pattern = re.compile(
         r"^###\s+Suggestion\s+#(\d+)\s+`\[([a-zA-Z]+)\]`\s+`\[([a-zA-Z]+)\]`\s*$",
         re.MULTILINE,
     )
 
-    matches = list(card_header_pattern.finditer(text))
+    all_matches = list(card_header_pattern.finditer(text))
+    matches = [m for m in all_matches if not is_inside_code(m.start())]
     if not matches:
         return []
 
     cards: List[Dict[str, Any]] = []
-    expected_id = 1
     seen_ids = set()
 
     for i, match in enumerate(matches):
@@ -140,10 +155,7 @@ def parse_suggestion_cards(text: str) -> List[Dict[str, Any]]:
             raise ValueError(f"Suggestion ID must be positive (>= 1), got #{card_id}")
         if card_id in seen_ids:
             raise ValueError(f"Duplicate suggestion ID #{card_id}")
-        if card_id != expected_id:
-            raise ValueError(f"Non-sequential suggestion ID: expected #{expected_id}, got #{card_id}")
         seen_ids.add(card_id)
-        expected_id += 1
 
         if category not in ALLOWED_CATEGORIES:
             raise ValueError(f"Invalid category '{category}'. Allowed: {sorted(ALLOWED_CATEGORIES)}")
@@ -210,3 +222,35 @@ def format_clean_summary(total_words: int, reading_time_min: int) -> str:
 - **Document Length:** {total_words:,} words (~{reading_time_min} min read)
 - **Status:** Clean prose with consistent voice and strong structural flow; No edits recommended.
 """
+
+
+def main() -> None:
+    """CLI entry point to validate suggestion cards and source text."""
+    parser = argparse.ArgumentParser(description="Validate prose suggestion cards and verify verbatim quote fidelity.")
+    parser.add_argument("file", help="Path to markdown/prose review file containing suggestion cards")
+    parser.add_argument("--source", "-s", help="Optional source document path for verbatim quote validation")
+    args = parser.parse_args()
+
+    file_path = Path(args.file)
+    if not file_path.exists():
+        print(f"Error: Review file not found at {file_path}", file=sys.stderr)
+        sys.exit(1)
+
+    content = file_path.read_text(encoding="utf-8")
+    try:
+        cards = parse_suggestion_cards(content)
+        if args.source:
+            source_path = Path(args.source)
+            if not source_path.exists():
+                print(f"Error: Source file not found at {source_path}", file=sys.stderr)
+                sys.exit(1)
+            source_text = source_path.read_text(encoding="utf-8")
+            validate_verbatim_quotes(cards, source_text)
+        print(f"Validation successful: {len(cards)} valid suggestion card(s) found.")
+    except Exception as err:
+        print(f"Validation failed: {err}", file=sys.stderr)
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

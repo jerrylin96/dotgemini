@@ -57,7 +57,7 @@ Every proposed edit must be formatted as an atomic card adhering to [suggestion_
 * **`Original`**: Quoted exact substring from the document.
 * **`Proposed`**: The replacement text (must differ from `Original`).
 * **`Rationale`**: Brief explanation of the improvement (e.g. "Eliminates passive filler", "Clarifies causal sequence").
-* **Card IDs**: Strictly positive, sequential integers starting at `#1` (`#1`, `#2`, `#3`...).
+* **Card IDs**: Strictly positive, unique integers (`#1`, `#2`, `#3`...). When analyzing documents across multiple chunks, IDs increase monotonically across sections (e.g. chunk 2 starting at `#5`).
 
 ---
 
@@ -78,11 +78,12 @@ The following non-prose and structural elements must be protected and preserved 
 
 ## Validation & Tooling
 
-To ensure schema compliance and verbatim quote fidelity, validate output using the bundled resources:
+To ensure schema compliance and verbatim quote fidelity, validate generated suggestions using the bundled resources:
 
 1. **Schema Reference**: Ensure all suggestion attributes match [resources/suggestion_schema.json](resources/suggestion_schema.json).
-2. **Runtime Verification Helper**: Run `resources/validator.py` functions:
-   - `parse_suggestion_cards(text)`: Verifies card syntax, positive sequential IDs, and valid enums.
+2. **Runtime Verification**: Import or run `resources/validator.py`:
+   - CLI: `python3 skills/prose-editor/resources/validator.py <review_file> --source <source_file>`
+   - `parse_suggestion_cards(text)`: Verifies card syntax, positive unique IDs, and valid schema enums.
    - `validate_verbatim_quotes(cards, source_text)`: Guarantees that every `Original` quote exists verbatim and unambiguously in the source document.
    - `extract_protected_blocks(text)`: Inspects protected code, math, table, and callout regions.
 
