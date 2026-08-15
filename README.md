@@ -108,6 +108,9 @@ This configuration is developed and tested on macOS and Linux (validated in CI).
 * `signoff` — Socratic human-comprehension and risk-ownership audit before merging.
   * **User Workflow**: Trigger with `/signoff` before merging a feature branch. Antigravity reverse-interviews you across 4 core axes (mechanics, trade-offs, failure boundaries, ownership). Upon verified comprehension and explicit user approval, it creates an empty attestation commit (`git commit --allow-empty`) containing a flat block of `Signoff-*` git trailers (including a traceable SHA-256 transcript reference digest).
 
+* `prose-editor` — Structured, high-clarity editing and review for prose, technical documentation, papers, and markdown essays.
+  * **User Workflow**: Trigger with `/edit-prose` or `/prose` (e.g., `/edit-prose docs/architecture.md` or `/edit-prose --diff`). Provides atomic Suggestion Cards with numbered IDs, category tags (`[Clarity]`, `[Brevity]`, `[Flow]`, `[Tone]`, `[Grammar]`, `[Structure]`), verbatim original quotes, proposed rewrites, and explicit rationales. Operates in pure advisory mode without mutating source files.
+
 * `/ponytail` — Lazy senior developer instructions.
 * `/caveman` — Token-efficient caveman communication mode.
 * `incremental-implementation` — Vertical slicing development guidelines.
