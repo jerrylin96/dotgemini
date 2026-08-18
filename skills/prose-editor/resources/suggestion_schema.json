@@ -42,6 +42,10 @@
     "rationale": {
       "type": "string",
       "description": "Terse, actionable explanation of why the modification improves the prose"
+    },
+    "diff": {
+      "type": "string",
+      "description": "Optional fenced markdown diff block providing visual color highlighting"
     }
   },
   "additionalProperties": false
