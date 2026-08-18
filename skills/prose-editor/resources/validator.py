@@ -32,15 +32,23 @@ def is_prose_file(file_path: str | Path) -> bool:
     return suffix in PROSE_EXTENSIONS
 
 
-def _get_code_fence_spans(text: str, strict: bool = False) -> List[tuple[int, int]]:
-    """Return start and end spans of fenced code blocks (supporting indentation and blockquotes)."""
-    spans: List[tuple[int, int]] = []
-    # Match opening fence with optional indentation (up to CommonMark 3 spaces or list indents) and optional blockquotes (> )
+def _scan_code_fences(
+    text: str,
+) -> tuple[List[tuple[int, int]], List[tuple[int, str]]]:
+    """Scan text for closed code fence spans and unclosed opening fences.
+
+    Returns:
+        (closed_spans, unclosed_fences) where:
+        - closed_spans: list of (start_idx, end_idx) for properly matched fences.
+        - unclosed_fences: list of (start_idx, fence_token) for unclosed opening fences.
+    """
     fence_pattern = re.compile(
         r"^[ \t]*(?:>[ \t]*)*(```+|~~~+)[^\r\n]*$",
         re.MULTILINE,
     )
     lines = list(fence_pattern.finditer(text))
+    closed_spans: List[tuple[int, int]] = []
+    unclosed_fences: List[tuple[int, str]] = []
 
     i = 0
     while i < len(lines):
@@ -53,21 +61,28 @@ def _get_code_fence_spans(text: str, strict: bool = False) -> List[tuple[int, in
         for j in range(i + 1, len(lines)):
             close_match = lines[j]
             close_token = close_match.group(1)
-            # Closing fence must use same character and have at least same length
+            # Closing fence must use same character and have length >= opening fence
             if close_token[0] == fence_char and len(close_token) >= fence_len:
-                spans.append((open_match.start(), close_match.end()))
+                closed_spans.append((open_match.start(), close_match.end()))
                 i = j + 1
                 close_found = True
                 break
         if not close_found:
-            if strict:
-                raise ValueError(
-                    f"Unterminated code fence '{fence_token}' at character index {open_match.start()} "
-                    "— cannot reliably locate suggestion cards"
-                )
-            spans.append((open_match.start(), len(text)))
-            break
-    return spans
+            unclosed_fences.append((open_match.start(), fence_token))
+            i += 1
+    return closed_spans, unclosed_fences
+
+
+def _get_code_fence_spans(text: str, strict: bool = False) -> List[tuple[int, int]]:
+    """Return start and end spans of fenced code blocks (supporting indentation and blockquotes)."""
+    closed_spans, unclosed_fences = _scan_code_fences(text)
+    if unclosed_fences and strict:
+        start_idx, token = unclosed_fences[0]
+        raise ValueError(
+            f"Unterminated code fence '{token}' at character index {start_idx} "
+            "— cannot reliably locate suggestion cards"
+        )
+    return closed_spans
 
 
 def extract_protected_blocks(text: str) -> List[Dict[str, Any]]:
@@ -193,51 +208,58 @@ def _extract_diff_field(body: str, card_id: int) -> str | None:
     if not diff_header_match:
         return None
 
-    # Matches - **Diff:**\n[optional whitespace](```+|~~~+)[optional whitespace](?:diff|DIFF)?[^\r\n]*\r?\n([\s\S]*?)\r?\n[ \t]*\2[ \t]*
-    fence_pattern = re.compile(
-        r"^-\s+\*\*Diff:\*\*\s*\r?\n([ \t]*(```+|~~~+)[ \t]*(?:diff|DIFF)?[^\r\n]*\r?\n([\s\S]*?)\r?\n[ \t]*\2[ \t]*)",
+    sub_body = body[diff_header_match.end() :]
+    # Opening fence: ``` or ~~~, optional blockquote prefixes, optional info string (e.g. diff, Diff, DIFF)
+    open_fence_pattern = re.compile(
+        r"^[ \t]*(?:>[ \t]*)*(```+|~~~+)[ \t]*(?:[a-zA-Z0-9_-]+)?[ \t]*$",
         re.MULTILINE,
     )
-    match = fence_pattern.search(body)
-    if match:
-        return match.group(1).strip()
+    open_match = open_fence_pattern.search(sub_body)
+    if not open_match:
+        raise ValueError(
+            f"Unterminated or malformed Diff block in Suggestion #{card_id}"
+        )
 
-    raise ValueError(f"Unterminated or malformed Diff block in Suggestion #{card_id}")
+    # Verify only whitespace exists between - **Diff:** and opening fence
+    if sub_body[: open_match.start()].strip() != "":
+        raise ValueError(
+            f"Unterminated or malformed Diff block in Suggestion #{card_id}"
+        )
+
+    fence_token = open_match.group(1)
+    fence_char = fence_token[0]
+    fence_len = len(fence_token)
+
+    # Find matching closing fence (same char, length >= opener)
+    close_fence_pattern = re.compile(
+        r"^[ \t]*(?:>[ \t]*)*(```+|~~~+)[ \t]*$",
+        re.MULTILINE,
+    )
+    close_matches = list(close_fence_pattern.finditer(sub_body[open_match.end() :]))
+    close_found = None
+    for cm in close_matches:
+        c_token = cm.group(1)
+        if c_token[0] == fence_char and len(c_token) >= fence_len:
+            close_found = cm
+            break
+
+    if not close_found:
+        raise ValueError(
+            f"Unterminated or malformed Diff block in Suggestion #{card_id}"
+        )
+
+    full_diff_fence = sub_body[
+        open_match.start() : open_match.end() + close_found.end()
+    ]
+    return full_diff_fence.strip()
 
 
 def parse_suggestion_cards(text: str) -> List[Dict[str, Any]]:
     """Parse markdown suggestion cards into structured dicts with strict schema validation."""
-    fence_pattern = re.compile(
-        r"^[ \t]*(?:>[ \t]*)*(```+|~~~+)[^\r\n]*$",
-        re.MULTILINE,
-    )
-    fence_lines = list(fence_pattern.finditer(text))
-    code_spans: List[tuple[int, int]] = []
-    unclosed_fences: List[re.Match] = []
-
-    i = 0
-    while i < len(fence_lines):
-        open_match = fence_lines[i]
-        fence_token = open_match.group(1)
-        fence_char = fence_token[0]
-        fence_len = len(fence_token)
-
-        close_found = False
-        for j in range(i + 1, len(fence_lines)):
-            close_match = fence_lines[j]
-            close_token = close_match.group(1)
-            if close_token[0] == fence_char and len(close_token) >= fence_len:
-                code_spans.append((open_match.start(), close_match.end()))
-                i = j + 1
-                close_found = True
-                break
-        if not close_found:
-            unclosed_fences.append(open_match)
-            code_spans.append((open_match.start(), len(text)))
-            break
+    closed_spans, unclosed_fences = _scan_code_fences(text)
 
     def is_inside_code(pos: int) -> bool:
-        return any(start <= pos < end for start, end in code_spans)
+        return any(start <= pos < end for start, end in closed_spans)
 
     card_header_pattern = re.compile(
         r"^###\s+Suggestion\s+#(\d+)\s+`\[([a-zA-Z]+)\]`\s+`\[([a-zA-Z]+)\]`\s*$",
@@ -245,30 +267,50 @@ def parse_suggestion_cards(text: str) -> List[Dict[str, Any]]:
     )
     all_card_headers = list(card_header_pattern.finditer(text))
 
-    # Check unclosed fences: if an unclosed fence is not inside a suggestion card body, raise immediately
+    # Guard 1: Detect if all suggestion headers are trapped inside an outer fenced code block
+    matches = [m for m in all_card_headers if not is_inside_code(m.start())]
+    if len(all_card_headers) > 0 and len(matches) == 0:
+        raise ValueError(
+            f"{len(all_card_headers)} suggestion header(s) found but all are inside fenced code blocks "
+            "— emit suggestion cards as top-level markdown, not wrapped in code fences"
+        )
+
+    # Guard 2: Handle unclosed fences (fail-closed)
     if unclosed_fences:
-        for uf in unclosed_fences:
-            fence_pos = uf.start()
-            in_card_body = False
-            for idx, ch in enumerate(all_card_headers):
+        # Check if there is only a single unclosed fence and it belongs specifically to a Diff block
+        # whose card parser will raise an exact 'Unterminated or malformed Diff block' error.
+        # Any other unclosed fence (stray fence, fence spanning across cards, etc.) must raise immediately.
+        diff_unclosed = False
+        if len(unclosed_fences) == 1 and len(matches) > 0:
+            fence_pos, _ = unclosed_fences[0]
+            for idx, ch in enumerate(matches):
                 card_start = ch.start()
                 card_end = (
-                    all_card_headers[idx + 1].start()
-                    if idx + 1 < len(all_card_headers)
-                    else len(text)
+                    matches[idx + 1].start() if idx + 1 < len(matches) else len(text)
                 )
                 if card_start <= fence_pos < card_end:
                     card_body = text[ch.end() : card_end]
-                    if re.search(r"^-\s+\*\*Diff:\*\*", card_body, re.MULTILINE):
-                        in_card_body = True
-                        break
-            if not in_card_body:
-                raise ValueError(
-                    f"Unterminated code fence '{uf.group(1)}' at character index {uf.start()} "
-                    "— cannot reliably locate suggestion cards"
-                )
+                    diff_match = re.search(
+                        r"^-\s+\*\*Diff:\*\*", card_body, re.MULTILINE
+                    )
+                    if diff_match:
+                        # Diff header exists before fence_pos and only whitespace between diff header and fence
+                        diff_hdr_abs = ch.end() + diff_match.end()
+                        if (
+                            diff_hdr_abs <= fence_pos
+                            and text[diff_hdr_abs:fence_pos].strip() == ""
+                        ):
+                            diff_unclosed = True
+                            break
 
-    # 1. Detect any malformed suggestion headers outside fenced code blocks
+        if not diff_unclosed:
+            start_idx, token = unclosed_fences[0]
+            raise ValueError(
+                f"Unterminated code fence '{token}' at character index {start_idx} "
+                "— cannot reliably locate suggestion cards"
+            )
+
+    # Guard 3: Detect any malformed suggestion headers outside fenced code blocks
     for line_match in re.finditer(r"^###\s*Suggestion[^\r\n]*", text, re.MULTILINE):
         if is_inside_code(line_match.start()):
             continue
@@ -280,7 +322,6 @@ def parse_suggestion_cards(text: str) -> List[Dict[str, Any]]:
         if not valid_header:
             raise ValueError(f"Malformed suggestion header: '{trimmed}'")
 
-    matches = [m for m in all_card_headers if not is_inside_code(m.start())]
     if not matches:
         return []
 

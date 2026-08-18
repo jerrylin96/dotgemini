@@ -47,7 +47,7 @@ Every proposed edit must be formatted as an atomic card adhering to [suggestion_
 - **Anchor:** `<Section or Heading>` (Lines `<Start>-<End>` if applicable)
 - **Original:** "<exact verbatim source snippet>"
 - **Proposed:** "<clean revised snippet>"
-- **Diff:**
+- **Diff:** (Optional)
   ```diff
   - <deleted text or words>
   + <added text or words>

@@ -718,3 +718,125 @@ def test_skill_md_outer_fence_wrapping():
     assert (
         "```diff" in skill_text
     ), "SKILL.md must document the ```diff fence format inside suggestion cards"
+
+
+def test_unclosed_stray_fence_after_diff_card_raises_error():
+    """Regression test (Agents 1 & 2): An unclosed non-Diff fence after a card with a closed Diff must raise, NOT drop subsequent cards."""
+    validator = get_validator()
+    assert validator is not None, "Validator module not loaded"
+
+    text = """### Suggestion #1 `[Brevity]` `[Minor]`
+- **Anchor:** `Intro`
+- **Original:** "old text one"
+- **Proposed:** "new text one"
+- **Diff:**
+  ```diff
+  - old text one
+  + new text one
+  ```
+- **Rationale:** Tighten.
+
+```
+stray fence not closed
+
+### Suggestion #2 `[Tone]` `[Nit]`
+- **Anchor:** `Outro`
+- **Original:** "very very old"
+- **Proposed:** "old"
+- **Rationale:** Trim.
+"""
+    with pytest.raises(ValueError, match="Unterminated code fence"):
+        validator.parse_suggestion_cards(text)
+
+
+def test_unclosed_stray_fence_before_diff_block_raises():
+    """Regression test: Stray unclosed fence before Diff block inside card must raise."""
+    validator = get_validator()
+    assert validator is not None, "Validator module not loaded"
+
+    text = """### Suggestion #1 `[Brevity]` `[Minor]`
+- **Anchor:** `Intro`
+```
+stray fence
+- **Original:** "old text one"
+- **Proposed:** "new text one"
+- **Diff:**
+  ```diff
+  - old text one
+  + new text one
+  ```
+- **Rationale:** Tighten.
+
+### Suggestion #2 `[Tone]` `[Nit]`
+- **Anchor:** `Outro`
+- **Original:** "very very old"
+- **Proposed:** "old"
+- **Rationale:** Trim.
+"""
+    with pytest.raises(ValueError, match="Unterminated code fence"):
+        validator.parse_suggestion_cards(text)
+
+
+def test_all_headers_wrapped_in_outer_code_fence_raises_loudly():
+    """Regression test (Agent 4): When all suggestion headers are wrapped in an outer code block, fail loudly instead of returning 0 cards."""
+    validator = get_validator()
+    assert validator is not None, "Validator module not loaded"
+
+    wrapped_review = """```markdown
+### Suggestion #1 `[Brevity]` `[Minor]`
+- **Anchor:** `Intro`
+- **Original:** "old"
+- **Proposed:** "new"
+- **Diff:**
+  ```diff
+  - old
+  + new
+  ```
+- **Rationale:** Test.
+```
+"""
+    with pytest.raises(ValueError, match="inside fenced code block"):
+        validator.parse_suggestion_cards(wrapped_review)
+
+
+def test_diff_block_with_longer_closing_fence_and_casing():
+    """Verify CommonMark closing fence length >= opener and case-insensitive info string (e.g. Diff, DIFF)."""
+    validator = get_validator()
+    assert validator is not None, "Validator module not loaded"
+
+    card = """### Suggestion #1 `[Brevity]` `[Minor]`
+- **Anchor:** `Intro`
+- **Original:** "old"
+- **Proposed:** "new"
+- **Diff:**
+  ```Diff
+  - old
+  + new
+  ````
+- **Rationale:** Test.
+"""
+    cards = validator.parse_suggestion_cards(card)
+    assert len(cards) == 1
+    assert "- old" in cards[0]["diff"]
+    assert "+ new" in cards[0]["diff"]
+
+
+def test_diff_content_with_literal_suggestion_header():
+    """Verify that literal suggestion headers in diff content are not parsed as independent cards."""
+    validator = get_validator()
+    assert validator is not None, "Validator module not loaded"
+
+    card = """### Suggestion #1 `[Clarity]` `[Major]`
+- **Anchor:** `Docs`
+- **Original:** "### Suggestion #999 [Tone] [Nit]"
+- **Proposed:** "### Suggestion #1000 [Tone] [Nit]"
+- **Diff:**
+  ```diff
+  - ### Suggestion #999 `[Tone]` `[Nit]`
+  + ### Suggestion #1000 `[Tone]` `[Nit]`
+  ```
+- **Rationale:** Clarify example.
+"""
+    cards = validator.parse_suggestion_cards(card)
+    assert len(cards) == 1
+    assert cards[0]["id"] == 1
