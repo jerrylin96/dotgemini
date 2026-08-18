@@ -16,7 +16,9 @@ if SCHEMA_PATH.exists():
             ALLOWED_CATEGORIES = set(_schema["properties"]["category"]["enum"])
             ALLOWED_IMPACTS = set(_schema["properties"]["impact"]["enum"])
         except (OSError, json.JSONDecodeError, KeyError) as err:
-            raise ValueError(f"Failed to load suggestion schema from {SCHEMA_PATH}: {err}") from err
+            raise ValueError(
+                f"Failed to load suggestion schema from {SCHEMA_PATH}: {err}"
+            ) from err
 else:
     ALLOWED_CATEGORIES = {"Clarity", "Brevity", "Flow", "Tone", "Grammar", "Structure"}
     ALLOWED_IMPACTS = {"Major", "Minor", "Nit"}
@@ -75,55 +77,85 @@ def extract_protected_blocks(text: str) -> List[Dict[str, Any]]:
     # 1. YAML frontmatter (^---\n[\s\S]*?\n---)
     frontmatter_match = re.match(r"^---\r?\n[\s\S]*?\r?\n---", text)
     if frontmatter_match:
-        protected.append({"type": "frontmatter", "content": frontmatter_match.group(0), "span": frontmatter_match.span()})
+        protected.append(
+            {
+                "type": "frontmatter",
+                "content": frontmatter_match.group(0),
+                "span": frontmatter_match.span(),
+            }
+        )
 
     # 2. Fenced code blocks (reusing shared fence scanner)
     for start, end in _get_code_fence_spans(text, strict=False):
         block_text = text[start:end]
         if block_text.strip():
-            protected.append({"type": "code_block", "content": block_text, "span": (start, end)})
+            protected.append(
+                {"type": "code_block", "content": block_text, "span": (start, end)}
+            )
 
     # 3. LaTeX math blocks ($$ ... $$, fail-closed to EOF)
     for match in re.finditer(r"\$\$[\s\S]*?(?:\$\$|$)", text):
         if match.group(0).strip():
-            protected.append({"type": "math_block", "content": match.group(0), "span": match.span()})
+            protected.append(
+                {"type": "math_block", "content": match.group(0), "span": match.span()}
+            )
 
     # 4. Alert callouts (> [!NOTE], > [!WARNING], etc.)
-    for match in re.finditer(r"^>[ \t]*\[!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\][^\n]*", text, re.MULTILINE):
-        protected.append({"type": "callout_alert", "content": match.group(0), "span": match.span()})
+    for match in re.finditer(
+        r"^>[ \t]*\[!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\][^\n]*", text, re.MULTILINE
+    ):
+        protected.append(
+            {"type": "callout_alert", "content": match.group(0), "span": match.span()}
+        )
 
     # 5. Markdown tables (| header | ... |, handles tables at EOF without trailing newline)
     for match in re.finditer(r"(?:^\|[^\n]+\|\r?\n?){2,}", text, re.MULTILINE):
-        protected.append({"type": "table", "content": match.group(0), "span": match.span()})
+        protected.append(
+            {"type": "table", "content": match.group(0), "span": match.span()}
+        )
 
     # 6. Task list items (- [ ] / - [x])
     for match in re.finditer(r"^[ \t]*-[ \t]+\[[ xX]\][^\n]*", text, re.MULTILINE):
-        protected.append({"type": "task_list_item", "content": match.group(0), "span": match.span()})
+        protected.append(
+            {"type": "task_list_item", "content": match.group(0), "span": match.span()}
+        )
 
     # 7. Footnote definitions ([^1]: ...) and references ([^1])
     for match in re.finditer(r"^\[\^[a-zA-Z0-9_-]+\]:[^\n]*", text, re.MULTILINE):
-        protected.append({"type": "footnote_def", "content": match.group(0), "span": match.span()})
+        protected.append(
+            {"type": "footnote_def", "content": match.group(0), "span": match.span()}
+        )
     for match in re.finditer(r"\[\^[a-zA-Z0-9_-]+\](?!:)", text):
-        protected.append({"type": "footnote_ref", "content": match.group(0), "span": match.span()})
+        protected.append(
+            {"type": "footnote_ref", "content": match.group(0), "span": match.span()}
+        )
 
     # 8. Inline code (`...`)
     for match in re.finditer(r"`[^`\r\n]+`", text):
-        protected.append({"type": "inline_code", "content": match.group(0), "span": match.span()})
+        protected.append(
+            {"type": "inline_code", "content": match.group(0), "span": match.span()}
+        )
 
     # 9. Inline math ($...$, non-currency: non-whitespace boundaries, excludes comma-formatted currency)
     for match in re.finditer(
         r"(?<![\$\w])\$(?!\s)(?!\d{1,3}(?:,\d{3})+(?:\.\d+)?\$)(?:[^\$\r\n]|\\\$)+?(?<!\s|\$)\$(?![\$\w])",
         text,
     ):
-        protected.append({"type": "inline_math", "content": match.group(0), "span": match.span()})
+        protected.append(
+            {"type": "inline_math", "content": match.group(0), "span": match.span()}
+        )
 
     # 10. HTML tags (<tag> ... </tag> or <tag/>)
     for match in re.finditer(r"<[a-zA-Z/][^>\r\n]*>", text):
-        protected.append({"type": "html_tag", "content": match.group(0), "span": match.span()})
+        protected.append(
+            {"type": "html_tag", "content": match.group(0), "span": match.span()}
+        )
 
     # 11. Markdown link targets / URLs ([text](url) or raw http://)
     for match in re.finditer(r"\[[^\]]+\]\([^)]+\)|https?://[^\s\)]+", text):
-        protected.append({"type": "link_url", "content": match.group(0), "span": match.span()})
+        protected.append(
+            {"type": "link_url", "content": match.group(0), "span": match.span()}
+        )
 
     return protected
 
@@ -133,7 +165,9 @@ def _extract_quoted_field(field_name: str, body: str, card_id: int) -> str:
     # Matches - **Field:** ["“]...["”][optional whitespace]$
     # Negative lookahead (?!\n-\s+\*\*) ensures quote does not bleed into subsequent field definitions
     pattern = re.compile(
-        r"^-\s+\*\*" + re.escape(field_name) + r":\*\*\s*[\"“]((?:(?!\n-\s+\*\*)[\s\S])*?)[\"”]\s*$",
+        r"^-\s+\*\*"
+        + re.escape(field_name)
+        + r":\*\*\s*[\"“]((?:(?!\n-\s+\*\*)[\s\S])*?)[\"”]\s*$",
         re.MULTILINE,
     )
     match = pattern.search(body)
@@ -141,19 +175,98 @@ def _extract_quoted_field(field_name: str, body: str, card_id: int) -> str:
         return match.group(1)
 
     # Check if field header was declared but quote was unterminated / malformed
-    header_pattern = re.compile(r"^-\s+\*\*" + re.escape(field_name) + r":\*\*", re.MULTILINE)
+    header_pattern = re.compile(
+        r"^-\s+\*\*" + re.escape(field_name) + r":\*\*", re.MULTILINE
+    )
     if header_pattern.search(body):
-        raise ValueError(f"Unterminated or malformed quoted '{field_name}' in Suggestion #{card_id}")
+        raise ValueError(
+            f"Unterminated or malformed quoted '{field_name}' in Suggestion #{card_id}"
+        )
 
     raise ValueError(f"Missing required field '{field_name}' in Suggestion #{card_id}")
 
 
+def _extract_diff_field(body: str, card_id: int) -> str | None:
+    """Extract optional fenced diff block from suggestion card body."""
+    diff_header_pattern = re.compile(r"^-\s+\*\*Diff:\*\*", re.MULTILINE)
+    diff_header_match = diff_header_pattern.search(body)
+    if not diff_header_match:
+        return None
+
+    # Matches - **Diff:**\n[optional whitespace](```+|~~~+)[optional whitespace](?:diff|DIFF)?[^\r\n]*\r?\n([\s\S]*?)\r?\n[ \t]*\2[ \t]*
+    fence_pattern = re.compile(
+        r"^-\s+\*\*Diff:\*\*\s*\r?\n([ \t]*(```+|~~~+)[ \t]*(?:diff|DIFF)?[^\r\n]*\r?\n([\s\S]*?)\r?\n[ \t]*\2[ \t]*)",
+        re.MULTILINE,
+    )
+    match = fence_pattern.search(body)
+    if match:
+        return match.group(1).strip()
+
+    raise ValueError(f"Unterminated or malformed Diff block in Suggestion #{card_id}")
+
+
 def parse_suggestion_cards(text: str) -> List[Dict[str, Any]]:
     """Parse markdown suggestion cards into structured dicts with strict schema validation."""
-    code_spans = _get_code_fence_spans(text, strict=True)
+    fence_pattern = re.compile(
+        r"^[ \t]*(?:>[ \t]*)*(```+|~~~+)[^\r\n]*$",
+        re.MULTILINE,
+    )
+    fence_lines = list(fence_pattern.finditer(text))
+    code_spans: List[tuple[int, int]] = []
+    unclosed_fences: List[re.Match] = []
+
+    i = 0
+    while i < len(fence_lines):
+        open_match = fence_lines[i]
+        fence_token = open_match.group(1)
+        fence_char = fence_token[0]
+        fence_len = len(fence_token)
+
+        close_found = False
+        for j in range(i + 1, len(fence_lines)):
+            close_match = fence_lines[j]
+            close_token = close_match.group(1)
+            if close_token[0] == fence_char and len(close_token) >= fence_len:
+                code_spans.append((open_match.start(), close_match.end()))
+                i = j + 1
+                close_found = True
+                break
+        if not close_found:
+            unclosed_fences.append(open_match)
+            code_spans.append((open_match.start(), len(text)))
+            break
 
     def is_inside_code(pos: int) -> bool:
         return any(start <= pos < end for start, end in code_spans)
+
+    card_header_pattern = re.compile(
+        r"^###\s+Suggestion\s+#(\d+)\s+`\[([a-zA-Z]+)\]`\s+`\[([a-zA-Z]+)\]`\s*$",
+        re.MULTILINE,
+    )
+    all_card_headers = list(card_header_pattern.finditer(text))
+
+    # Check unclosed fences: if an unclosed fence is not inside a suggestion card body, raise immediately
+    if unclosed_fences:
+        for uf in unclosed_fences:
+            fence_pos = uf.start()
+            in_card_body = False
+            for idx, ch in enumerate(all_card_headers):
+                card_start = ch.start()
+                card_end = (
+                    all_card_headers[idx + 1].start()
+                    if idx + 1 < len(all_card_headers)
+                    else len(text)
+                )
+                if card_start <= fence_pos < card_end:
+                    card_body = text[ch.end() : card_end]
+                    if re.search(r"^-\s+\*\*Diff:\*\*", card_body, re.MULTILINE):
+                        in_card_body = True
+                        break
+            if not in_card_body:
+                raise ValueError(
+                    f"Unterminated code fence '{uf.group(1)}' at character index {uf.start()} "
+                    "— cannot reliably locate suggestion cards"
+                )
 
     # 1. Detect any malformed suggestion headers outside fenced code blocks
     for line_match in re.finditer(r"^###\s*Suggestion[^\r\n]*", text, re.MULTILINE):
@@ -167,13 +280,7 @@ def parse_suggestion_cards(text: str) -> List[Dict[str, Any]]:
         if not valid_header:
             raise ValueError(f"Malformed suggestion header: '{trimmed}'")
 
-    card_header_pattern = re.compile(
-        r"^###\s+Suggestion\s+#(\d+)\s+`\[([a-zA-Z]+)\]`\s+`\[([a-zA-Z]+)\]`\s*$",
-        re.MULTILINE,
-    )
-
-    all_matches = list(card_header_pattern.finditer(text))
-    matches = [m for m in all_matches if not is_inside_code(m.start())]
+    matches = [m for m in all_card_headers if not is_inside_code(m.start())]
     if not matches:
         return []
 
@@ -192,9 +299,13 @@ def parse_suggestion_cards(text: str) -> List[Dict[str, Any]]:
         seen_ids.add(card_id)
 
         if category not in ALLOWED_CATEGORIES:
-            raise ValueError(f"Invalid category '{category}'. Allowed: {sorted(ALLOWED_CATEGORIES)}")
+            raise ValueError(
+                f"Invalid category '{category}'. Allowed: {sorted(ALLOWED_CATEGORIES)}"
+            )
         if impact not in ALLOWED_IMPACTS:
-            raise ValueError(f"Invalid impact '{impact}'. Allowed: {sorted(ALLOWED_IMPACTS)}")
+            raise ValueError(
+                f"Invalid impact '{impact}'. Allowed: {sorted(ALLOWED_IMPACTS)}"
+            )
 
         # Slice body content until next card header or EOF
         start_pos = match.end()
@@ -203,29 +314,41 @@ def parse_suggestion_cards(text: str) -> List[Dict[str, Any]]:
 
         anchor_match = re.search(r"^-\s+\*\*Anchor:\*\*\s*(.+)$", body, re.MULTILINE)
         if not anchor_match:
-            raise ValueError(f"Missing required field 'Anchor' in Suggestion #{card_id}")
+            raise ValueError(
+                f"Missing required field 'Anchor' in Suggestion #{card_id}"
+            )
 
         original_val = _extract_quoted_field("Original", body, card_id)
         proposed_val = _extract_quoted_field("Proposed", body, card_id)
 
-        rationale_match = re.search(r"^-\s+\*\*Rationale:\*\*\s*(.+)$", body, re.MULTILINE)
+        rationale_match = re.search(
+            r"^-\s+\*\*Rationale:\*\*\s*(.+)$", body, re.MULTILINE
+        )
         if not rationale_match:
-            raise ValueError(f"Missing required field 'Rationale' in Suggestion #{card_id}")
+            raise ValueError(
+                f"Missing required field 'Rationale' in Suggestion #{card_id}"
+            )
 
         if original_val == proposed_val:
-            raise ValueError(f"No-op suggestion in Suggestion #{card_id}: Original and Proposed are identical")
+            raise ValueError(
+                f"No-op suggestion in Suggestion #{card_id}: Original and Proposed are identical"
+            )
 
-        cards.append(
-            {
-                "id": card_id,
-                "category": category,
-                "impact": impact,
-                "anchor": anchor_match.group(1).strip(),
-                "original": original_val,
-                "proposed": proposed_val,
-                "rationale": rationale_match.group(1).strip(),
-            }
-        )
+        diff_val = _extract_diff_field(body, card_id)
+
+        card_dict: Dict[str, Any] = {
+            "id": card_id,
+            "category": category,
+            "impact": impact,
+            "anchor": anchor_match.group(1).strip(),
+            "original": original_val,
+            "proposed": proposed_val,
+            "rationale": rationale_match.group(1).strip(),
+        }
+        if diff_val is not None:
+            card_dict["diff"] = diff_val
+
+        cards.append(card_dict)
 
     return cards
 
@@ -240,7 +363,9 @@ def validate_verbatim_quotes(cards: List[Dict[str, Any]], source_text: str) -> b
         card_id = card.get("id", "?")
         count = normalized_source.count(orig)
         if count == 0:
-            raise ValueError(f"Verbatim quote mismatch for Suggestion #{card_id}: original text was not found in source")
+            raise ValueError(
+                f"Verbatim quote mismatch for Suggestion #{card_id}: original text was not found in source"
+            )
         if count > 1:
             raise ValueError(
                 f"Ambiguous verbatim quote for Suggestion #{card_id}: original text appears {count} times in source. "
@@ -260,9 +385,17 @@ def format_clean_summary(total_words: int, reading_time_min: int) -> str:
 
 def main() -> None:
     """CLI entry point to validate suggestion cards and source text."""
-    parser = argparse.ArgumentParser(description="Validate prose suggestion cards and verify verbatim quote fidelity.")
-    parser.add_argument("file", help="Path to markdown/prose review file containing suggestion cards")
-    parser.add_argument("--source", "-s", help="Optional source document path for verbatim quote validation")
+    parser = argparse.ArgumentParser(
+        description="Validate prose suggestion cards and verify verbatim quote fidelity."
+    )
+    parser.add_argument(
+        "file", help="Path to markdown/prose review file containing suggestion cards"
+    )
+    parser.add_argument(
+        "--source",
+        "-s",
+        help="Optional source document path for verbatim quote validation",
+    )
     parser.add_argument(
         "--require-cards",
         action="store_true",
@@ -280,9 +413,14 @@ def main() -> None:
         cards = parse_suggestion_cards(content)
         if len(cards) == 0:
             if args.require_cards:
-                print(f"Error: No valid suggestion cards found in {file_path} (--require-cards set)", file=sys.stderr)
+                print(
+                    f"Error: No valid suggestion cards found in {file_path} (--require-cards set)",
+                    file=sys.stderr,
+                )
                 sys.exit(1)
-            print(f"Validation successful: Clean document (0 suggestion cards) in {file_path}.")
+            print(
+                f"Validation successful: Clean document (0 suggestion cards) in {file_path}."
+            )
             sys.exit(0)
 
         if args.source:

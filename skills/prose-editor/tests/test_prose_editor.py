@@ -15,7 +15,9 @@ def get_validator():
     """Dynamically load validator module from resources directory."""
     if not VALIDATOR_PATH.exists():
         return None
-    spec = importlib.util.spec_from_file_location("prose_editor_validator", VALIDATOR_PATH)
+    spec = importlib.util.spec_from_file_location(
+        "prose_editor_validator", VALIDATOR_PATH
+    )
     if spec is None or spec.loader is None:
         return None
     validator = importlib.util.module_from_spec(spec)
@@ -29,14 +31,20 @@ def test_skill_metadata_and_frontmatter():
     content = SKILL_FILE.read_text(encoding="utf-8")
 
     # Check frontmatter
-    assert content.startswith("---\n"), "SKILL.md must start with YAML frontmatter delimiter '---'"
+    assert content.startswith(
+        "---\n"
+    ), "SKILL.md must start with YAML frontmatter delimiter '---'"
     frontmatter_match = re.search(r"^---\n(.*?)\n---", content, re.DOTALL)
     assert frontmatter_match is not None, "Missing closing YAML frontmatter delimiter"
     frontmatter = frontmatter_match.group(1)
 
-    assert "name: prose-editor" in frontmatter, "Frontmatter must define name: prose-editor"
+    assert (
+        "name: prose-editor" in frontmatter
+    ), "Frontmatter must define name: prose-editor"
     assert "description:" in frontmatter, "Frontmatter must define a description"
-    assert "/edit-prose" in frontmatter, "Frontmatter description must mention command trigger /edit-prose"
+    assert (
+        "/edit-prose" in frontmatter
+    ), "Frontmatter description must mention command trigger /edit-prose"
 
     # Check core section headings
     required_sections = [
@@ -101,7 +109,10 @@ def test_suggestion_card_format_validator():
     assert card1["category"] == "Brevity"
     assert card1["impact"] == "Minor"
     assert card1["anchor"] == "`Introduction` (Lines 10-12)"
-    assert card1["original"] == "It is important to note that the primary function of this module is"
+    assert (
+        card1["original"]
+        == "It is important to note that the primary function of this module is"
+    )
     assert card1["proposed"] == "This module primarily serves to"
     assert "filler" in card1["rationale"]
 
@@ -154,7 +165,10 @@ def test_parser_quote_edge_cases():
     )
     multi_parsed = validator.parse_suggestion_cards(multiline_card)
     assert len(multi_parsed) == 1
-    assert multi_parsed[0]["original"] == "First paragraph sentence.\nSecond paragraph sentence."
+    assert (
+        multi_parsed[0]["original"]
+        == "First paragraph sentence.\nSecond paragraph sentence."
+    )
 
     # Unterminated quote raises ValueError
     unterminated_card = (
@@ -415,7 +429,9 @@ def test_inline_math_vs_currency_isolation():
     for sample in currency_samples:
         protected = validator.extract_protected_blocks(sample)
         math_blocks = [b for b in protected if b["type"] == "inline_math"]
-        assert len(math_blocks) == 0, f"Expected 0 inline math blocks in '{sample}', found {math_blocks}"
+        assert (
+            len(math_blocks) == 0
+        ), f"Expected 0 inline math blocks in '{sample}', found {math_blocks}"
 
     # Legitimate digit-leading and command-bearing LaTeX math must match
     math_text = (
@@ -479,19 +495,45 @@ and inline math $E=mc^2$ alongside inline `code_fn()` and <div class="test">HTML
 
     protected = validator.extract_protected_blocks(sample_doc)
 
-    assert any("title: Sample Doc" in block["content"] for block in protected), "YAML frontmatter not protected"
-    assert any("def foo():" in block["content"] for block in protected), "Backtick code block not protected"
-    assert any("tilde fenced code" in block["content"] for block in protected), "Tilde code block not protected"
-    assert any("\\sigma =" in block["content"] for block in protected), "LaTeX math block not protected"
-    assert any("E=mc^2" in block["content"] for block in protected), "Inline math not protected"
-    assert any("`code_fn()`" in block["content"] for block in protected), "Inline code not protected"
-    assert any("<div class=" in block["content"] for block in protected), "HTML tag not protected"
-    assert any("[!NOTE]" in block["content"] for block in protected), "Alert callout not protected"
-    assert any("Header 1" in block["content"] for block in protected), "Markdown table without EOF newline not protected"
-    assert any("- [ ]" in block["content"] for block in protected), "Unchecked task list not protected"
-    assert any("- [x]" in block["content"] for block in protected), "Checked task list not protected"
-    assert any("[^1]:" in block["content"] for block in protected), "Footnote definition not protected"
-    assert any("https://example.com" in block["content"] for block in protected), "Link URL not protected"
+    assert any(
+        "title: Sample Doc" in block["content"] for block in protected
+    ), "YAML frontmatter not protected"
+    assert any(
+        "def foo():" in block["content"] for block in protected
+    ), "Backtick code block not protected"
+    assert any(
+        "tilde fenced code" in block["content"] for block in protected
+    ), "Tilde code block not protected"
+    assert any(
+        "\\sigma =" in block["content"] for block in protected
+    ), "LaTeX math block not protected"
+    assert any(
+        "E=mc^2" in block["content"] for block in protected
+    ), "Inline math not protected"
+    assert any(
+        "`code_fn()`" in block["content"] for block in protected
+    ), "Inline code not protected"
+    assert any(
+        "<div class=" in block["content"] for block in protected
+    ), "HTML tag not protected"
+    assert any(
+        "[!NOTE]" in block["content"] for block in protected
+    ), "Alert callout not protected"
+    assert any(
+        "Header 1" in block["content"] for block in protected
+    ), "Markdown table without EOF newline not protected"
+    assert any(
+        "- [ ]" in block["content"] for block in protected
+    ), "Unchecked task list not protected"
+    assert any(
+        "- [x]" in block["content"] for block in protected
+    ), "Checked task list not protected"
+    assert any(
+        "[^1]:" in block["content"] for block in protected
+    ), "Footnote definition not protected"
+    assert any(
+        "https://example.com" in block["content"] for block in protected
+    ), "Link URL not protected"
 
 
 def test_diff_prose_extension_filter():
@@ -517,10 +559,14 @@ def test_diff_prose_extension_filter():
     ]
 
     for path in prose_files:
-        assert validator.is_prose_file(path) is True, f"Expected {path} to be recognized as prose"
+        assert (
+            validator.is_prose_file(path) is True
+        ), f"Expected {path} to be recognized as prose"
 
     for path in non_prose_files:
-        assert validator.is_prose_file(path) is False, f"Expected {path} to be filtered out as non-prose"
+        assert (
+            validator.is_prose_file(path) is False
+        ), f"Expected {path} to be filtered out as non-prose"
 
 
 def test_zero_finding_clean_state_formatter():
@@ -532,3 +578,143 @@ def test_zero_finding_clean_state_formatter():
     assert "**Total Suggestions:** 0" in summary
     assert "1,250 words" in summary
     assert "No edits recommended" in summary
+
+
+def test_schema_accepts_diff_field():
+    """Verify that suggestion_schema.json defines an optional 'diff' property with string type."""
+    assert SCHEMA_PATH.exists(), f"Schema file not found at {SCHEMA_PATH}"
+    with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
+        schema = json.load(f)
+
+    assert "diff" in schema["properties"], "Schema must define 'diff' property"
+    assert (
+        schema["properties"]["diff"]["type"] == "string"
+    ), "'diff' property must be string type"
+    assert "diff" not in schema.get(
+        "required", []
+    ), "'diff' property must be optional (not required)"
+    assert (
+        schema.get("additionalProperties") is False
+    ), "Schema must enforce additionalProperties: false"
+
+
+def test_suggestion_cards_with_diff_blocks():
+    """Verify parsing suggestion cards with standard and word-level markdown diff code blocks."""
+    validator = get_validator()
+    assert validator is not None, "Validator module not loaded"
+
+    card_with_diff = """### Suggestion #1 `[Brevity]` `[Minor]`
+- **Anchor:** `Paragraph 2`
+- **Original:** "In order to optimize performance, we should cache results."
+- **Proposed:** "To optimize performance, cache results."
+- **Diff:**
+  ```diff
+  - In order to optimize performance, we should cache results.
+  + To optimize performance, cache results.
+  ```
+- **Rationale:** Cuts wordy prepositional phrase.
+"""
+    cards = validator.parse_suggestion_cards(card_with_diff)
+    assert len(cards) == 1
+    card = cards[0]
+    assert card["id"] == 1
+    assert card["category"] == "Brevity"
+    assert card["impact"] == "Minor"
+    assert (
+        card["original"] == "In order to optimize performance, we should cache results."
+    )
+    assert card["proposed"] == "To optimize performance, cache results."
+    assert "diff" in card, "Card dictionary must contain 'diff' field when present"
+    assert "- In order to optimize performance" in card["diff"]
+    assert "+ To optimize performance" in card["diff"]
+    assert card["rationale"] == "Cuts wordy prepositional phrase."
+
+
+def test_suggestion_cards_with_word_level_diff():
+    """Verify parsing suggestion cards with multi-line word-level diff blocks."""
+    validator = get_validator()
+    assert validator is not None, "Validator module not loaded"
+
+    word_diff_card = """### Suggestion #1 `[Clarity]` `[Minor]`
+- **Anchor:** `Section 3`
+- **Original:** "Due to the fact that memory is low, restart worker."
+- **Proposed:** "Because memory is low, restart worker."
+- **Diff:**
+  ```diff
+    The daemon halted.
+  - Due to the fact that
+  + Because
+    memory is low, restart worker.
+  ```
+- **Rationale:** Direct conjunction.
+"""
+    cards = validator.parse_suggestion_cards(word_diff_card)
+    assert len(cards) == 1
+    assert "diff" in cards[0]
+    assert "- Due to the fact that" in cards[0]["diff"]
+    assert "+ Because" in cards[0]["diff"]
+
+
+def test_mixed_diff_and_no_diff_cards_backward_compatibility():
+    """Verify backward compatibility: batches with mixed cards (some with diff, some without) parse correctly."""
+    validator = get_validator()
+    assert validator is not None, "Validator module not loaded"
+
+    mixed_cards = """### Suggestion #1 `[Brevity]` `[Minor]`
+- **Anchor:** `Intro`
+- **Original:** "The system is capable of processing requests."
+- **Proposed:** "The system processes requests."
+- **Diff:**
+  ```diff
+  - The system is capable of processing requests.
+  + The system processes requests.
+  ```
+- **Rationale:** Tighten verb.
+
+### Suggestion #2 `[Tone]` `[Nit]`
+- **Anchor:** `Conclusion`
+- **Original:** "Clearly this is obviously true."
+- **Proposed:** "This is true."
+- **Rationale:** Remove conversational fluff.
+"""
+    cards = validator.parse_suggestion_cards(mixed_cards)
+    assert len(cards) == 2
+    assert "diff" in cards[0]
+    assert "diff" not in cards[1]  # Backward compatibility: omit when absent
+
+    source_text = (
+        "The system is capable of processing requests.\nClearly this is obviously true."
+    )
+    assert validator.validate_verbatim_quotes(cards, source_text) is True
+
+
+def test_malformed_diff_fence_rejection():
+    """Verify that unclosed or malformed diff fences raise a clear ValueError."""
+    validator = get_validator()
+    assert validator is not None, "Validator module not loaded"
+
+    unclosed_diff_card = """### Suggestion #1 `[Brevity]` `[Minor]`
+- **Anchor:** `Intro`
+- **Original:** "old text"
+- **Proposed:** "new text"
+- **Diff:**
+  ```diff
+  - old text
+  + new text
+- **Rationale:** Test.
+"""
+    with pytest.raises(
+        ValueError, match="Unterminated or malformed Diff block in Suggestion #1"
+    ):
+        validator.parse_suggestion_cards(unclosed_diff_card)
+
+
+def test_skill_md_outer_fence_wrapping():
+    """Verify that SKILL.md uses 4-backtick code fences for suggestion schema templates so inner diff blocks don't close them."""
+    skill_text = SKILL_FILE.read_text(encoding="utf-8")
+    assert (
+        "````markdown" in skill_text or "````" in skill_text
+    ), "SKILL.md must use 4-backtick fences for markdown templates"
+    assert (
+        "```diff" in skill_text
+    ), "SKILL.md must document the ```diff fence format inside suggestion cards"
