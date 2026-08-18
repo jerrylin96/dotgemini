@@ -1031,3 +1031,42 @@ def test_diff_card_wrapped_card_then_visible_card_raises_error():
 """
     with pytest.raises(ValueError, match="trapped inside fenced code blocks"):
         validator.parse_suggestion_cards(c1 + wrapped_c2 + c3)
+
+
+def test_unindented_diff_deleting_exact_schema_field_fails_closed():
+    """Verify that an unindented deletion of an exact schema field name fails closed loudly, while indented succeeds."""
+    validator = get_validator()
+    assert validator is not None, "Validator module not loaded"
+
+    # Unindented: column 0 '- **Rationale:**' trips the boundary search and fails closed
+    unindented_card = """### Suggestion #1 `[Tone]` `[Minor]`
+- **Anchor:** `Intro`
+- **Original:** "old rationale"
+- **Proposed:** "new rationale"
+- **Diff:**
+```diff
+- **Rationale:** old text
++ **Rationale:** new text
+```
+- **Rationale:** Test.
+"""
+    with pytest.raises(
+        ValueError, match="Unterminated or malformed Diff block in Suggestion #1"
+    ):
+        validator.parse_suggestion_cards(unindented_card)
+
+    # Indented per SKILL.md template: 2-space indentation avoids column 0 matching and parses cleanly
+    indented_card = """### Suggestion #1 `[Tone]` `[Minor]`
+- **Anchor:** `Intro`
+- **Original:** "old rationale"
+- **Proposed:** "new rationale"
+- **Diff:**
+  ```diff
+  - **Rationale:** old text
+  + **Rationale:** new text
+  ```
+- **Rationale:** Test.
+"""
+    cards = validator.parse_suggestion_cards(indented_card)
+    assert len(cards) == 1
+    assert "- **Rationale:** old text" in cards[0]["diff"]

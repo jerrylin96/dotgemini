@@ -241,6 +241,8 @@ def _extract_diff_field(
     fence_len = len(fence_token)
 
     # The closing fence MUST appear before the next known card field (e.g. - **Rationale:**)
+    # ponytail: An unindented diff content line deleting a known field at column 0 (e.g. - **Rationale:** old)
+    # will bound the search and fail closed. Indented diff blocks (per SKILL.md template) avoid this heuristic limit.
     next_field_pattern = re.compile(
         r"^-\s+\*\*(?:Anchor|Original|Proposed|Diff|Rationale):\*\*", re.MULTILINE
     )

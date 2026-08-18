@@ -61,7 +61,7 @@ Every proposed edit must be formatted as an atomic card adhering to [suggestion_
 * **`Anchor`**: Indicates where the edit belongs (e.g., `## Architecture Overview` or `Paragraph 3`).
 * **`Original`**: Quoted exact substring from the document.
 * **`Proposed`**: The replacement text (must differ from `Original`).
-* **`Diff`**: Optional fenced ` ```diff ... ``` ` block providing visual color highlighting in terminal CLIs and markdown renderers.
+* **`Diff`**: Optional fenced ` ```diff ... ``` ` block providing visual color highlighting in terminal CLIs and markdown renderers. If the `**Diff:**` field header is present, the fenced block is required; omit the entire field when no diff is needed. Diff content lines should carry a `+`/`-`/space prefix. Note: The Diff block is visual-only and is not programmatically checked against `Original`/`Proposed`.
 * **`Rationale`**: Brief explanation of the improvement (e.g. "Eliminates passive filler", "Clarifies causal sequence").
 * **Card IDs**: Strictly positive, unique integers (`#1`, `#2`, `#3`...). When analyzing documents across multiple chunks, IDs remain unique across sections (e.g. chunk 2 starting at `#5`).
 
