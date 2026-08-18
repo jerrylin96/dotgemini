@@ -944,3 +944,90 @@ def test_extract_protected_blocks_unclosed_fence_extends_to_eof():
     assert len(code_blocks) == 1
     assert code_blocks[0]["span"] == (7, len(doc))
     assert "fence never closed" in code_blocks[0]["content"]
+
+
+def test_unindented_diff_deleting_field_like_line():
+    """Regression test (Agent 2): Diff deleting a line formatted like a markdown field (e.g. - **Emphasis:**) must parse."""
+    validator = get_validator()
+    assert validator is not None, "Validator module not loaded"
+
+    card = """### Suggestion #1 `[Tone]` `[Minor]`
+- **Anchor:** `Intro`
+- **Original:** "List items below."
+- **Proposed:** "List items below, with emphasis."
+- **Diff:**
+```diff
+- **Emphasis:** plain
++ **Emphasis:** bold
+```
+- **Rationale:** Bold it.
+"""
+    cards = validator.parse_suggestion_cards(card)
+    assert len(cards) == 1
+    assert "- **Emphasis:** plain" in cards[0]["diff"]
+    assert "+ **Emphasis:** bold" in cards[0]["diff"]
+
+
+def test_diff_card_followed_by_wrapped_card_raises_error():
+    """Regression test (Agents 3 & 4 Repro A): A wrapped card after a card with a diff block must not be silently dropped."""
+    validator = get_validator()
+    assert validator is not None, "Validator module not loaded"
+
+    c1 = """### Suggestion #1 `[Brevity]` `[Minor]`
+- **Anchor:** `Intro`
+- **Original:** "old text one"
+- **Proposed:** "new text one"
+- **Diff:**
+  ```diff
+  - old text one
+  + new text one
+  ```
+- **Rationale:** Tighten.
+"""
+    wrapped_c2 = """
+```markdown
+### Suggestion #2 `[Tone]` `[Nit]`
+- **Anchor:** `Outro`
+- **Original:** "very very old"
+- **Proposed:** "old"
+- **Rationale:** Trim.
+```
+"""
+    with pytest.raises(ValueError, match="trapped inside fenced code blocks"):
+        validator.parse_suggestion_cards(c1 + wrapped_c2)
+
+
+def test_diff_card_wrapped_card_then_visible_card_raises_error():
+    """Regression test (Agents 3 & 4 Repro B): A wrapped card between two valid cards must not be silently dropped."""
+    validator = get_validator()
+    assert validator is not None, "Validator module not loaded"
+
+    c1 = """### Suggestion #1 `[Brevity]` `[Minor]`
+- **Anchor:** `Intro`
+- **Original:** "old text one"
+- **Proposed:** "new text one"
+- **Diff:**
+  ```diff
+  - old text one
+  + new text one
+  ```
+- **Rationale:** Tighten.
+"""
+    wrapped_c2 = """
+```markdown
+### Suggestion #2 `[Tone]` `[Nit]`
+- **Anchor:** `Outro`
+- **Original:** "very very old"
+- **Proposed:** "old"
+- **Rationale:** Trim.
+```
+"""
+    c3 = """
+### Suggestion #3 `[Tone]` `[Nit]`
+- **Anchor:** `End`
+- **Original:** "zzz"
+- **Proposed:** "z"
+- **Rationale:** done.
+"""
+    with pytest.raises(ValueError, match="trapped inside fenced code blocks"):
+        validator.parse_suggestion_cards(c1 + wrapped_c2 + c3)

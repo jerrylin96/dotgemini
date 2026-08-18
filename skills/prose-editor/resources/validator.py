@@ -205,12 +205,18 @@ def _extract_quoted_field(field_name: str, body: str, card_id: int) -> str:
     raise ValueError(f"Missing required field '{field_name}' in Suggestion #{card_id}")
 
 
-def _extract_diff_field(body: str, card_id: int) -> str | None:
-    """Extract optional fenced diff block from suggestion card body."""
+def _extract_diff_field(
+    body: str, card_id: int, body_abs_offset: int = 0
+) -> tuple[str | None, tuple[int, int] | None]:
+    """Extract optional fenced diff block from suggestion card body.
+
+    Returns:
+        (diff_text, (abs_start, abs_end)) or (None, None) if not present.
+    """
     diff_header_pattern = re.compile(r"^-\s+\*\*Diff:\*\*[^\r\n]*\r?\n", re.MULTILINE)
     diff_header_match = diff_header_pattern.search(body)
     if not diff_header_match:
-        return None
+        return None, None
 
     sub_body = body[diff_header_match.end() :]
     # Opening fence: ``` or ~~~, optional blockquote prefixes, optional info string (e.g. diff, Diff, DIFF)
@@ -234,8 +240,10 @@ def _extract_diff_field(body: str, card_id: int) -> str | None:
     fence_char = fence_token[0]
     fence_len = len(fence_token)
 
-    # The closing fence MUST appear before the next card field (e.g. - **Rationale:**)
-    next_field_pattern = re.compile(r"^-\s+\*\*[A-Za-z]+:\*\*", re.MULTILINE)
+    # The closing fence MUST appear before the next known card field (e.g. - **Rationale:**)
+    next_field_pattern = re.compile(
+        r"^-\s+\*\*(?:Anchor|Original|Proposed|Diff|Rationale):\*\*", re.MULTILINE
+    )
     next_field_match = next_field_pattern.search(sub_body[open_match.end() :])
     max_search_pos = (
         next_field_match.start()
@@ -267,7 +275,11 @@ def _extract_diff_field(body: str, card_id: int) -> str | None:
     full_diff_fence = sub_body[
         open_match.start() : open_match.end() + close_found.end()
     ]
-    return full_diff_fence.strip()
+    abs_start = body_abs_offset + diff_header_match.end() + open_match.start()
+    abs_end = (
+        body_abs_offset + diff_header_match.end() + open_match.end() + close_found.end()
+    )
+    return full_diff_fence.strip(), (abs_start, abs_end)
 
 
 def parse_suggestion_cards(text: str) -> List[Dict[str, Any]]:
@@ -390,7 +402,9 @@ def parse_suggestion_cards(text: str) -> List[Dict[str, Any]]:
                 f"No-op suggestion in Suggestion #{card_id}: Original and Proposed are identical"
             )
 
-        diff_val = _extract_diff_field(body, card_id)
+        diff_val, diff_span = _extract_diff_field(
+            body, card_id, body_abs_offset=start_pos
+        )
 
         card_dict: Dict[str, Any] = {
             "id": card_id,
@@ -401,12 +415,9 @@ def parse_suggestion_cards(text: str) -> List[Dict[str, Any]]:
             "proposed": proposed_val,
             "rationale": rationale_match.group(1).strip(),
         }
-        if diff_val is not None:
+        if diff_val is not None and diff_span is not None:
             card_dict["diff"] = diff_val
-            diff_hdr = re.search(r"^-\s+\*\*Diff:\*\*[^\r\n]*\r?\n", body, re.MULTILINE)
-            if diff_hdr:
-                diff_abs_start = start_pos + diff_hdr.start()
-                parsed_diff_spans.append((diff_abs_start, start_pos + len(body)))
+            parsed_diff_spans.append(diff_span)
 
         cards.append(card_dict)
 
