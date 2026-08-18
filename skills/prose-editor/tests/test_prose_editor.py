@@ -840,3 +840,107 @@ def test_diff_content_with_literal_suggestion_header():
     cards = validator.parse_suggestion_cards(card)
     assert len(cards) == 1
     assert cards[0]["id"] == 1
+
+
+def test_partial_fence_wrap_raises_error():
+    """Regression test (Agent 1): If some cards are inside an unclosed code block and some outside, fail loudly."""
+    validator = get_validator()
+    assert validator is not None, "Validator module not loaded"
+
+    # Card 1 opens a fence and Card 2 is inside it
+    partial_wrap_doc = """```markdown
+### Suggestion #1 `[Brevity]` `[Minor]`
+- **Anchor:** `Intro`
+- **Original:** "old"
+- **Proposed:** "new"
+- **Rationale:** reason
+```
+
+### Suggestion #2 `[Tone]` `[Nit]`
+- **Anchor:** `Outro`
+- **Original:** "x"
+- **Proposed:** "y"
+- **Rationale:** z
+"""
+    with pytest.raises(ValueError, match="trapped inside fenced code blocks"):
+        validator.parse_suggestion_cards(partial_wrap_doc)
+
+
+def test_diff_close_must_not_swallow_later_fields():
+    """Verify that Diff closing fence must appear strictly before subsequent card fields."""
+    validator = get_validator()
+    assert validator is not None, "Validator module not loaded"
+
+    unclosed_diff_before_field = """### Suggestion #1 `[Brevity]` `[Minor]`
+- **Anchor:** `Intro`
+- **Original:** "old"
+- **Proposed:** "new"
+- **Diff:**
+  ```diff
+  - old
+  + new
+- **Rationale:** because
+  ```
+"""
+    with pytest.raises(
+        ValueError, match="Unterminated or malformed Diff block in Suggestion #1"
+    ):
+        validator.parse_suggestion_cards(unclosed_diff_before_field)
+
+
+def test_diff_header_with_optional_annotation_parses():
+    """Verify that template line '- **Diff:** (Optional)' parses cleanly."""
+    validator = get_validator()
+    assert validator is not None, "Validator module not loaded"
+
+    card = """### Suggestion #1 `[Brevity]` `[Minor]`
+- **Anchor:** `Intro`
+- **Original:** "old text one"
+- **Proposed:** "new text one"
+- **Diff:** (Optional)
+  ```diff
+  - old text one
+  + new text one
+  ```
+- **Rationale:** Tighten.
+"""
+    cards = validator.parse_suggestion_cards(card)
+    assert len(cards) == 1
+    assert "diff" in cards[0]
+    assert "- old text one" in cards[0]["diff"]
+
+
+def test_crlf_diff_and_card_parsing():
+    """Verify that cards with Windows CRLF newlines parse and extract diffs cleanly."""
+    validator = get_validator()
+    assert validator is not None, "Validator module not loaded"
+
+    crlf_card = (
+        "### Suggestion #1 `[Brevity]` `[Minor]`\r\n"
+        "- **Anchor:** `Intro`\r\n"
+        '- **Original:** "old"\r\n'
+        '- **Proposed:** "new"\r\n'
+        "- **Diff:**\r\n"
+        "  ```diff\r\n"
+        "  - old\r\n"
+        "  + new\r\n"
+        "  ```\r\n"
+        "- **Rationale:** CRLF test.\r\n"
+    )
+    cards = validator.parse_suggestion_cards(crlf_card)
+    assert len(cards) == 1
+    assert "diff" in cards[0]
+    assert "- old" in cards[0]["diff"]
+
+
+def test_extract_protected_blocks_unclosed_fence_extends_to_eof():
+    """Verify that extract_protected_blocks fail-closes to EOF when an unclosed code fence is present."""
+    validator = get_validator()
+    assert validator is not None, "Validator module not loaded"
+
+    doc = "Intro.\n```python\nx = 1\nfence never closed\nmore\n"
+    protected = validator.extract_protected_blocks(doc)
+    code_blocks = [b for b in protected if b["type"] == "code_block"]
+    assert len(code_blocks) == 1
+    assert code_blocks[0]["span"] == (7, len(doc))
+    assert "fence never closed" in code_blocks[0]["content"]

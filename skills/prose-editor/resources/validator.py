@@ -43,7 +43,7 @@ def _scan_code_fences(
         - unclosed_fences: list of (start_idx, fence_token) for unclosed opening fences.
     """
     fence_pattern = re.compile(
-        r"^[ \t]*(?:>[ \t]*)*(```+|~~~+)[^\r\n]*$",
+        r"^[ \t]*(?:>[ \t]*)*(```+|~~~+)[^\r\n]*\r?$",
         re.MULTILINE,
     )
     lines = list(fence_pattern.finditer(text))
@@ -76,12 +76,16 @@ def _scan_code_fences(
 def _get_code_fence_spans(text: str, strict: bool = False) -> List[tuple[int, int]]:
     """Return start and end spans of fenced code blocks (supporting indentation and blockquotes)."""
     closed_spans, unclosed_fences = _scan_code_fences(text)
-    if unclosed_fences and strict:
-        start_idx, token = unclosed_fences[0]
-        raise ValueError(
-            f"Unterminated code fence '{token}' at character index {start_idx} "
-            "— cannot reliably locate suggestion cards"
-        )
+    if unclosed_fences:
+        if strict:
+            start_idx, token = unclosed_fences[0]
+            raise ValueError(
+                f"Unterminated code fence '{token}' at character index {start_idx} "
+                "— cannot reliably locate suggestion cards"
+            )
+        # For non-strict callers (e.g. extract_protected_blocks), fail closed to EOF
+        for start_idx, _ in unclosed_fences:
+            closed_spans.append((start_idx, len(text)))
     return closed_spans
 
 
@@ -100,7 +104,7 @@ def extract_protected_blocks(text: str) -> List[Dict[str, Any]]:
             }
         )
 
-    # 2. Fenced code blocks (reusing shared fence scanner)
+    # 2. Fenced code blocks (reusing shared fence scanner, fails closed to EOF)
     for start, end in _get_code_fence_spans(text, strict=False):
         block_text = text[start:end]
         if block_text.strip():
@@ -203,7 +207,7 @@ def _extract_quoted_field(field_name: str, body: str, card_id: int) -> str:
 
 def _extract_diff_field(body: str, card_id: int) -> str | None:
     """Extract optional fenced diff block from suggestion card body."""
-    diff_header_pattern = re.compile(r"^-\s+\*\*Diff:\*\*", re.MULTILINE)
+    diff_header_pattern = re.compile(r"^-\s+\*\*Diff:\*\*[^\r\n]*\r?\n", re.MULTILINE)
     diff_header_match = diff_header_pattern.search(body)
     if not diff_header_match:
         return None
@@ -211,7 +215,7 @@ def _extract_diff_field(body: str, card_id: int) -> str | None:
     sub_body = body[diff_header_match.end() :]
     # Opening fence: ``` or ~~~, optional blockquote prefixes, optional info string (e.g. diff, Diff, DIFF)
     open_fence_pattern = re.compile(
-        r"^[ \t]*(?:>[ \t]*)*(```+|~~~+)[ \t]*(?:[a-zA-Z0-9_-]+)?[ \t]*$",
+        r"^[ \t]*(?:>[ \t]*)*(```+|~~~+)[ \t]*(?:[a-zA-Z0-9_-]+)?[ \t]*\r?$",
         re.MULTILINE,
     )
     open_match = open_fence_pattern.search(sub_body)
@@ -220,7 +224,7 @@ def _extract_diff_field(body: str, card_id: int) -> str | None:
             f"Unterminated or malformed Diff block in Suggestion #{card_id}"
         )
 
-    # Verify only whitespace exists between - **Diff:** and opening fence
+    # Verify only whitespace exists between - **Diff:** line and opening fence
     if sub_body[: open_match.start()].strip() != "":
         raise ValueError(
             f"Unterminated or malformed Diff block in Suggestion #{card_id}"
@@ -230,12 +234,24 @@ def _extract_diff_field(body: str, card_id: int) -> str | None:
     fence_char = fence_token[0]
     fence_len = len(fence_token)
 
-    # Find matching closing fence (same char, length >= opener)
+    # The closing fence MUST appear before the next card field (e.g. - **Rationale:**)
+    next_field_pattern = re.compile(r"^-\s+\*\*[A-Za-z]+:\*\*", re.MULTILINE)
+    next_field_match = next_field_pattern.search(sub_body[open_match.end() :])
+    max_search_pos = (
+        next_field_match.start()
+        if next_field_match
+        else len(sub_body) - open_match.end()
+    )
+
+    diff_content_and_close = sub_body[
+        open_match.end() : open_match.end() + max_search_pos
+    ]
+
     close_fence_pattern = re.compile(
-        r"^[ \t]*(?:>[ \t]*)*(```+|~~~+)[ \t]*$",
+        r"^[ \t]*(?:>[ \t]*)*(```+|~~~+)[ \t]*\r?$",
         re.MULTILINE,
     )
-    close_matches = list(close_fence_pattern.finditer(sub_body[open_match.end() :]))
+    close_matches = list(close_fence_pattern.finditer(diff_content_and_close))
     close_found = None
     for cm in close_matches:
         c_token = cm.group(1)
@@ -266,9 +282,9 @@ def parse_suggestion_cards(text: str) -> List[Dict[str, Any]]:
         re.MULTILINE,
     )
     all_card_headers = list(card_header_pattern.finditer(text))
+    matches = [m for m in all_card_headers if not is_inside_code(m.start())]
 
     # Guard 1: Detect if all suggestion headers are trapped inside an outer fenced code block
-    matches = [m for m in all_card_headers if not is_inside_code(m.start())]
     if len(all_card_headers) > 0 and len(matches) == 0:
         raise ValueError(
             f"{len(all_card_headers)} suggestion header(s) found but all are inside fenced code blocks "
@@ -279,7 +295,6 @@ def parse_suggestion_cards(text: str) -> List[Dict[str, Any]]:
     if unclosed_fences:
         # Check if there is only a single unclosed fence and it belongs specifically to a Diff block
         # whose card parser will raise an exact 'Unterminated or malformed Diff block' error.
-        # Any other unclosed fence (stray fence, fence spanning across cards, etc.) must raise immediately.
         diff_unclosed = False
         if len(unclosed_fences) == 1 and len(matches) > 0:
             fence_pos, _ = unclosed_fences[0]
@@ -291,10 +306,9 @@ def parse_suggestion_cards(text: str) -> List[Dict[str, Any]]:
                 if card_start <= fence_pos < card_end:
                     card_body = text[ch.end() : card_end]
                     diff_match = re.search(
-                        r"^-\s+\*\*Diff:\*\*", card_body, re.MULTILINE
+                        r"^-\s+\*\*Diff:\*\*[^\r\n]*\r?\n", card_body, re.MULTILINE
                     )
                     if diff_match:
-                        # Diff header exists before fence_pos and only whitespace between diff header and fence
                         diff_hdr_abs = ch.end() + diff_match.end()
                         if (
                             diff_hdr_abs <= fence_pos
@@ -327,6 +341,7 @@ def parse_suggestion_cards(text: str) -> List[Dict[str, Any]]:
 
     cards: List[Dict[str, Any]] = []
     seen_ids = set()
+    parsed_diff_spans: List[tuple[int, int]] = []
 
     for i, match in enumerate(matches):
         card_id = int(match.group(1))
@@ -388,8 +403,28 @@ def parse_suggestion_cards(text: str) -> List[Dict[str, Any]]:
         }
         if diff_val is not None:
             card_dict["diff"] = diff_val
+            diff_hdr = re.search(r"^-\s+\*\*Diff:\*\*[^\r\n]*\r?\n", body, re.MULTILINE)
+            if diff_hdr:
+                diff_abs_start = start_pos + diff_hdr.start()
+                parsed_diff_spans.append((diff_abs_start, start_pos + len(body)))
 
         cards.append(card_dict)
+
+    # Guard 4: Detect partially trapped card headers outside valid diff blocks
+    trapped_headers = []
+    for h in all_card_headers:
+        if is_inside_code(h.start()):
+            in_valid_diff = any(
+                d_start <= h.start() < d_end for d_start, d_end in parsed_diff_spans
+            )
+            if not in_valid_diff:
+                trapped_headers.append(h)
+
+    if trapped_headers:
+        raise ValueError(
+            f"{len(trapped_headers)} suggestion header(s) trapped inside fenced code blocks "
+            "— emit suggestion cards as top-level markdown, not wrapped in code fences"
+        )
 
     return cards
 
