@@ -64,12 +64,14 @@ def test_workflow_yaml_structure():
 
     assert "name: Signoff Verification Gate" in content
     assert "pull_request:" in content
+    assert "push:" in content
+    assert "branches: [main]" in content
     assert "ready_for_review" in content
     assert "permissions:" in content
     assert "contents: read" in content
     assert "concurrency:" in content
     assert "actions/checkout@" in content
-    assert "ref: ${{ github.event.pull_request.head.sha }}" in content
+    assert "ref: ${{ github.event.pull_request.head.sha || github.sha }}" in content
     assert "fetch-depth: 0" in content
     assert "persist-credentials: false" in content
     assert "cat_sort_uniq" in content
