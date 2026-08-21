@@ -51,6 +51,7 @@ jobs:
           HEAD_TREE=$(git rev-parse HEAD^{tree})
           EVENT_NAME="${SIGNOFF_EVENT_NAME:-${GITHUB_EVENT_NAME:-pull_request}}"
           REF_NAME="${SIGNOFF_REF:-${GITHUB_REF:-refs/heads/main}}"
+          EVENT_BEFORE="${SIGNOFF_EVENT_BEFORE:-${GITHUB_EVENT_BEFORE:-}}"
           echo "Verifying signoff attestation for SHA (${HEAD_SHA}) / TREE (${HEAD_TREE}) [event=${EVENT_NAME} ref=${REF_NAME}]..."
 
           IS_VALID=0
@@ -165,9 +166,15 @@ jobs:
           if verify_target "$HEAD_SHA" "$HEAD_TREE" "HEAD"; then
             IS_VALID=1
           elif [ "$EVENT_NAME" = "push" ] && [ "$REF_NAME" = "refs/heads/main" ] && git rev-parse --verify -q HEAD^2 >/dev/null; then
-            # Merge commit fallback: strictly restricted to push events on refs/heads/main (e.g. sequential PR merges)
-            # Ensure HEAD^2 brings new work and is not an already-merged ancestor of HEAD^1
-            if ! git merge-base --is-ancestor HEAD^2 HEAD^1; then
+            # Push-provenance merge fallback for sequential PR merges on main:
+            # 1. Require exactly two parents (reject octopus merges)
+            # 2. Require valid, non-zero SIGNOFF_EVENT_BEFORE matching HEAD^1 (ensures main-side parent is exactly the previous main tip)
+            # 3. Require HEAD^2 not to be an ancestor of HEAD^1 (ensures HEAD^2 brings new work)
+            # 4. Require HEAD^2 to pass verify_target
+            if ! git rev-parse --verify -q HEAD^3 >/dev/null && \
+               [ -n "$EVENT_BEFORE" ] && [ "$EVENT_BEFORE" != "0000000000000000000000000000000000000000" ] && \
+               [ "$EVENT_BEFORE" = "$(git rev-parse HEAD^1)" ] && \
+               ! git merge-base --is-ancestor HEAD^2 HEAD^1; then
               MERGE_PR_HEAD=$(git rev-parse HEAD^2)
               MERGE_PR_TREE=$(git rev-parse HEAD^2^{tree})
               if verify_target "$MERGE_PR_HEAD" "$MERGE_PR_TREE" "merged PR branch head (HEAD^2)"; then
