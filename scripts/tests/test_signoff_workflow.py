@@ -772,7 +772,53 @@ def test_push_crafted_merge_ancestor_blocked(tmp_path):
     # 4. Run verification on push to main: MUST FAIL
     res = run_verification_in_repo(repo, event_name="push", ref="refs/heads/main", before_sha=p1_sha)
     assert res.returncode == 1
-    assert "::error::Missing, incomplete, or mismatched" in res.stdout or "::error::Missing, incomplete, or mismatched" in res.stderr
+    assert "::error::main contains commit(s) not covered" in res.stdout or "::error::main contains commit(s) not covered" in res.stderr
+
+
+def test_push_crafted_dirty_merge_tree_fails(tmp_path):
+    """Regression test (Agent #2 finding): Crafted merge commit on push with valid before_sha,
+    attested HEAD^2, but an unreviewed/dirty file injected into HEAD^{tree} (tree != git merge-tree --write-tree HEAD^1 HEAD^2).
+    Must exit 1 because the tree is not the canonical merge result."""
+    repo = str(tmp_path)
+    setup_git_repo(repo)
+
+    # 1. Base on main
+    subprocess.run(["git", "commit", "--allow-empty", "-m", "Base main"], cwd=repo, check=True)
+    base_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+
+    # 2. Attested feature branch
+    subprocess.run(["git", "checkout", "-b", "feature-clean", base_sha], cwd=repo, check=True)
+    with open(os.path.join(repo, "clean_feature.txt"), "w") as f:
+        f.write("clean feature content")
+    subprocess.run(["git", "add", "clean_feature.txt"], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-m", "Clean feature"], cwd=repo, check=True)
+    f_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+    f_tree = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+    note = f"Signoff-Spec-Version: 1.0\nSignoff-Status: VERIFIED_BY_HUMAN\nSignoff-Reviewed-Commit-SHA: {f_sha}\nSignoff-Reviewed-Tree-SHA: {f_tree}\nSignoff-Verified-By: dev@example.com"
+    subprocess.run(["git", "notes", "--ref=signoff", "add", "-m", note, f_sha], cwd=repo, check=True)
+    subprocess.run(["git", "notes", "--ref=signoff", "add", "-m", note, f_tree], cwd=repo, check=True)
+
+    # 3. On main, create a dirty tree that includes unreviewed backdoor.txt
+    subprocess.run(["git", "checkout", "main"], cwd=repo, check=True)
+    with open(os.path.join(repo, "backdoor.txt"), "w") as f:
+        f.write("unreviewed injected backdoor")
+    subprocess.run(["git", "add", "backdoor.txt"], cwd=repo, check=True)
+    with open(os.path.join(repo, "clean_feature.txt"), "w") as f:
+        f.write("clean feature content")
+    subprocess.run(["git", "add", "clean_feature.txt"], cwd=repo, check=True)
+    dirty_tree = subprocess.run(["git", "write-tree"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+
+    # 4. Commit this dirty tree with parents HEAD^1=base_sha, HEAD^2=f_sha
+    dirty_commit = subprocess.run(
+        ["git", "commit-tree", dirty_tree, "-p", base_sha, "-p", f_sha, "-m", "Crafted dirty merge"],
+        cwd=repo, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    subprocess.run(["git", "update-ref", "refs/heads/main", dirty_commit], cwd=repo, check=True)
+
+    # 5. Run verification on push to main: MUST FAIL because HEAD^{tree} != git merge-tree --write-tree HEAD^1 HEAD^2
+    res = run_verification_in_repo(repo, event_name="push", ref="refs/heads/main", before_sha=base_sha)
+    assert res.returncode == 1
+    assert "::error::main contains commit(s) not covered" in res.stdout or "::error::main contains commit(s) not covered" in res.stderr
 
 
 def test_head_2_fallback_disabled_on_non_main_push(tmp_path):
@@ -824,4 +870,24 @@ def test_unattested_merge_commit_fails(tmp_path):
 
     res = run_verification_in_repo(repo, event_name="push", ref="refs/heads/main", before_sha=base_sha)
     assert res.returncode == 1
-    assert "::error::Missing, incomplete, or mismatched" in res.stdout or "::error::Missing, incomplete, or mismatched" in res.stderr
+    assert "::error::main contains commit(s) not covered" in res.stdout or "::error::main contains commit(s) not covered" in res.stderr
+
+
+def test_event_aware_error_messages(tmp_path):
+    """Verify event-aware error messages: pull_request vs push."""
+    repo = str(tmp_path)
+    setup_git_repo(repo)
+
+    subprocess.run(["git", "commit", "--allow-empty", "-m", "Unattested commit"], cwd=repo, check=True)
+
+    # PR event failure message
+    res_pr = run_verification_in_repo(repo, event_name="pull_request", ref="refs/pull/1/merge")
+    assert res_pr.returncode == 1
+    assert "::error::Missing, incomplete, or mismatched Git Signoff Attestation on head" in res_pr.stdout
+    assert "Run /signoff on latest head and push refs/notes/signoff before merging." in res_pr.stdout
+
+    # Push event failure message
+    res_push = run_verification_in_repo(repo, event_name="push", ref="refs/heads/main", before_sha="0000000000000000000000000000000000000000")
+    assert res_push.returncode == 1
+    assert "::error::main contains commit(s) not covered by a signoff attestation on head" in res_push.stdout
+    assert "Check workflow run logs." in res_push.stdout

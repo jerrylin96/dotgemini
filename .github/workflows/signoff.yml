@@ -43,7 +43,18 @@ jobs:
           # They do not prove that a Socratic review occurred or establish independent human identity.
           # Cryptographic signing (git commit -S) and trusted reviewer verification remain required if independent identity assurance is intended.
           # REAL ENFORCEMENT REQUIRES A GITHUB BRANCH PROTECTION RULE requiring 'Signoff Verification Gate' on 'main'.
-          # Note on Commit Trailers (Check 1): Empty attestation commits must be the HEAD commit on the PR branch. Pushing new code commits after signing requires re-attestation or Git Notes (Check 2/3).
+          #
+          # Event Model & Push Semantics:
+          # 1. pull_request runs: Pre-merge gating. Strictly evaluates only PR HEAD/tree (Checks 1-3) with zero parent fallback.
+          # 2. push runs on main: Post-hoc tripwire for continuous verification & status badge.
+          #    - Direct commits / squash merges: verified directly via HEAD commit/tree notes (Checks 1-3).
+          #    - Merge commits (e.g. sequential merges): evaluates HEAD^2 if and only if:
+          #      a) Exactly two parents (rejects octopus merges).
+          #      b) SIGNOFF_EVENT_BEFORE is valid, non-zero, and equals HEAD^1 (ensures main was previous tip before merge).
+          #      c) HEAD^2 is not an ancestor of HEAD^1 (brings new branch work).
+          #      d) HEAD^{tree} matches canonical 3-way merge result: git merge-tree --write-tree HEAD^1 HEAD^2.
+          #      e) HEAD^2 is validly attested (Checks 1-3).
+          #    Known limitation: Batch pushes with multiple merges fail closed; merge PRs sequentially.
 
           set -eo pipefail
 
@@ -51,7 +62,7 @@ jobs:
           HEAD_TREE=$(git rev-parse HEAD^{tree})
           EVENT_NAME="${SIGNOFF_EVENT_NAME:-${GITHUB_EVENT_NAME:-pull_request}}"
           REF_NAME="${SIGNOFF_REF:-${GITHUB_REF:-refs/heads/main}}"
-          EVENT_BEFORE="${SIGNOFF_EVENT_BEFORE:-${GITHUB_EVENT_BEFORE:-}}"
+          EVENT_BEFORE="${SIGNOFF_EVENT_BEFORE:-}"
           echo "Verifying signoff attestation for SHA (${HEAD_SHA}) / TREE (${HEAD_TREE}) [event=${EVENT_NAME} ref=${REF_NAME}]..."
 
           IS_VALID=0
@@ -170,15 +181,19 @@ jobs:
             # 1. Require exactly two parents (reject octopus merges)
             # 2. Require valid, non-zero SIGNOFF_EVENT_BEFORE matching HEAD^1 (ensures main-side parent is exactly the previous main tip)
             # 3. Require HEAD^2 not to be an ancestor of HEAD^1 (ensures HEAD^2 brings new work)
-            # 4. Require HEAD^2 to pass verify_target
+            # 4. Require HEAD^{tree} to match canonical merge-tree result of HEAD^1 and HEAD^2 (rejects crafted dirty trees)
+            # 5. Require HEAD^2 to pass verify_target
             if ! git rev-parse --verify -q HEAD^3 >/dev/null && \
                [ -n "$EVENT_BEFORE" ] && [ "$EVENT_BEFORE" != "0000000000000000000000000000000000000000" ] && \
                [ "$EVENT_BEFORE" = "$(git rev-parse HEAD^1)" ] && \
                ! git merge-base --is-ancestor HEAD^2 HEAD^1; then
-              MERGE_PR_HEAD=$(git rev-parse HEAD^2)
-              MERGE_PR_TREE=$(git rev-parse HEAD^2^{tree})
-              if verify_target "$MERGE_PR_HEAD" "$MERGE_PR_TREE" "merged PR branch head (HEAD^2)"; then
-                IS_VALID=1
+              EXPECTED_MERGE_TREE=$(git merge-tree --write-tree HEAD^1 HEAD^2 2>/dev/null || true)
+              if [ -n "$EXPECTED_MERGE_TREE" ] && [ "$EXPECTED_MERGE_TREE" = "$HEAD_TREE" ]; then
+                MERGE_PR_HEAD=$(git rev-parse HEAD^2)
+                MERGE_PR_TREE=$(git rev-parse HEAD^2^{tree})
+                if verify_target "$MERGE_PR_HEAD" "$MERGE_PR_TREE" "merged PR branch head (HEAD^2)"; then
+                  IS_VALID=1
+                fi
               fi
             fi
           fi
@@ -187,6 +202,10 @@ jobs:
             echo "✅ Git Signoff Attestation gate PASSED for SHA ${HEAD_SHA}."
             exit 0
           else
-            echo "::error::Missing, incomplete, or mismatched Git Signoff Attestation on head (${HEAD_SHA})! Run /signoff on latest head and push refs/notes/signoff before merging."
+            if [ "$EVENT_NAME" = "push" ]; then
+              echo "::error::main contains commit(s) not covered by a signoff attestation on head (${HEAD_SHA})! Check workflow run logs."
+            else
+              echo "::error::Missing, incomplete, or mismatched Git Signoff Attestation on head (${HEAD_SHA})! Run /signoff on latest head and push refs/notes/signoff before merging."
+            fi
             exit 1
           fi
