@@ -318,6 +318,31 @@ To manually verify the harness adapter and transcript digest helper logic across
 
 ---
 
+## CI Gating & Status Badge Verification
+
+The GitHub Actions workflow (`.github/workflows/signoff.yml`) validates GSA records in two distinct event contexts:
+
+1. **Pull Request Events (`pull_request`) — Pre-Merge Enforcement Gate:**
+   - Evaluates strictly the PR `HEAD` commit and tree (Checks 1–3).
+   - Zero parent fallback: PR branches must be directly attested before merge.
+   - Enforced server-side via repository branch protection / ruleset requiring `verify-signoff`.
+
+2. **Push Events (`push` on `main`) — Post-Hoc Tripwire & Live Status Badge:**
+   - Powers the live `[![attested by humans]](...)` status badge.
+   - Direct commits and squash merges are verified via `HEAD` commit or tree notes.
+   - Sequential merge commits evaluate `HEAD^2` (the merged PR head) under strict push-provenance invariants:
+     a) Exactly two parents (rejects octopus merges).
+     b) `SIGNOFF_EVENT_BEFORE` equals `HEAD^1` (ensures `main` was the previous tip before merge).
+     c) `HEAD^2` is not an ancestor of `HEAD^1` (brings genuine new work).
+     d) `HEAD^{tree}` matches the canonical 3-way merge result: `git merge-tree --write-tree HEAD^1 HEAD^2` (rejects crafted dirty trees).
+     e) `HEAD^2` is validly attested.
+   - **Known Limitations**:
+     - *Batch Pushes*: Pushing multiple merge commits in a single push fails the gate; merge PRs sequentially.
+     - *Manual Conflict Merges*: Merges whose conflicts are resolved manually (resolved tree != `git merge-tree --write-tree HEAD^1 HEAD^2`) fail the push gate fail-closed; the remediation is to attest the merged state and push notes to `refs/notes/signoff`.
+     - *Post-Hoc Nature*: Push runs cannot prevent a direct push; they serve as an audit tripwire and badge driver.
+
+---
+
 ## Modifiers
 Modifiers select the named interview-intensity level (see Interview Intensity Levels):
 - `/signoff`: **standard** intensity (default).
