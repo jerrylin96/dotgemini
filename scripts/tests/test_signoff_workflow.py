@@ -34,15 +34,16 @@ def get_verification_script() -> str:
 
     for line in lines:
         if "Verify Git Signoff Attestation" in line:
-            recording = True
+            recording = "step"
             continue
-        if recording:
+        if recording == "step":
+            if line.strip().startswith("run:"):
+                recording = "script"
+            continue
+        if recording == "script":
             if base_indent is None:
-                if line.strip().startswith("run:"):
-                    continue
                 if line.strip():
                     base_indent = len(line) - len(line.lstrip())
-
             if base_indent is not None:
                 if line.strip() and (len(line) - len(line.lstrip())) < base_indent:
                     break
@@ -81,6 +82,8 @@ def test_workflow_yaml_structure():
     assert "persist-credentials: false" in content
     assert "cat_sort_uniq" in content
     assert "refs/notes/signoff" in content
+    assert "SIGNOFF_EVENT_NAME" in content
+    assert "SIGNOFF_REF" in content
 
     # Yaml integrity assertion
     script = get_verification_script()
@@ -88,6 +91,7 @@ def test_workflow_yaml_structure():
     assert "validate_payload" in script
     assert "verify_target" in script
     assert "HEAD^2" in script
+    assert "EVENT_NAME" in script
 
     # Verify README badge scopes to main and push
     readme_path = os.path.join(ROOT, "README.md")
@@ -110,10 +114,20 @@ def setup_git_repo(repo_dir: str) -> None:
         shutil.copy2(src_script, dst_script)
 
 
-def run_verification_in_repo(repo_dir: str) -> subprocess.CompletedProcess:
-    """Helper to run the verification shell script inside a test git repository."""
+def run_verification_in_repo(
+    repo_dir: str,
+    event_name: str = "pull_request",
+    ref: str = "refs/heads/main",
+    before_sha: str = ""
+) -> subprocess.CompletedProcess:
+    """Helper to run the verification shell script inside a test git repository with realistic GitHub event context."""
     env = os.environ.copy()
     env["GIT_CONFIG_NOSYSTEM"] = "1"
+    env["SIGNOFF_EVENT_NAME"] = event_name
+    env["SIGNOFF_REF"] = ref
+    env["SIGNOFF_EVENT_BEFORE"] = before_sha
+    env["GITHUB_EVENT_NAME"] = event_name
+    env["GITHUB_REF"] = ref
     return subprocess.run(
         ["bash", "-c", get_verification_script()],
         cwd=repo_dir,
@@ -503,7 +517,7 @@ def test_conformance_vectors(tmp_path):
 
 
 def test_sequential_merge_with_attested_pr_head_passes(tmp_path):
-    """Verify Scenario B: Sequential merge commits on main pass when merged PR head (HEAD^2) is attested."""
+    """Verify Scenario B: Sequential merge commits on main pass on push when merged PR head (HEAD^2) is attested."""
     repo = str(tmp_path)
     setup_git_repo(repo)
 
@@ -539,10 +553,109 @@ def test_sequential_merge_with_attested_pr_head_passes(tmp_path):
     subprocess.run(["git", "checkout", "main"], cwd=repo, check=True)
     subprocess.run(["git", "merge", "--no-ff", "feature-2", "-m", "Merge PR 2"], cwd=repo, check=True)
 
-    # 5. Run verification script against HEAD (the sequential merge commit)
-    res = run_verification_in_repo(repo)
+    # 5. Run verification script on push to main
+    res = run_verification_in_repo(repo, event_name="push", ref="refs/heads/main")
     assert res.returncode == 0
     assert "PASSED" in res.stdout
+
+
+def test_pr_merge_commit_bypass_blocked(tmp_path):
+    """Regression test (Hole A): PR HEAD is a merge commit with unattested P1 and attested P2.
+    Must exit 1 on pull_request events because HEAD^2 fallback is strictly disabled for PRs."""
+    repo = str(tmp_path)
+    setup_git_repo(repo)
+
+    # 1. Attested base on main
+    subprocess.run(["git", "commit", "--allow-empty", "-m", "Attested main tip"], cwd=repo, check=True)
+    main_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+    main_tree = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+    note_main = f"Signoff-Spec-Version: 1.0\nSignoff-Status: VERIFIED_BY_HUMAN\nSignoff-Reviewed-Commit-SHA: {main_sha}\nSignoff-Reviewed-Tree-SHA: {main_tree}\nSignoff-Verified-By: dev@example.com"
+    subprocess.run(["git", "notes", "--ref=signoff", "add", "-m", note_main, main_sha], cwd=repo, check=True)
+    subprocess.run(["git", "notes", "--ref=signoff", "add", "-m", note_main, main_tree], cwd=repo, check=True)
+
+    # 2. Unattested branch with code changes
+    subprocess.run(["git", "checkout", "-b", "unattested-branch", main_sha], cwd=repo, check=True)
+    with open(os.path.join(repo, "evil.txt"), "w") as f:
+        f.write("unattested code")
+    subprocess.run(["git", "add", "evil.txt"], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-m", "Unattested work"], cwd=repo, check=True)
+
+    # 3. Branch merges main (so HEAD^2 is the attested main tip)
+    subprocess.run(["git", "merge", "--no-ff", "main", "-m", "Merge main into feature"], cwd=repo, check=True)
+
+    # 4. Run verification under pull_request event: MUST FAIL
+    res = run_verification_in_repo(repo, event_name="pull_request", ref="refs/pull/123/merge")
+    assert res.returncode == 1
+    assert "::error::Missing, incomplete, or mismatched" in res.stdout or "::error::Missing, incomplete, or mismatched" in res.stderr
+
+
+def test_push_crafted_merge_ancestor_blocked(tmp_path):
+    """Regression test (Hole B): Merge commit on push whose HEAD^2 is an already-merged ancestor of HEAD^1.
+    Must exit 1 because HEAD^2 does not bring new work."""
+    repo = str(tmp_path)
+    setup_git_repo(repo)
+
+    # 1. Attested base on main
+    subprocess.run(["git", "commit", "--allow-empty", "-m", "Initial main"], cwd=repo, check=True)
+    base_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+    base_tree = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+    note_base = f"Signoff-Spec-Version: 1.0\nSignoff-Status: VERIFIED_BY_HUMAN\nSignoff-Reviewed-Commit-SHA: {base_sha}\nSignoff-Reviewed-Tree-SHA: {base_tree}\nSignoff-Verified-By: dev@example.com"
+    subprocess.run(["git", "notes", "--ref=signoff", "add", "-m", note_base, base_sha], cwd=repo, check=True)
+    subprocess.run(["git", "notes", "--ref=signoff", "add", "-m", note_base, base_tree], cwd=repo, check=True)
+
+    # 2. Add an unattested commit on main
+    with open(os.path.join(repo, "unattested.txt"), "w") as f:
+        f.write("unattested direct work")
+    subprocess.run(["git", "add", "unattested.txt"], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-m", "Unattested work on main"], cwd=repo, check=True)
+    p1_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+
+    # 3. Create a crafted merge commit whose P1 is p1_sha and P2 is base_sha (already an ancestor)
+    crafted_tree = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+    crafted_commit = subprocess.run(
+        ["git", "commit-tree", crafted_tree, "-p", p1_sha, "-p", base_sha, "-m", "Crafted merge with ancestor P2"],
+        cwd=repo, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    subprocess.run(["git", "update-ref", "refs/heads/main", crafted_commit], cwd=repo, check=True)
+
+    # 4. Run verification on push to main: MUST FAIL
+    res = run_verification_in_repo(repo, event_name="push", ref="refs/heads/main")
+    assert res.returncode == 1
+    assert "::error::Missing, incomplete, or mismatched" in res.stdout or "::error::Missing, incomplete, or mismatched" in res.stderr
+
+
+def test_head_2_fallback_disabled_on_non_main_push(tmp_path):
+    """Verify that HEAD^2 fallback is disabled for push events on non-main branches."""
+    repo = str(tmp_path)
+    setup_git_repo(repo)
+
+    # 1. Base commit
+    subprocess.run(["git", "commit", "--allow-empty", "-m", "Base"], cwd=repo, check=True)
+    base_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+
+    # 2. Attested feature branch
+    subprocess.run(["git", "checkout", "-b", "feature-attested", base_sha], cwd=repo, check=True)
+    with open(os.path.join(repo, "feature.txt"), "w") as f:
+        f.write("feature content")
+    subprocess.run(["git", "add", "feature.txt"], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-m", "Attested"], cwd=repo, check=True)
+    f_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+    f_tree = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+    note = f"Signoff-Spec-Version: 1.0\nSignoff-Status: VERIFIED_BY_HUMAN\nSignoff-Reviewed-Commit-SHA: {f_sha}\nSignoff-Reviewed-Tree-SHA: {f_tree}\nSignoff-Verified-By: dev@example.com"
+    subprocess.run(["git", "notes", "--ref=signoff", "add", "-m", note, f_sha], cwd=repo, check=True)
+    subprocess.run(["git", "notes", "--ref=signoff", "add", "-m", note, f_tree], cwd=repo, check=True)
+
+    # 3. Non-main branch merges feature-attested with distinct work
+    subprocess.run(["git", "checkout", "-b", "staging", base_sha], cwd=repo, check=True)
+    with open(os.path.join(repo, "staging.txt"), "w") as f:
+        f.write("staging content")
+    subprocess.run(["git", "add", "staging.txt"], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-m", "Staging work"], cwd=repo, check=True)
+    subprocess.run(["git", "merge", "--no-ff", "feature-attested", "-m", "Merge into staging"], cwd=repo, check=True)
+
+    # 4. Push to staging: MUST FAIL because fallback is restricted to refs/heads/main
+    res = run_verification_in_repo(repo, event_name="push", ref="refs/heads/staging")
+    assert res.returncode == 1
 
 
 def test_unattested_merge_commit_fails(tmp_path):

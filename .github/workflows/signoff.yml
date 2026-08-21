@@ -33,6 +33,10 @@ jobs:
           git notes --ref=signoff merge -s cat_sort_uniq refs/notes/signoff-remote 2>/dev/null || true
 
       - name: Verify Git Signoff Attestation
+        env:
+          SIGNOFF_EVENT_NAME: ${{ github.event_name }}
+          SIGNOFF_REF: ${{ github.ref }}
+          SIGNOFF_EVENT_BEFORE: ${{ github.event.before }}
         run: |
           # Trust & Authenticity Model:
           # Unsigned trailers and notes verify only that a syntactically valid, self-attested GSA record is present.
@@ -45,7 +49,9 @@ jobs:
 
           HEAD_SHA=$(git rev-parse HEAD)
           HEAD_TREE=$(git rev-parse HEAD^{tree})
-          echo "Verifying signoff attestation for PR HEAD SHA (${HEAD_SHA}) / TREE (${HEAD_TREE})..."
+          EVENT_NAME="${SIGNOFF_EVENT_NAME:-${GITHUB_EVENT_NAME:-pull_request}}"
+          REF_NAME="${SIGNOFF_REF:-${GITHUB_REF:-refs/heads/main}}"
+          echo "Verifying signoff attestation for SHA (${HEAD_SHA}) / TREE (${HEAD_TREE}) [event=${EVENT_NAME} ref=${REF_NAME}]..."
 
           IS_VALID=0
 
@@ -158,12 +164,15 @@ jobs:
 
           if verify_target "$HEAD_SHA" "$HEAD_TREE" "HEAD"; then
             IS_VALID=1
-          elif git rev-parse --verify -q HEAD^2 >/dev/null; then
-            # Merge commit fallback for sequential merges on main: verify merged PR branch head (HEAD^2)
-            MERGE_PR_HEAD=$(git rev-parse HEAD^2)
-            MERGE_PR_TREE=$(git rev-parse HEAD^2^{tree})
-            if verify_target "$MERGE_PR_HEAD" "$MERGE_PR_TREE" "merged PR branch head (HEAD^2)"; then
-              IS_VALID=1
+          elif [ "$EVENT_NAME" = "push" ] && [ "$REF_NAME" = "refs/heads/main" ] && git rev-parse --verify -q HEAD^2 >/dev/null; then
+            # Merge commit fallback: strictly restricted to push events on refs/heads/main (e.g. sequential PR merges)
+            # Ensure HEAD^2 brings new work and is not an already-merged ancestor of HEAD^1
+            if ! git merge-base --is-ancestor HEAD^2 HEAD^1; then
+              MERGE_PR_HEAD=$(git rev-parse HEAD^2)
+              MERGE_PR_TREE=$(git rev-parse HEAD^2^{tree})
+              if verify_target "$MERGE_PR_HEAD" "$MERGE_PR_TREE" "merged PR branch head (HEAD^2)"; then
+                IS_VALID=1
+              fi
             fi
           fi
 
