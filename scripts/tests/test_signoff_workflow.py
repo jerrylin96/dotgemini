@@ -187,6 +187,76 @@ def test_valid_empty_attestation_commit_passes(tmp_path):
     assert "verified via empty attestation commit on head" in res.stdout.lower()
 
 
+def test_empty_commit_missing_verified_by_fails(tmp_path):
+    """Verify that an empty attestation commit missing Signoff-Verified-By fails verification."""
+    repo = str(tmp_path)
+    setup_git_repo(repo)
+
+    subprocess.run(["git", "commit", "--allow-empty", "-m", "Substantive change"], cwd=repo, check=True)
+    rev_commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+    rev_tree = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+
+    msg = (
+        f"[SIGNOFF {rev_commit[:7]}]: human comprehension and risk attestation\n\n"
+        f"Signoff-Spec-Version: 1.0\n"
+        f"Signoff-Status: VERIFIED_BY_HUMAN\n"
+        f"Signoff-Reviewed-Commit-SHA: {rev_commit}\n"
+        f"Signoff-Reviewed-Tree-SHA: {rev_tree}"
+    )
+    subprocess.run(["git", "commit", "--allow-empty", "-m", msg], cwd=repo, check=True)
+
+    res = run_verification_in_repo(repo)
+    assert res.returncode == 1
+    assert "::error::Missing, incomplete, or mismatched" in res.stdout or "::error::Missing, incomplete, or mismatched" in res.stderr
+
+
+def test_empty_commit_whitespace_verified_by_fails(tmp_path):
+    """Verify that an empty attestation commit with whitespace-only Signoff-Verified-By fails."""
+    repo = str(tmp_path)
+    setup_git_repo(repo)
+
+    subprocess.run(["git", "commit", "--allow-empty", "-m", "Substantive change"], cwd=repo, check=True)
+    rev_commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+    rev_tree = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+
+    msg = (
+        f"[SIGNOFF {rev_commit[:7]}]: human comprehension and risk attestation\n\n"
+        f"Signoff-Spec-Version: 1.0\n"
+        f"Signoff-Status: VERIFIED_BY_HUMAN\n"
+        f"Signoff-Reviewed-Commit-SHA: {rev_commit}\n"
+        f"Signoff-Reviewed-Tree-SHA: {rev_tree}\n"
+        f"Signoff-Verified-By:    "
+    )
+    subprocess.run(["git", "commit", "--allow-empty", "-m", msg], cwd=repo, check=True)
+
+    res = run_verification_in_repo(repo)
+    assert res.returncode == 1
+
+
+def test_empty_commit_duplicate_verified_by_fails(tmp_path):
+    """Verify that an empty attestation commit with duplicate Signoff-Verified-By trailers fails."""
+    repo = str(tmp_path)
+    setup_git_repo(repo)
+
+    subprocess.run(["git", "commit", "--allow-empty", "-m", "Substantive change"], cwd=repo, check=True)
+    rev_commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+    rev_tree = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+
+    msg = (
+        f"[SIGNOFF {rev_commit[:7]}]: human comprehension and risk attestation\n\n"
+        f"Signoff-Spec-Version: 1.0\n"
+        f"Signoff-Status: VERIFIED_BY_HUMAN\n"
+        f"Signoff-Reviewed-Commit-SHA: {rev_commit}\n"
+        f"Signoff-Reviewed-Tree-SHA: {rev_tree}\n"
+        f"Signoff-Verified-By: alice@example.com\n"
+        f"Signoff-Verified-By: bob@example.com"
+    )
+    subprocess.run(["git", "commit", "--allow-empty", "-m", msg], cwd=repo, check=True)
+
+    res = run_verification_in_repo(repo)
+    assert res.returncode == 1
+
+
 def test_code_changing_non_empty_head_commit_fails(tmp_path):
     """Verify that a code-changing/non-empty HEAD commit with trailers fails empty attestation commit check."""
     repo = str(tmp_path)

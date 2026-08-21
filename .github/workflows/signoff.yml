@@ -54,7 +54,9 @@ jobs:
           #      c) HEAD^2 is not an ancestor of HEAD^1 (brings new branch work).
           #      d) HEAD^{tree} matches canonical 3-way merge result: git merge-tree --write-tree HEAD^1 HEAD^2.
           #      e) HEAD^2 is validly attested (Checks 1-3).
-          #    Known limitation: Batch pushes with multiple merges fail closed; merge PRs sequentially.
+          #    Known limitations:
+          #    - Batch pushes with multiple merges fail closed; merge PRs sequentially.
+          #    - Merges with manual conflict resolutions (resolved tree != git merge-tree --write-tree HEAD^1 HEAD^2) fail closed on push; remediation is to push an attestation note on the merged tree.
 
           set -eo pipefail
 
@@ -73,21 +75,23 @@ jobs:
             local expected_commit="$3"
 
             # Require exactly one occurrence of each mandatory GSA field (reject duplicates & conflicts)
-            local c_spec c_status c_tree c_commit
+            local c_spec c_status c_tree c_commit c_verifier
             c_spec=$(echo "$payload" | (grep -c -E "^Signoff-Spec-Version:" || true))
             c_status=$(echo "$payload" | (grep -c -E "^Signoff-Status:" || true))
             c_tree=$(echo "$payload" | (grep -c -E "^Signoff-Reviewed-Tree-SHA:" || true))
             c_commit=$(echo "$payload" | (grep -c -E "^Signoff-Reviewed-Commit-SHA:" || true))
+            c_verifier=$(echo "$payload" | (grep -c -E "^Signoff-Verified-By:" || true))
 
-            if [ "$c_spec" -ne 1 ] || [ "$c_status" -ne 1 ] || [ "$c_tree" -ne 1 ] || [ "$c_commit" -ne 1 ]; then
+            if [ "$c_spec" -ne 1 ] || [ "$c_status" -ne 1 ] || [ "$c_tree" -ne 1 ] || [ "$c_commit" -ne 1 ] || [ "$c_verifier" -ne 1 ]; then
               return 1
             fi
 
-            local spec_ver status rev_tree rev_commit
+            local spec_ver status rev_tree rev_commit verifier
             spec_ver=$(echo "$payload" | (grep -E "^Signoff-Spec-Version:" || true) | cut -d':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
             status=$(echo "$payload" | (grep -E "^Signoff-Status:" || true) | cut -d':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
             rev_tree=$(echo "$payload" | (grep -E "^Signoff-Reviewed-Tree-SHA:" || true) | cut -d':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
             rev_commit=$(echo "$payload" | (grep -E "^Signoff-Reviewed-Commit-SHA:" || true) | cut -d':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+            verifier=$(echo "$payload" | (grep -E "^Signoff-Verified-By:" || true) | cut -d':' -f2- | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
 
             # 1. Spec version must be 1.0
             if [ "$spec_ver" != "1.0" ]; then
@@ -117,6 +121,11 @@ jobs:
               if [ "$rev_commit" != "$expected_commit" ]; then
                 return 1
               fi
+            fi
+
+            # 6. Verifier must be non-empty and not whitespace-only (GSA §2.1)
+            if [ -z "$verifier" ]; then
+              return 1
             fi
 
             return 0

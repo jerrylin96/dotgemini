@@ -338,6 +338,7 @@ The GitHub Actions workflow (`.github/workflows/signoff.yml`) validates GSA reco
      e) `HEAD^2` is validly attested.
    - **Known Limitations**:
      - *Batch Pushes*: Pushing multiple merge commits in a single push fails the gate; merge PRs sequentially.
+     - *Manual Conflict Merges*: Merges whose conflicts are resolved manually (resolved tree != `git merge-tree --write-tree HEAD^1 HEAD^2`) fail the push gate fail-closed; the remediation is to attest the merged state and push notes to `refs/notes/signoff`.
      - *Post-Hoc Nature*: Push runs cannot prevent a direct push; they serve as an audit tripwire and badge driver.
 
 ---
