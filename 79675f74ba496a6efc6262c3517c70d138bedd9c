@@ -1,0 +1,16 @@
+[SIGNOFF 79675f7]: human comprehension and risk attestation
+
+Signoff-Spec-Version: 1.0
+Signoff-Status: VERIFIED_BY_HUMAN
+Signoff-Timestamp: 2026-08-05T01:11:26Z
+Signoff-Base-SHA: 800cd6368f422f814c3c9e5db86bc180b431b226
+Signoff-Reviewed-Commit-SHA: 79675f74ba496a6efc6262c3517c70d138bedd9c
+Signoff-Reviewed-Tree-SHA: 1e16163a1fc7a999ae939541db9725f82bec693b
+Signoff-Harness-ID: antigravity-cli
+Signoff-Conversation-ID: a310b6ac-a7a2-4535-b404-aded70ce5a44
+Signoff-Transcript-Digest: sha256:592bd2d5b7c254e5628da39104a9131ffd7163d504a814ec1a6862c705027d36
+Signoff-Transcript-Bytes: 84401
+Signoff-Tradeoff: Manual session ID export required on ChatGPT Codex CLI; web session container ephemerality
+Signoff-Risk: Web transcript file destroyed when container reclaimed (digest proves commit-time snapshot)
+Signoff-Verified-By: jerrylin247365@gmail.com
+Signoff-Agent: Antigravity (Gemini 3.6 Flash (High))

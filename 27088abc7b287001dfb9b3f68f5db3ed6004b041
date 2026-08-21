@@ -1,0 +1,19 @@
+[SIGNOFF 70e9901]: human comprehension and risk attestation
+
+Signoff-Spec-Version: 1.0
+Signoff-Status: VERIFIED_BY_HUMAN
+Signoff-Timestamp: 2026-08-08T19:19:24Z
+Signoff-Base-SHA: 0cfe6b45ac555815454ff313485b637eb8f40dbb
+Signoff-Reviewed-Commit-SHA: 70e99013b03be6495f55487b0e02a8fa5d3919bb
+Signoff-Reviewed-Tree-SHA: 27088abc7b287001dfb9b3f68f5db3ed6004b041
+Signoff-Harness-ID: antigravity-cli
+Signoff-Conversation-ID: 67645d09-12d8-4aac-94f9-2c1aa09b537e
+Signoff-Transcript-Digest: sha256:480fd3c59a1431bb8868fa669e46674f9df6d9ce775dfae3e74029e0aac0b6f5
+Signoff-Transcript-Bytes: 58740
+Signoff-Tradeoff: SIGNOFF_PROFILE_FILE unreadable path triggers explicit hard abort instead of silent fallback to repo/embedded profile
+Signoff-Tradeoff: validate_gsa_note.py short-circuits on multi-block note payloads, returning valid if at least one block matches the expected commit/tree
+Signoff-Tradeoff: Profile resolution logic exists in both SKILL.md (bash/sed) and signoff_mcp/profile.py (python/hashlib); exact 12-hex digest parity is test-pinned
+Signoff-Risk: validate_gsa_note.py multi-block matching ignores malformed appended blocks as long as one matching block is valid
+Signoff-Risk: Science-signal regexes are informative heuristics that escalate interview intensity; agent judgment remains authoritative
+Signoff-Verified-By: jerrylin247365@gmail.com
+Signoff-Agent: harness=antigravity-cli/N/A model=Gemini-3.6-Flash reasoning=N/A interview=standard/software-general

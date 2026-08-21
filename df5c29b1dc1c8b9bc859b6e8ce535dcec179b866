@@ -1,0 +1,17 @@
+[SIGNOFF ac6a887]: human comprehension and risk attestation
+
+Signoff-Spec-Version: 1.0
+Signoff-Status: VERIFIED_BY_HUMAN
+Signoff-Timestamp: 2026-08-05T00:32:42Z
+Signoff-Base-SHA: 6cc78c9f17156a6f3bef47dd89f8fb3296c29c50
+Signoff-Reviewed-Commit-SHA: ac6a88782b7d3918aef1fe5ca8081803430fb286
+Signoff-Reviewed-Tree-SHA: df5c29b1dc1c8b9bc859b6e8ce535dcec179b866
+Signoff-Harness-ID: antigravity-cli
+Signoff-Conversation-ID: 4151e98a-88ca-4761-886e-72e2c3ba64ba
+Signoff-Transcript-Digest: sha256:7ba6408b8b672082d15f6c29c3e762b9a34f7d0db26a262e0622a7e2581af72d
+Signoff-Transcript-Bytes: 88589
+Signoff-Tradeoff: shift from prompt-based skill trailer formatting to deterministic server-side signoff-mcp engine execution
+Signoff-Tradeoff: require explicit ack_no_transcript=True caller acknowledgment for missing/unreadable transcripts to issue downgraded VERIFIED_BY_HUMAN_NO_TRANSCRIPT_DIGEST status
+Signoff-Risk: none
+Signoff-Verified-By: jerrylin247365@gmail.com
+Signoff-Agent: Antigravity (Gemini 3.6 Flash)

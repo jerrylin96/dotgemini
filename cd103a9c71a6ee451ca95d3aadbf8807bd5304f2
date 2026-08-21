@@ -1,0 +1,19 @@
+[SIGNOFF cd103a94]: human comprehension and risk attestation
+
+Signoff-Spec-Version: 1.0
+Signoff-Status: VERIFIED_BY_HUMAN
+Signoff-Timestamp: 2026-08-08T19:56:17Z
+Signoff-Base-SHA: 0cfe6b45ac555815454ff313485b637eb8f40dbb
+Signoff-Reviewed-Commit-SHA: cd103a9436ea08bdfcbf2f0bf2fdbe5ae6cf47f3
+Signoff-Reviewed-Tree-SHA: 924a245f088377aec4d4576982b2129f0b6dedbc
+Signoff-Harness-ID: antigravity-cli
+Signoff-Conversation-ID: 67645d09-12d8-4aac-94f9-2c1aa09b537e
+Signoff-Transcript-Digest: sha256:f0bec6152cc016ddef66c504c22d552529db5ff1d74f637ec979c66a89282f3c
+Signoff-Transcript-Bytes: 242606
+Signoff-Tradeoff: Automatic feature branch push introduces network and remote-state dependencies during /signoff
+Signoff-Tradeoff: Branch push failures capture branch_push_warning non-blockingly to preserve refs/notes/signoff persistence
+Signoff-Tradeoff: Feature branch push is skipped with warning when running on detached HEAD
+Signoff-Risk: Automated branch push will fail on non-fast-forward remote drift, leaving attestation commit local until manually pushed
+Signoff-Risk: Network timeouts on branch push log a warning while proceeding to notes push
+Signoff-Verified-By: jerrylin247365@gmail.com
+Signoff-Agent: harness=antigravity-cli/N/A model=Gemini-3.6-Flash reasoning=N/A interview=standard/software-general
