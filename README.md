@@ -1,6 +1,6 @@
 # Antigravity Global Agent Config (`dotgemini`)
 
-[![attested by humans](https://github.com/jerrylin96/dotgemini/actions/workflows/signoff.yml/badge.svg)](https://github.com/jerrylin96/dotgemini/actions/workflows/signoff.yml)
+[![attested by humans](https://github.com/jerrylin96/dotgemini/actions/workflows/signoff.yml/badge.svg?branch=main&event=push)](https://github.com/jerrylin96/dotgemini/actions/workflows/signoff.yml)
 
 Personal global configuration and custom skills for Google Antigravity CLI.
 

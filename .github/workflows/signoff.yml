@@ -114,38 +114,56 @@ jobs:
             printf '%s\n' "$payload" | python3 scripts/validate_gsa_note.py - "$expected_tree" "$expected_commit"
           }
 
-          # --- Check 1: Empty GSA Attestation Commit on HEAD ---
-          HEAD_PAYLOAD=$(git log -1 --format="%(trailers:only=true)" HEAD)
-          if [ -n "$HEAD_PAYLOAD" ] && git rev-parse --verify -q HEAD~1 >/dev/null; then
-            PARENT_TREE=$(git rev-parse HEAD~1^{tree} 2>/dev/null || true)
-            PARENT_SHA=$(git rev-parse HEAD~1 2>/dev/null || true)
-            if [ "$PARENT_TREE" = "$HEAD_TREE" ]; then
-              if validate_payload "$HEAD_PAYLOAD" "$HEAD_TREE" "$PARENT_SHA"; then
-                echo "✅ Git Signoff Attestation verified via empty attestation commit on HEAD."
-                IS_VALID=1
+          verify_target() {
+            local target_sha="$1"
+            local target_tree="$2"
+            local label="$3"
+
+            # --- Check 1: Empty GSA Attestation Commit ---
+            local payload parent_tree parent_sha
+            payload=$(git log -1 --format="%(trailers:only=true)" "$target_sha")
+            if [ -n "$payload" ] && git rev-parse --verify -q "${target_sha}~1" >/dev/null; then
+              parent_tree=$(git rev-parse "${target_sha}~1^{tree}" 2>/dev/null || true)
+              parent_sha=$(git rev-parse "${target_sha}~1" 2>/dev/null || true)
+              if [ "$parent_tree" = "$target_tree" ]; then
+                if validate_payload "$payload" "$target_tree" "$parent_sha"; then
+                  echo "✅ Git Signoff Attestation verified via empty attestation commit on ${label}."
+                  return 0
+                fi
               fi
             fi
-          fi
 
-          # --- Check 2: Git note on HEAD commit SHA ---
-          if [ "$IS_VALID" -eq 0 ]; then
-            NOTE_COMMIT=$(git notes --ref=signoff show HEAD 2>/dev/null || true)
-            if [ -n "$NOTE_COMMIT" ]; then
-              if validate_note_payload "$NOTE_COMMIT" "$HEAD_TREE" "$HEAD_SHA"; then
-                echo "✅ Git Signoff Attestation verified via commit note."
-                IS_VALID=1
+            # --- Check 2: Git note on commit SHA ---
+            local note_commit
+            note_commit=$(git notes --ref=signoff show "$target_sha" 2>/dev/null || true)
+            if [ -n "$note_commit" ]; then
+              if validate_note_payload "$note_commit" "$target_tree" "$target_sha"; then
+                echo "✅ Git Signoff Attestation verified via commit note on ${label}."
+                return 0
               fi
             fi
-          fi
 
-          # --- Check 3: Git note on HEAD tree SHA (GSA §5.1 Tree Fallback for Post-Squash/Rebase) ---
-          if [ "$IS_VALID" -eq 0 ]; then
-            NOTE_TREE_PAYLOAD=$(git notes --ref=signoff show "$HEAD_TREE" 2>/dev/null || true)
-            if [ -n "$NOTE_TREE_PAYLOAD" ]; then
-              if validate_note_payload "$NOTE_TREE_PAYLOAD" "$HEAD_TREE" ""; then
-                echo "✅ Git Signoff Attestation verified via tree note fallback (GSA §5.1)."
-                IS_VALID=1
+            # --- Check 3: Git note on tree SHA (GSA §5.1 Tree Fallback) ---
+            local note_tree
+            note_tree=$(git notes --ref=signoff show "$target_tree" 2>/dev/null || true)
+            if [ -n "$note_tree" ]; then
+              if validate_note_payload "$note_tree" "$target_tree" ""; then
+                echo "✅ Git Signoff Attestation verified via tree note fallback on ${label} (GSA §5.1)."
+                return 0
               fi
+            fi
+
+            return 1
+          }
+
+          if verify_target "$HEAD_SHA" "$HEAD_TREE" "HEAD"; then
+            IS_VALID=1
+          elif git rev-parse --verify -q HEAD^2 >/dev/null; then
+            # Merge commit fallback for sequential merges on main: verify merged PR branch head (HEAD^2)
+            MERGE_PR_HEAD=$(git rev-parse HEAD^2)
+            MERGE_PR_TREE=$(git rev-parse HEAD^2^{tree})
+            if verify_target "$MERGE_PR_HEAD" "$MERGE_PR_TREE" "merged PR branch head (HEAD^2)"; then
+              IS_VALID=1
             fi
           fi
 
@@ -153,6 +171,6 @@ jobs:
             echo "✅ Git Signoff Attestation gate PASSED for SHA ${HEAD_SHA}."
             exit 0
           else
-            echo "::error::Missing, incomplete, or mismatched Git Signoff Attestation on PR head (${HEAD_SHA})! Run /signoff on latest head and push refs/notes/signoff before merging."
+            echo "::error::Missing, incomplete, or mismatched Git Signoff Attestation on head (${HEAD_SHA})! Run /signoff on latest head and push refs/notes/signoff before merging."
             exit 1
           fi
