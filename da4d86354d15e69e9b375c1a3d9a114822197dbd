@@ -1,0 +1,11 @@
+[SIGNOFF b3a7145]: human comprehension and risk attestation
+
+Signoff-Spec-Version: 1.0
+Signoff-Status: VERIFIED_BY_HUMAN
+Signoff-Reviewed-Commit-SHA: b3a7145641edd339d641d9f92fc7e5e29cde3025
+Signoff-Reviewed-Tree-SHA: da4d86354d15e69e9b375c1a3d9a114822197dbd
+Signoff-Verified-By: Jerry Lin <jerrylin247365@gmail.com>
+Signoff-Harness-ID: antigravity-cli
+Signoff-Conversation-ID: 73c9c502-60c3-4bdb-bf48-cb9799803615
+Signoff-Transcript-Digest: 206136dd3c6d9bbf2ebd7069ff6dd679cf70a22b9011c3ba4edc9e818116f25c
+Signoff-Transcript-Byte-Count: 832385
