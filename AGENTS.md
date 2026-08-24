@@ -116,6 +116,7 @@ The global settings contain dedicated skills under `~/.gemini/skills/` which can
 * [math-proof-audit/SKILL.md](skills/math-proof-audit/SKILL.md) — Verify math/statistical code implementations against formal LaTeX specs, audit for bugs via red teaming subagent, Socratic signoff, and Obsidian Vault export; maps to `/showproof`
 * [prose-editor/SKILL.md](skills/prose-editor/SKILL.md) — Structured, high-clarity editing and review for prose, documentation, papers, and markdown essays using atomic suggestion cards; maps to `/edit-prose` (or `/prose`)
 * [signoff/SKILL.md](skills/signoff/SKILL.md) — Socratic reverse-interview verifying human comprehension and risk ownership before merge; maps to `/signoff`
+* [codebase-audit/SKILL.md](skills/codebase-audit/SKILL.md) — Multi-agent adversarial codebase review across functional clusters with cross-boundary contract validation and blast-radius scorecards; maps to `/codebase-audit`
 
 ---
 
