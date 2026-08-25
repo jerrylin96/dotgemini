@@ -1,0 +1,17 @@
+[SIGNOFF 811afb9]: human comprehension and risk attestation
+
+Signoff-Spec-Version: 1.0
+Signoff-Status: VERIFIED_BY_HUMAN
+Signoff-Timestamp: 2026-08-25T01:19:33Z
+Signoff-Base-SHA: 026f1c169675518c824fdcbab72c344c01cd84aa
+Signoff-Reviewed-Commit-SHA: 811afb902c7fbdbdfcc913dc58efa649a8972706
+Signoff-Reviewed-Tree-SHA: e54594398458b205d10a65dccc117c4acb724f8a
+Signoff-Harness-ID: antigravity-cli
+Signoff-Conversation-ID: e55ef1a1-9308-4c59-a62a-b96203639f6d
+Signoff-Transcript-Digest: sha256:c5fb435f606a05f0a01c0edce97d0239f79c264e99c20e8b39d5bc687ada8ca5
+Signoff-Transcript-Bytes: 300007
+Signoff-Tradeoff: Cluster budget capped at 5 to prevent token explosion; massive repos consolidate overflow into shared_utils
+Signoff-Tradeoff: Shallow clone environments fall back to two-dot tree diff when three-dot merge base is unavailable
+Signoff-Risk: Cross-boundary interface drift detection depends on subagent export flags and orchestrator synthesis
+Signoff-Verified-By: jerrylin247365@gmail.com
+Signoff-Agent: harness=antigravity-cli/N/A model=gemini-3.7-flash-high reasoning=N/A interview=standard/software-general
