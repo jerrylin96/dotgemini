@@ -117,6 +117,7 @@ The global settings contain dedicated skills under `~/.gemini/skills/` which can
 * [prose-editor/SKILL.md](skills/prose-editor/SKILL.md) — Structured, high-clarity editing and review for prose, documentation, papers, and markdown essays using atomic suggestion cards; maps to `/edit-prose` (or `/prose`)
 * [signoff/SKILL.md](skills/signoff/SKILL.md) — Socratic reverse-interview verifying human comprehension and risk ownership before merge; maps to `/signoff`
 * [codebase-audit/SKILL.md](skills/codebase-audit/SKILL.md) — Multi-agent adversarial codebase review across functional clusters with cross-boundary contract validation and blast-radius scorecards; maps to `/codebase-audit`
+* [codebase-map/SKILL.md](skills/codebase-map/SKILL.md) — Multi-agent architectural discovery, polyglot entrypoint mapping, and intent-guided onboarding across functional clusters; maps to `/codebase-map`
 
 ---
 
