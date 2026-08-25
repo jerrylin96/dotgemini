@@ -51,6 +51,11 @@ python3 ~/.gemini/skills/codebase-audit/scripts/cluster_files.py --diff [optiona
 python3 ~/.gemini/skills/codebase-audit/scripts/cluster_files.py --repo <path_to_repo>
 ```
 
+#### Engine Error & Warning Contract
+- **Non-Zero Exit (`exit 1`)**: If git diff fails or the base ref cannot be resolved, the script prints an error JSON payload to `stderr` (`{"error": "<msg>", "is_small_diff": false, "recommended_mode": null, "clusters": []}`). The orchestrating agent MUST surface this error to the user and abort the audit rather than treating empty output as a small diff.
+- **Shallow Clone Fallback (`warning`)**: If the standard three-dot merge-base diff fails due to shallow history (e.g. CI / `fetch-depth: 1`), the engine automatically falls back to a two-dot tree diff and attaches `"warning": "three-dot diff unavailable (shallow history?); used two-dot tree diff"` to the JSON payload.
+- **Merge-Base Clean Empty**: If a three-dot diff succeeds with zero changes, it returns an empty cluster list without flipping to a two-dot diff.
+
 ### 2. Fast-Path Fallback for Small Diffs
 If `cluster_files.py` returns `"is_small_diff": true` (diff < 300 lines and $\le 3$ files), do NOT spawn multiple subagents. Immediately advise the user and delegate to single-agent [`adversarial-review`](../adversarial-review/SKILL.md).
 

@@ -130,7 +130,6 @@ def test_max_clusters_hard_bound(tmp_path):
     repo = tmp_path / "many_domains_repo"
     repo.mkdir()
 
-    # Create 6 domains with sufficient lines
     for i in range(6):
         d = repo / f"domain_{i}"
         d.mkdir()
@@ -138,6 +137,50 @@ def test_max_clusters_hard_bound(tmp_path):
 
     clusters = cluster_files.cluster_repo(str(repo), max_clusters=4, max_lines=3000)
     assert len(clusters) <= 4, f"Expected <= 4 clusters, got {len(clusters)}"
+
+
+def test_max_clusters_with_monolithic_and_overflow(tmp_path):
+    """Test max_clusters budget when monolithic files and overflow coexist."""
+    repo = tmp_path / "mono_overflow_repo"
+    repo.mkdir()
+
+    # 2 monolithic files
+    (repo / "src" / "aa").mkdir(parents=True)
+    (repo / "src" / "aa" / "a.py").write_text("# Mono A\n" * 3500)
+    (repo / "src" / "huge.py").write_text("# Mono Huge\n" * 3500)
+
+    # 2 normal domains
+    (repo / "src" / "bb").mkdir(parents=True)
+    (repo / "src" / "bb" / "b.py").write_text("# Domain B\n" * 100)
+    (repo / "src" / "cc").mkdir(parents=True)
+    (repo / "src" / "cc" / "c.py").write_text("# Domain C\n" * 100)
+
+    # With max_clusters=2, the 2 monolithic files take both slots, remaining merged into 1 shared_utils
+    clusters = cluster_files.cluster_repo(str(repo), max_clusters=2, max_lines=3000)
+    # Total clusters should be 2 monolithic + at most 1 shared_utils = 3 (zero separate domain clusters)
+    domain_clusters = [c for c in clusters if not c.get("is_monolithic")]
+    assert len(domain_clusters) <= 1
+    assert any(c["id"] == "cluster_shared_utils" for c in domain_clusters)
+
+
+def test_small_domains_merge_into_shared_utils(tmp_path):
+    """Test merging of tiny folders (<20 lines) into shared_utils."""
+    repo = tmp_path / "small_merge_repo"
+    repo.mkdir()
+
+    (repo / "src" / "util1").mkdir(parents=True)
+    (repo / "src" / "util1" / "u1.py").write_text("# u1\n" * 5)
+
+    (repo / "src" / "util2").mkdir(parents=True)
+    (repo / "src" / "util2" / "u2.py").write_text("# u2\n" * 5)
+
+    (repo / "src" / "core").mkdir(parents=True)
+    (repo / "src" / "core" / "core.py").write_text("# core\n" * 500)
+
+    clusters = cluster_files.cluster_repo(str(repo), max_clusters=3, max_lines=1000)
+    assert len(clusters) == 2
+    assert any(c["id"] == "cluster_core" for c in clusters)
+    assert any(c["id"] == "cluster_shared_utils" for c in clusters)
 
 
 def test_monolithic_file_isolation(tmp_path):
@@ -171,9 +214,26 @@ def test_associated_test_matching(sample_repo):
     assert not any("test_monitor.py" in t for t in io_tests)
 
 
+def test_associated_tests_no_absolute_path_false_positives(tmp_path):
+    """Test that absolute path components (e.g. /home/user/) do not cause false-positive test matches."""
+    # Create root directory with component 'user'
+    root_dir = tmp_path / "repo_for_user"
+    root_dir.mkdir()
+
+    (root_dir / "src" / "user").mkdir(parents=True)
+    (root_dir / "src" / "user" / "profile.py").write_text("# profile\n" * 20)
+
+    (root_dir / "tests").mkdir()
+    (root_dir / "tests" / "test_unrelated.py").write_text("# Unrelated\n" * 10)
+
+    test_matches = cluster_files.discover_associated_tests(str(root_dir), ["src/user/profile.py"])
+    # test_unrelated.py should NOT match
+    assert not any("test_unrelated.py" in t for t in test_matches)
+
+
 def test_git_diff_real_repo_clustering(real_git_repo):
     """Test git diff mode against a real git repository."""
-    clusters, total_lines, total_files = cluster_files.cluster_diff(
+    clusters, total_lines, total_files, warning = cluster_files.cluster_diff(
         base_ref="main",
         head_ref="HEAD",
         repo_path=str(real_git_repo),
@@ -182,19 +242,41 @@ def test_git_diff_real_repo_clustering(real_git_repo):
     )
     assert total_files >= 2
     assert total_lines > 0
-    # Check that test files were excluded from source clusters
+    assert warning is None
+
     for c in clusters:
         for f in c["files"]:
             assert not cluster_files.is_test_path(f), f"Test file clustered as source: {f}"
 
-    # Verify rename parsed cleanly to on-disk path
     all_files = [f for c in clusters for f in c["files"]]
     assert "src/core/core_base.py" in all_files
     assert not any("=>" in f for f in all_files)
 
 
+def test_git_diff_shallow_clone_fallback(monkeypatch, real_git_repo):
+    """Test that a failed three-dot diff (shallow clone) falls back to two-dot diff with a warning."""
+    original_run_git = cluster_files.run_git
+
+    def mock_run_git(args, cwd="."):
+        # Simulate three-dot failure with 'no merge base'
+        if any("..." in arg for arg in args):
+            return 128, "", "fatal: refusing to merge unrelated histories / no merge base"
+        return original_run_git(args, cwd=cwd)
+
+    monkeypatch.setattr(cluster_files, "run_git", mock_run_git)
+
+    clusters, total_lines, total_files, warning = cluster_files.cluster_diff(
+        base_ref="main",
+        head_ref="HEAD",
+        repo_path=str(real_git_repo),
+    )
+    assert total_files >= 2
+    assert warning is not None
+    assert "shallow history" in warning
+
+
 def test_git_diff_failure_raises_error():
-    """Test that cluster_diff raises RuntimeError on invalid git base ref."""
+    """Test that cluster_diff raises RuntimeError when both three-dot and two-dot diffs fail."""
     with pytest.raises(RuntimeError) as exc_info:
         cluster_files.cluster_diff(base_ref="nonexistent_base_ref_12345", repo_path=".")
     assert "Git diff failed" in str(exc_info.value)
@@ -202,7 +284,7 @@ def test_git_diff_failure_raises_error():
 
 def test_git_diff_empty_merge_base_stays_empty(real_git_repo):
     """Test that a diff against HEAD returns empty without failing or inverting."""
-    clusters, total_lines, total_files = cluster_files.cluster_diff(
+    clusters, total_lines, total_files, warning = cluster_files.cluster_diff(
         base_ref="HEAD",
         head_ref="HEAD",
         repo_path=str(real_git_repo),
@@ -210,6 +292,7 @@ def test_git_diff_empty_merge_base_stays_empty(real_git_repo):
     assert clusters == []
     assert total_lines == 0
     assert total_files == 0
+    assert warning is None
 
 
 def test_get_domain_key():
@@ -222,10 +305,12 @@ def test_get_domain_key():
 
 
 def test_parse_numstat_path():
-    """Test parsing of git numstat rename notations."""
+    """Test parsing of git numstat rename notations, quoted paths, and multiple arrows."""
     assert cluster_files.parse_numstat_path("src/core/{base.py => core_base.py}") == "src/core/core_base.py"
     assert cluster_files.parse_numstat_path("{old => new}/file.py") == "new/file.py"
     assert cluster_files.parse_numstat_path("old.py => new.py") == "new.py"
+    assert cluster_files.parse_numstat_path('"src/{old => new}/file.py"') == "src/new/file.py"
+    assert cluster_files.parse_numstat_path('"quoted filename with spaces.py"') == "quoted filename with spaces.py"
     assert cluster_files.parse_numstat_path("regular/file.py") == "regular/file.py"
 
 
@@ -276,4 +361,5 @@ def test_cli_diff_failure_exits_nonzero(tmp_path):
     assert res.returncode == 1
     err_data = json.loads(res.stderr)
     assert "error" in err_data
+    assert "nonexistent_ref_9999" in err_data["error"]
     assert err_data["is_small_diff"] is False

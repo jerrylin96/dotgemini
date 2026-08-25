@@ -53,11 +53,8 @@ def run_git(args: List[str], cwd: str = ".") -> Tuple[int, str, str]:
         return 1, "", str(e)
 
 
-def resolve_git_base_ref(base_ref: Optional[str] = None, cwd: str = ".") -> Optional[str]:
-    """Resolve a valid git base ref using a fallback cascade.
-    
-    Returns None if no candidate resolves cleanly.
-    """
+def get_base_ref_candidates(base_ref: Optional[str] = None) -> List[str]:
+    """Get list of base ref candidates in priority order."""
     candidates: List[str] = []
     if base_ref:
         candidates.extend([f"origin/{base_ref}", base_ref])
@@ -69,7 +66,15 @@ def resolve_git_base_ref(base_ref: Optional[str] = None, cwd: str = ".") -> Opti
         "master",
         "HEAD~1",
     ])
+    return candidates
 
+
+def resolve_git_base_ref(base_ref: Optional[str] = None, cwd: str = ".") -> Optional[str]:
+    """Resolve a valid git base ref using a fallback cascade.
+    
+    Returns None if no candidate resolves cleanly.
+    """
+    candidates = get_base_ref_candidates(base_ref)
     for cand in candidates:
         code, _, _ = run_git(["rev-parse", "--verify", cand], cwd=cwd)
         if code == 0:
@@ -81,11 +86,9 @@ def resolve_git_base_ref(base_ref: Optional[str] = None, cwd: str = ".") -> Opti
 def is_test_path(rel_path: str) -> bool:
     """Check if a path corresponds to a test file or test directory."""
     p = Path(rel_path)
-    # Check if any path component is tests / test
     for part in p.parts:
         if part.lower() in ("tests", "test", "testing"):
             return True
-    # Check filename naming convention
     name = p.name.lower()
     if name.startswith("test_") or name.endswith("_test.py") or name.endswith(".test.js") or name.endswith(".test.ts"):
         return True
@@ -105,19 +108,20 @@ def is_reviewable_source(rel_path: str) -> bool:
 
 def parse_numstat_path(raw_path: str) -> str:
     """Parse git numstat paths handling rename notations like 'a/{b => c}/d' or 'old => new'."""
+    clean_path = raw_path.strip().strip('"')
+
     # Pattern 1: prefix/{old => new}/suffix
-    m = re.search(r"^(.*?)\{(?:.*?) => (.*?)\}(.*?)$", raw_path)
+    m = re.search(r"^(.*?)\{(?:.*?) => (.*?)\}(.*?)$", clean_path)
     if m:
         prefix, new_mid, suffix = m.group(1), m.group(2), m.group(3)
-        clean = f"{prefix}{new_mid}{suffix}".replace("//", "/")
-        return clean
+        return f"{prefix}{new_mid}{suffix}".replace("//", "/").strip('"')
 
-    # Pattern 2: old => new
-    if " => " in raw_path:
-        parts = raw_path.split(" => ")
-        return parts[1].strip()
+    # Pattern 2: old => new (join all parts after first arrow to preserve any subsequent arrows)
+    if " => " in clean_path:
+        parts = clean_path.split(" => ", 1)
+        return parts[1].strip().strip('"')
 
-    return raw_path
+    return clean_path
 
 
 def count_file_lines(file_path: Path) -> int:
@@ -146,7 +150,6 @@ def discover_associated_tests(repo_path: str, source_files: List[str]) -> List[s
                 continue
 
             f_stem = p.stem.lower()
-            # Token/boundary matching: test_<stem>, <stem>_test, or exact stem match
             matched = False
             for stem in source_stems:
                 if f_stem in (f"test_{stem}", f"{stem}_test", stem):
@@ -154,9 +157,9 @@ def discover_associated_tests(repo_path: str, source_files: List[str]) -> List[s
                     matched = True
                     break
             if not matched:
-                # Parent directory match: e.g. test_dynamics.py for src/dynamics/
+                rel_parts = [part.lower() for part in Path(rel_test).parts]
                 for pdir in source_parent_dirs:
-                    if f_stem in (f"test_{pdir}", f"{pdir}_test", pdir) or pdir in [part.lower() for part in p.parts]:
+                    if f_stem in (f"test_{pdir}", f"{pdir}_test", pdir) or pdir in rel_parts:
                         discovered.add(rel_test)
                         break
 
@@ -186,12 +189,12 @@ def _consolidate_clusters(
     repo_root: Path,
     max_clusters: int = 5,
 ) -> List[Dict[str, Any]]:
-    """Merge domain buckets into at most max_clusters clusters while preserving unique IDs."""
+    """Consolidate domain buckets into clusters, respecting max_clusters budget."""
     clusters: List[Dict[str, Any]] = list(monolithic_clusters)
     used_ids: Set[str] = {c["id"] for c in clusters}
 
-    # Available slots for domain clusters
-    available_slots = max(1, max_clusters - len(monolithic_clusters))
+    num_mono = len(monolithic_clusters)
+    available_slots = max(0, max_clusters - num_mono)
 
     sorted_domains = sorted(
         domain_buckets.items(),
@@ -199,11 +202,50 @@ def _consolidate_clusters(
         reverse=True,
     )
 
+    if not sorted_domains:
+        return clusters
+
+    # If monolithic files already exhaust the budget, merge all remaining non-monolithic files into shared_utils
+    if available_slots == 0:
+        all_remaining_files: List[Tuple[str, int]] = []
+        for _, file_entries in sorted_domains:
+            all_remaining_files.extend(file_entries)
+
+        if all_remaining_files:
+            files_list = [f for f, _ in all_remaining_files]
+            total_small_lines = sum(lines for _, lines in all_remaining_files)
+            tests = discover_associated_tests(str(repo_root), files_list)
+            base_id = "cluster_shared_utils"
+            cluster_id = base_id
+            counter = 1
+            while cluster_id in used_ids:
+                cluster_id = f"{base_id}_{counter}"
+                counter += 1
+            used_ids.add(cluster_id)
+
+            clusters.append({
+                "id": cluster_id,
+                "name": "Domain: Utilities & Shared",
+                "domain": "shared_utils",
+                "files": files_list,
+                "total_lines": total_small_lines,
+                "is_monolithic": False,
+                "tests": tests,
+            })
+        return clusters
+
     needs_shared_utils = len(sorted_domains) > available_slots or any(
         sum(lines for _, lines in item[1]) < 20 for item in sorted_domains
     )
 
-    primary_slot_count = available_slots - 1 if (needs_shared_utils and available_slots > 1) else available_slots
+    if needs_shared_utils:
+        if available_slots == 1:
+            primary_slot_count = 0
+        else:
+            primary_slot_count = available_slots - 1
+    else:
+        primary_slot_count = min(len(sorted_domains), available_slots)
+
     primary_domains = sorted_domains[:primary_slot_count]
     overflow_domains = sorted_domains[primary_slot_count:]
 
@@ -264,10 +306,6 @@ def _consolidate_clusters(
             "tests": tests,
         })
 
-    # Hard bound: never exceed max_clusters if possible
-    if len(clusters) > max_clusters and len(clusters) > len(monolithic_clusters):
-        pass  # Monolithic files + min 1 domain might equal count
-
     return clusters
 
 
@@ -324,18 +362,33 @@ def cluster_diff(
     repo_path: str = ".",
     max_clusters: int = 5,
     max_lines: int = 3000,
-) -> Tuple[List[Dict[str, Any]], int, int]:
+) -> Tuple[List[Dict[str, Any]], int, int, Optional[str]]:
     """Cluster modified files from git diff between base_ref and head_ref.
     
-    Raises RuntimeError on git execution errors.
+    Returns (clusters, total_lines, total_files, warning).
+    Raises RuntimeError if both three-dot and two-dot diffs fail.
     """
     repo_root = Path(repo_path).resolve()
-    code, output, err = run_git(["diff", "--numstat", f"{base_ref}...{head_ref}"], cwd=str(repo_root))
-    if code != 0:
-        raise RuntimeError(f"Git diff failed for '{base_ref}...{head_ref}': {err or 'non-zero exit code'}")
+    warning: Optional[str] = None
 
-    if not output:
-        return [], 0, 0
+    code, output, err = run_git(["diff", "--numstat", f"{base_ref}...{head_ref}"], cwd=str(repo_root))
+    if code == 0:
+        if not output:
+            return [], 0, 0, None
+    else:
+        # Fallback only when three-dot fails (e.g. shallow clone / no merge base)
+        fallback_code, fallback_output, fallback_err = run_git(
+            ["diff", "--numstat", f"{base_ref}..{head_ref}"], cwd=str(repo_root)
+        )
+        if fallback_code == 0:
+            warning = "three-dot diff unavailable (shallow history?); used two-dot tree diff"
+            output = fallback_output
+            if not output:
+                return [], 0, 0, warning
+        else:
+            raise RuntimeError(
+                f"Git diff failed for '{base_ref}...{head_ref}' ({err}) and fallback '{base_ref}..{head_ref}' ({fallback_err})"
+            )
 
     domain_buckets: Dict[str, List[Tuple[str, int]]] = collections.defaultdict(list)
     monolithic_clusters: List[Dict[str, Any]] = []
@@ -386,7 +439,7 @@ def cluster_diff(
             domain_buckets[domain].append((rel_path, file_diff_lines))
 
     clusters = _consolidate_clusters(domain_buckets, monolithic_clusters, repo_root, max_clusters)
-    return clusters, total_diff_lines, total_files
+    return clusters, total_diff_lines, total_files, warning
 
 
 def format_cluster_payload(
@@ -395,6 +448,7 @@ def format_cluster_payload(
     total_files: int,
     base_ref: Optional[str] = None,
     is_diff: bool = True,
+    warning: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Format clusters into standard JSON output schema."""
     if is_diff:
@@ -404,7 +458,7 @@ def format_cluster_payload(
         is_small = False
         recommended = "multi-agent-audit"
 
-    return {
+    payload: Dict[str, Any] = {
         "base_ref": base_ref,
         "total_files": total_files,
         "total_lines": total_lines,
@@ -412,6 +466,10 @@ def format_cluster_payload(
         "recommended_mode": recommended,
         "clusters": clusters,
     }
+    if warning:
+        payload["warning"] = warning
+
+    return payload
 
 
 def main() -> None:
@@ -449,8 +507,9 @@ def main() -> None:
     base_ref = resolve_git_base_ref(base_ref_arg, cwd=cwd)
 
     if base_ref is None:
+        candidates = get_base_ref_candidates(base_ref_arg)
         err_payload = {
-            "error": f"Could not resolve a valid git base ref (tried: {base_ref_arg or 'origin/main, main, HEAD~1'}).",
+            "error": f"Could not resolve a valid git base ref (tried: {', '.join(candidates)}).",
             "is_small_diff": False,
             "recommended_mode": None,
             "clusters": [],
@@ -459,7 +518,7 @@ def main() -> None:
         sys.exit(1)
 
     try:
-        clusters, total_lines, total_files = cluster_diff(
+        clusters, total_lines, total_files, warning = cluster_diff(
             base_ref=base_ref,
             head_ref="HEAD",
             repo_path=cwd,
@@ -467,7 +526,12 @@ def main() -> None:
             max_lines=args.max_lines,
         )
         payload = format_cluster_payload(
-            clusters, total_lines=total_lines, total_files=total_files, base_ref=base_ref, is_diff=True
+            clusters,
+            total_lines=total_lines,
+            total_files=total_files,
+            base_ref=base_ref,
+            is_diff=True,
+            warning=warning,
         )
         print(json.dumps(payload, indent=2))
     except Exception as e:
