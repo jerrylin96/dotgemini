@@ -16,7 +16,7 @@ import os
 import re
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 # Import shared clustering utilities from codebase-audit
 AUDIT_SCRIPT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../codebase-audit/scripts"))
@@ -27,6 +27,7 @@ try:
     from cluster_files import (
         EXCLUDE_DIRS,
         TEXT_EXTENSIONS,
+        cluster_file_list,
         count_file_lines,
         get_domain_key,
         is_reviewable_source,
@@ -83,6 +84,41 @@ except ImportError:
 
     def sanitize_id(raw_str: str) -> str:
         return re.sub(r"[^a-zA-Z0-9_]", "_", raw_str).strip("_")
+
+    def cluster_file_list(
+        repo_root: Path,
+        file_entries: List[Tuple[str, int]],
+        max_clusters: int = 5,
+        max_lines: int = 3000,
+    ) -> List[Dict[str, Any]]:
+        if max_clusters < 1:
+            raise ValueError(f"max_clusters must be >= 1, got {max_clusters}")
+        domain_buckets: Dict[str, List[Tuple[str, int]]] = collections.defaultdict(list)
+        for rel, lines in file_entries:
+            domain = get_domain_key(rel)
+            domain_buckets[domain].append((rel, lines))
+        sorted_domains = sorted(domain_buckets.items(), key=lambda it: sum(num_lines for _, num_lines in it[1]), reverse=True)
+        if max_clusters == 1 or len(sorted_domains) > max_clusters:
+            primary = dict(sorted_domains[: max(0, max_clusters - 1)])
+            overflow = [f for _, items in sorted_domains[max(0, max_clusters - 1):] for f, _ in items]
+            if overflow:
+                if "shared_utils" in primary:
+                    primary["shared_utils"].extend([(f, 0) for f in overflow])
+                else:
+                    primary["shared_utils"] = [(f, 0) for f in overflow]
+            domain_buckets = primary
+        clusters = []
+        for domain, items in domain_buckets.items():
+            clusters.append({
+                "id": f"cluster_{sanitize_id(domain)}",
+                "name": f"Domain: {domain.title()}",
+                "domain": domain,
+                "files": sorted(f for f, _ in items),
+                "total_lines": sum(num_lines for _, num_lines in items),
+                "is_monolithic": False,
+                "tests": [],
+            })
+        return clusters
 
 
 # Polyglot Entrypoint Heuristics
@@ -250,6 +286,20 @@ def detect_polyglot_entrypoints(repo_root: Path, file_paths: List[str]) -> List[
     return entrypoints
 
 
+def _clean_imported_names(raw_import_str: str) -> List[str]:
+    """Parse comma-separated import list and strip aliases (e.g. 'foo as f, bar' -> ['foo', 'bar'])."""
+    names = []
+    for item in raw_import_str.split(","):
+        cleaned = item.strip()
+        if not cleaned:
+            continue
+        # Strip 'as alias'
+        parts = cleaned.split()
+        if parts:
+            names.append(parts[0])
+    return names
+
+
 def extract_internal_imports(file_path: Path, repo_root: Path) -> Set[str]:
     """Extract direct internal imports referenced inside a Python or JS/TS file."""
     referenced_files: Set[str] = set()
@@ -263,11 +313,11 @@ def extract_internal_imports(file_path: Path, repo_root: Path) -> Set[str]:
         return referenced_files
 
     if suffix == ".py":
-        # 1. Match 'from . import foo' or 'from .. import bar'
+        # 1. Match 'from . import foo as f, bar' or 'from .. import baz'
         py_from_dot_import = re.compile(r"^\s*from\s+(\.+)\s+import\s+([a-zA-Z0-9_,\t ]+)", re.MULTILINE)
         for match in py_from_dot_import.finditer(content):
             dots = match.group(1)
-            imported_names = [n.strip() for n in match.group(2).split(",") if n.strip()]
+            imported_names = _clean_imported_names(match.group(2))
             num_dots = len(dots)
             base_dir = file_path.parent
             for _ in range(num_dots - 1):
@@ -279,10 +329,12 @@ def extract_internal_imports(file_path: Path, repo_root: Path) -> Set[str]:
                     if cand_res.is_file() and cand_res.is_relative_to(repo_root):
                         referenced_files.add(str(cand_res.relative_to(repo_root)))
 
-        # 2. Match 'from .foo import bar' or 'from ..foo.bar import baz' or 'from foo.bar import baz'
+        # 2. Match 'from .foo import bar as b' or 'from ..foo.bar import baz' or 'from foo.bar import baz as b'
         py_from_module_import = re.compile(r"^\s*from\s+([\.a-zA-Z0-9_]+)\s+import\s+([a-zA-Z0-9_,\t ]+)", re.MULTILINE)
         for match in py_from_module_import.finditer(content):
             raw_module = match.group(1)
+            imported_names = _clean_imported_names(match.group(2))
+
             if raw_module.startswith("."):
                 stripped = raw_module.lstrip(".")
                 num_dots = len(raw_module) - len(stripped)
@@ -292,17 +344,35 @@ def extract_internal_imports(file_path: Path, repo_root: Path) -> Set[str]:
                     for _ in range(num_dots - 1):
                         base_dir = base_dir.parent
 
+                    # The module itself
                     for cand in (base_dir / f"{sub_path}.py", base_dir / sub_path / "__init__.py"):
                         cand_res = cand.resolve()
                         if cand_res.is_file() and cand_res.is_relative_to(repo_root):
                             referenced_files.add(str(cand_res.relative_to(repo_root)))
+
+                    # Submodules imported from the module (e.g. from ..shared import helper)
+                    mod_dir = base_dir / sub_path
+                    for name in imported_names:
+                        for cand in (mod_dir / f"{name}.py", mod_dir / name / "__init__.py"):
+                            cand_res = cand.resolve()
+                            if cand_res.is_file() and cand_res.is_relative_to(repo_root):
+                                referenced_files.add(str(cand_res.relative_to(repo_root)))
             else:
                 sub_path = raw_module.replace(".", "/")
                 for prefix in ("", "src/"):
+                    # The module itself
                     for cand in (repo_root / f"{prefix}{sub_path}.py", repo_root / f"{prefix}{sub_path}" / "__init__.py"):
                         cand_res = cand.resolve()
                         if cand_res.is_file() and cand_res.is_relative_to(repo_root):
                             referenced_files.add(str(cand_res.relative_to(repo_root)))
+
+                    # Submodules imported from the package (e.g. from src.db import session_store)
+                    pkg_dir = repo_root / f"{prefix}{sub_path}"
+                    for name in imported_names:
+                        for cand in (pkg_dir / f"{name}.py", pkg_dir / name / "__init__.py"):
+                            cand_res = cand.resolve()
+                            if cand_res.is_file() and cand_res.is_relative_to(repo_root):
+                                referenced_files.add(str(cand_res.relative_to(repo_root)))
 
         # 3. Match 'import foo.bar'
         py_import = re.compile(r"^\s*import\s+([a-zA-Z0-9_\.]+)", re.MULTILINE)
@@ -334,7 +404,10 @@ def extract_internal_imports(file_path: Path, repo_root: Path) -> Set[str]:
 
 
 def filter_files_by_goal(repo_root: Path, all_files: List[str], goal: str) -> List[str]:
-    """Filter and expand files based on natural language intent keywords and direct imports."""
+    """Filter and expand files based on natural language intent keywords and direct imports.
+    
+    Prefers path and component stem matches first; falls back to content scan if no path matches exist.
+    """
     keywords = [
         w.lower() for w in re.findall(r"[a-zA-Z0-9_]{3,}", goal)
         if w.lower() not in STOPWORDS
@@ -342,31 +415,37 @@ def filter_files_by_goal(repo_root: Path, all_files: List[str], goal: str) -> Li
     if not keywords:
         return all_files
 
-    matched_files: Set[str] = set()
-
+    # Step 1: Scan path components and stems for word-boundary matches (e.g. 'cli' matches 'cli/main.py' not 'client.py')
+    path_matched: Set[str] = set()
     for rel_path in all_files:
-        p = repo_root / rel_path
-        path_lower = rel_path.lower()
-
-        # Check path name substring match
-        if any(kw in path_lower for kw in keywords):
-            matched_files.add(rel_path)
-            continue
-
-        # Check content match with regex word-boundary
-        try:
-            content = p.read_text(encoding="utf-8", errors="replace")
+        p = Path(rel_path)
+        # Check all path segments and stem with boundary
+        segments = list(p.parts[:-1]) + [p.stem]
+        for seg in segments:
             for kw in keywords:
-                if re.search(r"\b" + re.escape(kw) + r"\b", content, re.IGNORECASE):
-                    matched_files.add(rel_path)
+                if re.search(r"(?:^|[^a-zA-Z0-9])" + re.escape(kw) + r"(?:[^a-zA-Z0-9]|$)", seg, re.IGNORECASE):
+                    path_matched.add(rel_path)
                     break
-        except Exception:
-            continue
+
+    matched_files: Set[str] = set(path_matched)
+
+    # Step 2: Content fallback if no path matches were found
+    if not matched_files:
+        for rel_path in all_files:
+            p = repo_root / rel_path
+            try:
+                content = p.read_text(encoding="utf-8", errors="replace")
+                for kw in keywords:
+                    if re.search(r"(?:^|[^a-zA-Z0-9])" + re.escape(kw) + r"(?:[^a-zA-Z0-9]|$)", content, re.IGNORECASE):
+                        matched_files.add(rel_path)
+                        break
+            except Exception:
+                continue
 
     if not matched_files:
         return all_files
 
-    # Expand direct 1-hop imports for all matched files
+    # Step 3: Expand direct 1-hop imports for all matched files
     expanded_files = set(matched_files)
     for rel_path in matched_files:
         p = repo_root / rel_path
@@ -402,11 +481,13 @@ def map_repository(
     max_lines: int = 3000,
 ) -> Dict[str, Any]:
     """Partition codebase, detect entrypoints, and discover architecture."""
+    if max_clusters <= 0:
+        raise ValueError(f"max_clusters must be >= 1, got {max_clusters}")
+
     if not os.path.exists(repo_path) or not os.path.isdir(repo_path):
         raise FileNotFoundError(f"Repository directory does not exist: {repo_path}")
 
     repo_root = Path(repo_path).resolve()
-    max_clusters = max(1, max_clusters)
 
     # Line count cache for single-read performance
     line_cache: Dict[str, int] = {}
@@ -464,58 +545,19 @@ def map_repository(
     else:
         arch_mode = "application_service"
 
-    # Partition files into functional clusters with max_clusters budget
-    domain_buckets: Dict[str, List[str]] = collections.defaultdict(list)
-    for rel in all_source_files:
-        domain = get_domain_key(rel)
-        domain_buckets[domain].append(rel)
-
-    sorted_domains = sorted(
-        domain_buckets.items(),
-        key=lambda item: sum(line_cache.get(f, 0) for f in item[1]),
-        reverse=True,
+    # Partition files using shared clustering engine
+    file_entries = [(f, line_cache.get(f, 0)) for f in all_source_files]
+    clusters = cluster_file_list(
+        repo_root=repo_root,
+        file_entries=file_entries,
+        max_clusters=max_clusters,
+        max_lines=max_lines,
     )
 
-    if max_clusters == 1:
-        # Single cluster consolidation
-        all_files = sorted(all_source_files)
-        clusters = [{
-            "id": "cluster_shared_utils",
-            "name": "Consolidated System Subsystem",
-            "domain": "shared_utils",
-            "files": all_files,
-            "total_lines": total_lines,
-            "is_monolithic": any(line_cache.get(f, 0) >= max_lines for f in all_files),
-            "entrypoints": entrypoints,
-        }]
-    else:
-        if len(sorted_domains) > max_clusters:
-            primary_domains = dict(sorted_domains[: max_clusters - 1])
-            overflow_files: List[str] = []
-            for _, files in sorted_domains[max_clusters - 1 :]:
-                overflow_files.extend(files)
-
-            if overflow_files:
-                # Merge into shared_utils without dropping existing files
-                if "shared_utils" in primary_domains:
-                    primary_domains["shared_utils"] = sorted(set(primary_domains["shared_utils"] + overflow_files))
-                else:
-                    primary_domains["shared_utils"] = sorted(overflow_files)
-            domain_buckets = primary_domains
-
-        clusters = []
-        for domain, files in sorted(domain_buckets.items()):
-            domain_lines = sum(line_cache.get(f, 0) for f in files)
-            cluster_entrypoints = [ep for ep in entrypoints if ep["path"] in files]
-            clusters.append({
-                "id": f"cluster_{sanitize_id(domain)}",
-                "name": f"{domain.capitalize()} Subsystem",
-                "domain": domain,
-                "files": sorted(files),
-                "total_lines": domain_lines,
-                "is_monolithic": any(line_cache.get(f, 0) >= max_lines for f in files),
-                "entrypoints": cluster_entrypoints,
-            })
+    # Attach detected entrypoints to each cluster
+    for cluster in clusters:
+        cluster_files_set = set(cluster["files"])
+        cluster["entrypoints"] = [ep for ep in entrypoints if ep["path"] in cluster_files_set]
 
     is_small = total_lines < 300 and total_files <= 3
 

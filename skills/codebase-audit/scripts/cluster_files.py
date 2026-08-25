@@ -263,6 +263,9 @@ def _consolidate_clusters(
         merged_files.extend(file_entries)
 
     for domain, file_entries in kept_domains:
+        if domain == "shared_utils" and merged_files:
+            file_entries = file_entries + merged_files
+            merged_files = []
         files_list = [f for f, _ in file_entries]
         total_domain_lines = sum(lines for _, lines in file_entries)
         tests = discover_associated_tests(str(repo_root), files_list)
@@ -309,51 +312,63 @@ def _consolidate_clusters(
     return clusters
 
 
+def cluster_file_list(
+    repo_root: Path,
+    file_entries: List[Tuple[str, int]],
+    max_clusters: int = 5,
+    max_lines: int = 3000,
+) -> List[Dict[str, Any]]:
+    """Partition a list of (rel_path, lines) into clusters honoring max_clusters and max_lines."""
+    if max_clusters < 1:
+        raise ValueError(f"max_clusters must be >= 1, got {max_clusters}")
+
+    domain_buckets: Dict[str, List[Tuple[str, int]]] = collections.defaultdict(list)
+    monolithic_clusters: List[Dict[str, Any]] = []
+    used_ids: Set[str] = set()
+
+    for rel_path, lines in file_entries:
+        if lines >= max_lines:
+            tests = discover_associated_tests(str(repo_root), [rel_path])
+            base_id = f"cluster_mono_{sanitize_id(rel_path)}"
+            cluster_id = base_id
+            counter = 1
+            while cluster_id in used_ids:
+                cluster_id = f"{base_id}_{counter}"
+                counter += 1
+            used_ids.add(cluster_id)
+
+            monolithic_clusters.append({
+                "id": cluster_id,
+                "name": f"Monolithic File: {Path(rel_path).name}",
+                "domain": "monolithic",
+                "files": [rel_path],
+                "total_lines": lines,
+                "is_monolithic": True,
+                "tests": tests,
+            })
+        else:
+            domain = get_domain_key(rel_path)
+            domain_buckets[domain].append((rel_path, lines))
+
+    return _consolidate_clusters(domain_buckets, monolithic_clusters, repo_root, max_clusters)
+
+
 def cluster_repo(repo_path: str, max_clusters: int = 5, max_lines: int = 3000) -> List[Dict[str, Any]]:
     """Cluster all source files in a repository by domain and volume."""
     repo_root = Path(repo_path).resolve()
     if not repo_root.exists() or not repo_root.is_dir():
         raise FileNotFoundError(f"Repository directory does not exist: {repo_path}")
 
-    domain_buckets: Dict[str, List[Tuple[str, int]]] = collections.defaultdict(list)
-    monolithic_clusters: List[Dict[str, Any]] = []
-    used_ids: Set[str] = set()
-
+    file_entries: List[Tuple[str, int]] = []
     for root, dirs, files in os.walk(repo_root):
         dirs[:] = [d for d in dirs if d not in EXCLUDE_DIRS and not d.startswith(".")]
-
         for f in files:
             p = Path(root) / f
             rel_path = str(p.relative_to(repo_root))
-            if not is_reviewable_source(rel_path):
-                continue
+            if is_reviewable_source(rel_path):
+                file_entries.append((rel_path, count_file_lines(p)))
 
-            lines = count_file_lines(p)
-
-            if lines >= max_lines:
-                tests = discover_associated_tests(str(repo_root), [rel_path])
-                base_id = f"cluster_mono_{sanitize_id(rel_path)}"
-                cluster_id = base_id
-                counter = 1
-                while cluster_id in used_ids:
-                    cluster_id = f"{base_id}_{counter}"
-                    counter += 1
-                used_ids.add(cluster_id)
-
-                monolithic_clusters.append({
-                    "id": cluster_id,
-                    "name": f"Monolithic File: {p.name}",
-                    "domain": "monolithic",
-                    "files": [rel_path],
-                    "total_lines": lines,
-                    "is_monolithic": True,
-                    "tests": tests,
-                })
-            else:
-                domain = get_domain_key(rel_path)
-                domain_buckets[domain].append((rel_path, lines))
-
-    return _consolidate_clusters(domain_buckets, monolithic_clusters, repo_root, max_clusters)
+    return cluster_file_list(repo_root, file_entries, max_clusters=max_clusters, max_lines=max_lines)
 
 
 def cluster_diff(

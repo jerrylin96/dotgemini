@@ -150,46 +150,54 @@ def test_path_scoping_and_glob(sample_polyglot_repo):
     assert payload_boundary["total_files"] == 0
 
 
-def test_intent_scoping_word_boundary_and_import_expansion(tmp_path):
-    """Intent scoping uses word boundary matching and expands direct 1-hop internal imports."""
-    repo = tmp_path / "intent_repo"
+def test_intent_scoping_path_preference_and_word_boundaries(tmp_path):
+    """Goal scoping prefers path stem matches with word boundaries and ignores substring false positives."""
+    repo = tmp_path / "path_pref_repo"
     repo.mkdir()
 
-    # Target module matching 'stripe' and 'webhook'
+    cli_dir = repo / "src" / "cli"
+    cli_dir.mkdir(parents=True)
+    (cli_dir / "main.py").write_text("# CLI Entry\n" * 10)
+
+    (repo / "client.py").write_text("# Client\n" * 10)
+    (repo / "recline.py").write_text("# Recline\n" * 10)
+
+    payload = map_codebase.map_repository(str(repo), goal="cli")
+    all_scoped = [f for c in payload["clusters"] for f in c["files"]]
+
+    # Must include src/cli/main.py (segment 'cli' matches 'cli')
+    assert "src/cli/main.py" in all_scoped
+    # Must NOT include client.py or recline.py
+    assert "client.py" not in all_scoped
+    assert "recline.py" not in all_scoped
+
+
+def test_intent_scoping_content_fallback_and_stopwords(tmp_path):
+    """Goal scoping falls back to content scan with word boundaries when no path match exists."""
+    repo = tmp_path / "content_fallback_repo"
+    repo.mkdir()
+
     billing_dir = repo / "src" / "billing"
     billing_dir.mkdir(parents=True)
-    (billing_dir / "stripe_gateway.py").write_text(
-        "from ..db.session_store import SessionStore\n"
-        "def handle_stripe_webhook(event: dict):\n"
-        "    store = SessionStore()\n"
-        "    return store.save_event(event)\n"
+    (billing_dir / "processor.py").write_text(
+        "def process():\n"
+        "    secret_token = 'stripe_live_key'\n"
     )
 
-    db_dir = repo / "src" / "db"
-    db_dir.mkdir(parents=True)
-    (db_dir / "session_store.py").write_text(
-        "class SessionStore:\n"
-        "    def save_event(self, event: dict):\n"
-        "        return True\n"
-    )
-
-    # Unrelated file containing 'add' as substring (e.g. add_argument/address)
     unrelated_dir = repo / "src" / "analytics"
     unrelated_dir.mkdir(parents=True)
     (unrelated_dir / "metrics.py").write_text(
         "def add_argument(parser):\n"
-        "    user_address = '123 Main St'\n"
-        "    return user_address\n"
+        "    address = '123 Main'\n"
     )
 
     payload = map_codebase.map_repository(str(repo), goal="I want to add Stripe webhooks")
-    all_scoped_files = [f for c in payload["clusters"] for f in c["files"]]
+    all_scoped = [f for c in payload["clusters"] for f in c["files"]]
 
-    # Must include stripe_gateway.py (keyword match) and session_store.py (1-hop import expansion)
-    assert any("stripe_gateway.py" in f for f in all_scoped_files)
-    assert any("session_store.py" in f for f in all_scoped_files)
-    # Must NOT include metrics.py because 'add' is a stopword and word-boundary prevents matching add_argument
-    assert not any("metrics.py" in f for f in all_scoped_files)
+    # processor.py matched via content fallback for 'stripe'
+    assert "src/billing/processor.py" in all_scoped
+    # metrics.py excluded because 'add' is a stopword and does not match add_argument
+    assert "src/analytics/metrics.py" not in all_scoped
 
 
 def test_polyglot_entrypoint_detection(sample_polyglot_repo):
@@ -260,6 +268,23 @@ def test_nonexistent_repo_exits_one(tmp_path):
     assert "does_not_exist" in err_data["error"]
 
 
+def test_invalid_max_clusters_rejected(sample_polyglot_repo):
+    """max_clusters <= 0 raises ValueError and exits 1 in CLI."""
+    with pytest.raises(ValueError, match="max_clusters must be >= 1"):
+        map_codebase.map_repository(str(sample_polyglot_repo), max_clusters=0)
+
+    cmd = [
+        sys.executable,
+        os.path.join(SCRIPT_DIR, "map_codebase.py"),
+        "--repo",
+        str(sample_polyglot_repo),
+        "--max-clusters",
+        "0",
+    ]
+    res = subprocess.run(cmd, capture_output=True, text=True)
+    assert res.returncode == 1
+
+
 def test_max_clusters_one(sample_polyglot_repo):
     """max_clusters=1 produces exactly one consolidated cluster containing all files."""
     payload = map_codebase.map_repository(str(sample_polyglot_repo), max_clusters=1)
@@ -289,7 +314,7 @@ def test_shared_utils_domain_collision_retained(tmp_path):
     repo = tmp_path / "collision_repo"
     repo.mkdir()
 
-    # Create existing shared_utils domain with 3 files
+    # Create existing shared_utils domain with 2 files
     shared_dir = repo / "shared_utils"
     shared_dir.mkdir()
     (shared_dir / "u1.py").write_text("# U1\n" * 100)
@@ -305,34 +330,53 @@ def test_shared_utils_domain_collision_retained(tmp_path):
     assert len(payload["clusters"]) <= 3
 
     all_clustered_files = [f for c in payload["clusters"] for f in c["files"]]
-    # Total files must match total_files without dropping existing shared_utils files
     assert len(all_clustered_files) == payload["total_files"]
     assert "shared_utils/u1.py" in all_clustered_files
     assert "shared_utils/u2.py" in all_clustered_files
 
 
-def test_relative_dot_import_expansion(tmp_path):
-    """Verify relative dot imports (from . import foo, from .sub import bar, from ..sibling import baz) resolve."""
-    repo = tmp_path / "dot_imports_repo"
+def test_python_import_expansion_comprehensive(tmp_path):
+    """Verify all Python import patterns resolve module files across packages, aliases, and relative dots."""
+    repo = tmp_path / "import_repo"
     repo.mkdir()
 
-    sub = repo / "src" / "sub" / "pkg"
-    sub.mkdir(parents=True)
-    (sub / "worker.py").write_text(
-        "from . import local_helper\n"
-        "from ..sibling import db_call\n"
-        "def run():\n"
-        "    local_helper.do_work()\n"
-        "    db_call()\n"
+    # 1. Absolute package import: from src.db import session_store as sessions
+    db_dir = repo / "src" / "db"
+    db_dir.mkdir(parents=True)
+    (db_dir / "session_store.py").write_text("class SessionStore: pass\n")
+
+    # 2. Package import without src prefix: from mypkg import helpers
+    pkg_dir = repo / "mypkg"
+    pkg_dir.mkdir(parents=True)
+    (pkg_dir / "helpers.py").write_text("def help_func(): pass\n")
+
+    # 3. Relative package import: from ..shared import helper
+    shared_dir = repo / "src" / "shared"
+    shared_dir.mkdir(parents=True)
+    (shared_dir / "helper.py").write_text("def shared_help(): pass\n")
+
+    # 4. Sibling relative import with alias: from . import local_mod as lm
+    app_dir = repo / "src" / "app"
+    app_dir.mkdir(parents=True)
+    (app_dir / "local_mod.py").write_text("def local_func(): pass\n")
+
+    caller = app_dir / "caller.py"
+    caller.write_text(
+        "from src.db import session_store as sessions\n"
+        "from mypkg import helpers\n"
+        "from ..shared import helper\n"
+        "from . import local_mod as lm\n"
+        "from non_existent import missing\n"
     )
-    (sub / "local_helper.py").write_text("def do_work(): pass\n")
 
-    sibling_dir = repo / "src" / "sub"
-    (sibling_dir / "sibling.py").write_text("def db_call(): pass\n")
+    imports = map_codebase.extract_internal_imports(caller, repo)
 
-    imports = map_codebase.extract_internal_imports(sub / "worker.py", repo)
-    assert "src/sub/pkg/local_helper.py" in imports
-    assert "src/sub/sibling.py" in imports
+    assert "src/db/session_store.py" in imports
+    assert "mypkg/helpers.py" in imports
+    assert "src/shared/helper.py" in imports
+    assert "src/app/local_mod.py" in imports
+    # Non-existent files are safely skipped without error
+    assert not any("non_existent" in f or "missing" in f for f in imports)
 
 
 def test_template_sections_exist():
