@@ -268,3 +268,44 @@ def test_agents_md_registration():
 
     assert gemini_md.exists()
     assert "skills/codebase-map/SKILL.md" in gemini_md.read_text(encoding="utf-8")
+
+
+def test_relative_dot_import_expansion(tmp_path):
+    """Verify relative dot imports (e.g. from .helpers import foo, from ..db import bar) resolve properly."""
+    repo = tmp_path / "dot_imports_repo"
+    repo.mkdir()
+
+    sub = repo / "src" / "sub" / "pkg"
+    sub.mkdir(parents=True)
+    (sub / "worker.py").write_text(
+        "from .local_helper import do_work\n"
+        "from ..sibling import db_call\n"
+        "def run():\n"
+        "    do_work()\n"
+        "    db_call()\n"
+    )
+    (sub / "local_helper.py").write_text("def do_work(): pass\n")
+
+    sibling_dir = repo / "src" / "sub"
+    (sibling_dir / "sibling.py").write_text("def db_call(): pass\n")
+
+    imports = map_codebase.extract_internal_imports(sub / "worker.py", repo)
+    assert "src/sub/pkg/local_helper.py" in imports
+    assert "src/sub/sibling.py" in imports
+
+
+def test_max_clusters_consolidation(tmp_path):
+    """Verify domains exceeding max_clusters consolidate into shared_utils."""
+    repo = tmp_path / "multi_domain_repo"
+    repo.mkdir()
+
+    for i in range(8):
+        dom = repo / f"domain_{i}"
+        dom.mkdir()
+        (dom / f"mod_{i}.py").write_text(f"# Domain {i}\n" * (10 + i * 5))
+
+    payload = map_codebase.map_repository(str(repo), max_clusters=3)
+    assert len(payload["clusters"]) <= 3
+    cluster_domains = {c["domain"] for c in payload["clusters"]}
+    assert "shared_utils" in cluster_domains
+

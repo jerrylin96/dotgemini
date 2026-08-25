@@ -90,14 +90,14 @@ Parent agent passes a structured context block ($\le 30$ lines / ~400 words) in 
 - **Target Source Files**: [list of files in this cluster]
 - **Detected Entrypoints**: [list of detected entrypoints in this cluster, if any]
 - **User Focus / Goal**: [plain English intent or 'Whole Repository Architecture']
-- **Active Constraints**: Local laptop execution; empirical line-number grounding; strict markdown link citations [Symbol](file:///path/to/file#L1-L20).
+- **Active Constraints**: Local laptop execution; empirical line-number grounding; strict symbol link citations [`Symbol`](path/to/file#L1-L20).
 - **Extraction Target**: Domain responsibilities, exported symbols/APIs, core data structures, internal control flow, cluster Mermaid diagram, invariants.
 ```
 
 ### 3. Subagent Execution Rules
 Each subagent MUST:
 1. **Inspect Code in Chunks:** Read source files via `view_file` in chunks ($\le 800$ lines). For monolithic files ($>3000$ lines), use Tier 1 indexing then Tier 2 deep-dive.
-2. **Strict Empirical Grounding:** Cite all exported symbols, models, and interfaces with exact markdown links: `[ClassName](file:///path/to/file#L10-L40)`.
+2. **Strict Empirical Grounding:** Cite all exported symbols, models, and interfaces with exact links: [`ClassName`](path/to/file#L10-L40).
 3. **Emit Structured Domain Card:**
    - **Domain Overview:** 2-3 sentences defining the cluster's boundary.
    - **Public API & Exported Symbols:** Classes, functions, and interfaces exposed to other modules.

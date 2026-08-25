@@ -271,19 +271,37 @@ def extract_internal_imports(file_path: Path, repo_root: Path) -> Set[str]:
         ]
         for pat in py_import_patterns:
             for match in pat.finditer(content):
-                module_path = match.group(1)
-                # Convert module path to relative file path candidates
-                rel_candidate_py = module_path.replace(".", "/") + ".py"
-                rel_candidate_init = module_path.replace(".", "/") + "/__init__.py"
+                raw_module = match.group(1)
+                stripped = raw_module.lstrip(".")
+                num_dots = len(raw_module) - len(stripped)
+                sub_path = stripped.replace(".", "/")
 
-                for candidate in (rel_candidate_py, rel_candidate_init):
-                    if (repo_root / candidate).is_file():
-                        referenced_files.add(candidate)
-                    # Check if candidate exists relative to file's directory
-                    file_dir = file_path.parent
-                    rel_to_dir = (file_dir / candidate).resolve()
-                    if rel_to_dir.is_file() and rel_to_dir.is_relative_to(repo_root):
-                        referenced_files.add(str(rel_to_dir.relative_to(repo_root)))
+                if num_dots > 0:
+                    base_dir = file_path.parent
+                    for _ in range(num_dots - 1):
+                        base_dir = base_dir.parent
+
+                    candidates = []
+                    if sub_path:
+                        candidates.append(base_dir / f"{sub_path}.py")
+                        candidates.append(base_dir / sub_path / "__init__.py")
+                    else:
+                        candidates.append(base_dir / "__init__.py")
+
+                    for cand in candidates:
+                        cand_res = cand.resolve()
+                        if cand_res.is_file() and cand_res.is_relative_to(repo_root):
+                            referenced_files.add(str(cand_res.relative_to(repo_root)))
+                else:
+                    rel_candidate_py = f"{sub_path}.py"
+                    rel_candidate_init = f"{sub_path}/__init__.py"
+                    for rel_cand in (rel_candidate_py, rel_candidate_init):
+                        cand_root = (repo_root / rel_cand).resolve()
+                        if cand_root.is_file() and cand_root.is_relative_to(repo_root):
+                            referenced_files.add(str(cand_root.relative_to(repo_root)))
+                        cand_dir = (file_path.parent / rel_cand).resolve()
+                        if cand_dir.is_file() and cand_dir.is_relative_to(repo_root):
+                            referenced_files.add(str(cand_dir.relative_to(repo_root)))
 
     elif suffix in (".js", ".ts", ".jsx", ".tsx"):
         js_import_patterns = [
@@ -407,11 +425,26 @@ def map_repository(
     else:
         arch_mode = "application_service"
 
-    # Partition files into functional clusters
+    # Partition files into functional clusters with max_clusters budget
     domain_buckets: Dict[str, List[str]] = collections.defaultdict(list)
     for rel in all_source_files:
         domain = get_domain_key(rel)
         domain_buckets[domain].append(rel)
+
+    sorted_domains = sorted(
+        domain_buckets.items(),
+        key=lambda item: sum(count_file_lines(repo_root / f) for f in item[1]),
+        reverse=True,
+    )
+
+    if len(sorted_domains) > max_clusters and max_clusters > 1:
+        primary_domains = dict(sorted_domains[: max_clusters - 1])
+        overflow_files: List[str] = []
+        for _, files in sorted_domains[max_clusters - 1 :]:
+            overflow_files.extend(files)
+        if overflow_files:
+            primary_domains["shared_utils"] = sorted(overflow_files)
+        domain_buckets = primary_domains
 
     clusters: List[Dict[str, Any]] = []
     for domain, files in sorted(domain_buckets.items()):

@@ -53,8 +53,8 @@ flowchart TD
 - **Directory Scope:** `[src/core/]` (`[N]` files, `[M]` lines)
 - **Domain Responsibilities:** [2-3 sentences explaining what this cluster does and does not do]
 - **Key Exported Interfaces & Types:**
-  - [`MainClass`](file:///path/to/file.py#L10-L40): Primary orchestrator for business logic.
-  - [`DataModel`](file:///path/to/models.py#L15-L35): Core entity schema representing system state.
+  - [`MainClass`](path/to/file.py#L10-L40): Primary orchestrator for business logic.
+  - [`DataModel`](path/to/models.py#L15-L35): Core entity schema representing system state.
 - **Internal Control Flow:**
   1. Receives input parameters from entrypoint layer.
   2. Normalizes and validates attributes via schema layer.
@@ -72,10 +72,10 @@ flowchart TD
 - **Directory Scope:** `[src/api/]` (`[N]` files, `[M]` lines)
 - **Domain Responsibilities:** [Description of interface adapters, request validation, authentication]
 - **Detected Entrypoints:**
-  - [`routes.py:L15`](file:///path/to/routes.py#L15): `GET /api/v1/health`
-  - [`routes.py:L40`](file:///path/to/routes.py#L40): `POST /api/v1/resource`
+  - [`routes.py:L15`](path/to/routes.py#L15): `GET /api/v1/health`
+  - [`routes.py:L40`](path/to/routes.py#L40): `POST /api/v1/resource`
 - **Key Exported Interfaces & Types:**
-  - [`RouterAdapter`](file:///path/to/router.py#L20-L50): Translates HTTP requests to domain calls.
+  - [`RouterAdapter`](path/to/router.py#L20-L50): Translates HTTP requests to domain calls.
 
 ---
 
@@ -84,10 +84,10 @@ flowchart TD
 *Step-by-step traces of critical lifecycles (e.g., Request Handling, Batch Ingestion, or User-Specified Feature Goal).*
 
 ### Trace 1: [Primary Lifecycle / Goal Execution Path]
-1. **Entrypoint Trigger:** User invokes CLI / sends HTTP request to [`entrypoint.py`](file:///path/to/entrypoint.py#L10).
-2. **Authentication / Parameter Parsing:** Validates payload against [`schema.py`](file:///path/to/schema.py#L20).
-3. **Domain Processing:** Calls [`engine.process()`](file:///path/to/engine.py#L45) to execute core algorithms.
-4. **State Mutation / Persistence:** Writes updated record to [`store.py`](file:///path/to/store.py#L80).
+1. **Entrypoint Trigger:** User invokes CLI / sends HTTP request to [`entrypoint.py`](path/to/entrypoint.py#L10).
+2. **Authentication / Parameter Parsing:** Validates payload against [`schema.py`](path/to/schema.py#L20).
+3. **Domain Processing:** Calls [`engine.process()`](path/to/engine.py#L45) to execute core algorithms.
+4. **State Mutation / Persistence:** Writes updated record to [`store.py`](path/to/store.py#L80).
 5. **Response / Output:** Returns structured result to caller.
 
 ```mermaid
@@ -113,10 +113,10 @@ sequenceDiagram
 *Actionable recipes showing engineers how to extend or modify the system safely.*
 
 ### Recipe 1: [Goal-Specific Recipe or How to Add a New Feature]
-- **Step 1:** Define the new model in [`models/`](file:///path/to/models/).
-- **Step 2:** Implement the core business logic method in [`engine/`](file:///path/to/engine/).
-- **Step 3:** Register the entrypoint in [`cli/`](file:///path/to/cli/) or [`api/`](file:///path/to/api/).
-- **Step 4:** Add integration test in [`tests/`](file:///path/to/tests/).
+- **Step 1:** Define the new model in [`models/`](path/to/models/).
+- **Step 2:** Implement the core business logic method in [`engine/`](path/to/engine/).
+- **Step 3:** Register the entrypoint in [`cli/`](path/to/cli/) or [`api/`](path/to/api/).
+- **Step 4:** Add integration test in [`tests/`](path/to/tests/).
 
 ### Recipe 2: Local Setup & Testing Quickstart
 ```bash
