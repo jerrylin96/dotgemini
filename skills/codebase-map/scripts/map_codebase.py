@@ -18,6 +18,58 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+def _embedded_get_domain_key(rel_path: str) -> str:
+    parts = Path(rel_path).parts
+    if len(parts) >= 3 and parts[0] in ("src", "lib", "app", "pkg"):
+        return parts[1]
+    if len(parts) >= 2 and parts[0] in ("src", "lib", "app", "pkg"):
+        return parts[0]
+    if len(parts) >= 2:
+        return parts[0]
+    return "root"
+
+
+def _embedded_sanitize_id(raw_str: str) -> str:
+    return re.sub(r"[^a-zA-Z0-9_]", "_", raw_str).strip("_")
+
+
+def _embedded_cluster_file_list(
+    repo_root: Path,
+    file_entries: List[Tuple[str, int]],
+    max_clusters: int = 5,
+    max_lines: int = 3000,
+) -> List[Dict[str, Any]]:
+    """Standalone fallback implementation of cluster_file_list when codebase-audit is not available."""
+    if max_clusters < 1:
+        raise ValueError(f"max_clusters must be >= 1, got {max_clusters}")
+    domain_buckets: Dict[str, List[Tuple[str, int]]] = collections.defaultdict(list)
+    for rel, lines in file_entries:
+        domain = _embedded_get_domain_key(rel)
+        domain_buckets[domain].append((rel, lines))
+    sorted_domains = sorted(domain_buckets.items(), key=lambda it: sum(num_lines for _, num_lines in it[1]), reverse=True)
+    if max_clusters == 1 or len(sorted_domains) > max_clusters:
+        primary = dict(sorted_domains[: max(0, max_clusters - 1)])
+        overflow = [item for _, items in sorted_domains[max(0, max_clusters - 1):] for item in items]
+        if overflow:
+            if "shared_utils" in primary:
+                primary["shared_utils"].extend(overflow)
+            else:
+                primary["shared_utils"] = overflow
+        domain_buckets = primary
+    clusters = []
+    for domain, items in domain_buckets.items():
+        clusters.append({
+            "id": f"cluster_{_embedded_sanitize_id(domain)}",
+            "name": f"Domain: {domain.title()}",
+            "domain": domain,
+            "files": sorted(f for f, _ in items),
+            "total_lines": sum(num_lines for _, num_lines in items),
+            "is_monolithic": False,
+            "tests": [],
+        })
+    return clusters
+
+
 # Import shared clustering utilities from codebase-audit
 AUDIT_SCRIPT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../codebase-audit/scripts"))
 if AUDIT_SCRIPT_DIR not in sys.path:
@@ -72,91 +124,9 @@ except ImportError:
             return False
         return p.suffix.lower() in TEXT_EXTENSIONS
 
-    def get_domain_key(rel_path: str) -> str:
-        parts = Path(rel_path).parts
-        if len(parts) >= 3 and parts[0] in ("src", "lib", "app", "pkg"):
-            return parts[1]
-        if len(parts) >= 2 and parts[0] in ("src", "lib", "app", "pkg"):
-            return parts[0]
-        if len(parts) >= 2:
-            return parts[0]
-        return "root"
-
-    def sanitize_id(raw_str: str) -> str:
-        return re.sub(r"[^a-zA-Z0-9_]", "_", raw_str).strip("_")
-
-    def _embedded_cluster_file_list(
-        repo_root: Path,
-        file_entries: List[Tuple[str, int]],
-        max_clusters: int = 5,
-        max_lines: int = 3000,
-    ) -> List[Dict[str, Any]]:
-        if max_clusters < 1:
-            raise ValueError(f"max_clusters must be >= 1, got {max_clusters}")
-        domain_buckets: Dict[str, List[Tuple[str, int]]] = collections.defaultdict(list)
-        for rel, lines in file_entries:
-            domain = get_domain_key(rel)
-            domain_buckets[domain].append((rel, lines))
-        sorted_domains = sorted(domain_buckets.items(), key=lambda it: sum(num_lines for _, num_lines in it[1]), reverse=True)
-        if max_clusters == 1 or len(sorted_domains) > max_clusters:
-            primary = dict(sorted_domains[: max(0, max_clusters - 1)])
-            overflow = [item for _, items in sorted_domains[max(0, max_clusters - 1):] for item in items]
-            if overflow:
-                if "shared_utils" in primary:
-                    primary["shared_utils"].extend(overflow)
-                else:
-                    primary["shared_utils"] = overflow
-            domain_buckets = primary
-        clusters = []
-        for domain, items in domain_buckets.items():
-            clusters.append({
-                "id": f"cluster_{sanitize_id(domain)}",
-                "name": f"Domain: {domain.title()}",
-                "domain": domain,
-                "files": sorted(f for f, _ in items),
-                "total_lines": sum(num_lines for _, num_lines in items),
-                "is_monolithic": False,
-                "tests": [],
-            })
-        return clusters
-
+    get_domain_key = _embedded_get_domain_key
+    sanitize_id = _embedded_sanitize_id
     cluster_file_list = _embedded_cluster_file_list
-else:
-    # Also expose _embedded_cluster_file_list for direct unit test verification
-    def _embedded_cluster_file_list(
-        repo_root: Path,
-        file_entries: List[Tuple[str, int]],
-        max_clusters: int = 5,
-        max_lines: int = 3000,
-    ) -> List[Dict[str, Any]]:
-        if max_clusters < 1:
-            raise ValueError(f"max_clusters must be >= 1, got {max_clusters}")
-        domain_buckets: Dict[str, List[Tuple[str, int]]] = collections.defaultdict(list)
-        for rel, lines in file_entries:
-            domain = get_domain_key(rel)
-            domain_buckets[domain].append((rel, lines))
-        sorted_domains = sorted(domain_buckets.items(), key=lambda it: sum(num_lines for _, num_lines in it[1]), reverse=True)
-        if max_clusters == 1 or len(sorted_domains) > max_clusters:
-            primary = dict(sorted_domains[: max(0, max_clusters - 1)])
-            overflow = [item for _, items in sorted_domains[max(0, max_clusters - 1):] for item in items]
-            if overflow:
-                if "shared_utils" in primary:
-                    primary["shared_utils"].extend(overflow)
-                else:
-                    primary["shared_utils"] = overflow
-            domain_buckets = primary
-        clusters = []
-        for domain, items in domain_buckets.items():
-            clusters.append({
-                "id": f"cluster_{sanitize_id(domain)}",
-                "name": f"Domain: {domain.title()}",
-                "domain": domain,
-                "files": sorted(f for f, _ in items),
-                "total_lines": sum(num_lines for _, num_lines in items),
-                "is_monolithic": False,
-                "tests": [],
-            })
-        return clusters
 
 
 # Polyglot Entrypoint Heuristics
