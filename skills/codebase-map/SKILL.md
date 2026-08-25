@@ -79,7 +79,7 @@ Confirm cluster scope to launch mapping subagents?
 ## Stage 2: Parallel Subagent Dispatch
 
 ### 1. Concurrent Subagent Invocation
-Launch concurrent explorer subagents using `invoke_subagent` (`TypeName: self` or `research`, `Role: Cluster Mapper [<Cluster Name>]`, `Workspace: inherit`).
+Launch concurrent explorer subagents using `invoke_subagent` (`TypeName: research` by default for read-only exploration, `Role: Cluster Mapper [<Cluster Name>]`, `Workspace: inherit`).
 
 ### 2. Subagent Context Compaction Block
 Parent agent passes a structured context block ($\le 30$ lines / ~400 words) in each subagent's prompt:
