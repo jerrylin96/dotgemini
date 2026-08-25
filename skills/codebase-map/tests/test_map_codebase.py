@@ -200,6 +200,37 @@ def test_intent_scoping_content_fallback_and_stopwords(tmp_path):
     assert "src/analytics/metrics.py" not in all_scoped
 
 
+def test_intent_scoping_multi_keyword_path_and_content_union(tmp_path):
+    """Goal scoping combines path matches and content matches without skipping content scans."""
+    repo = tmp_path / "union_goal_repo"
+    repo.mkdir()
+
+    stripe_dir = repo / "src" / "stripe"
+    stripe_dir.mkdir(parents=True)
+    (stripe_dir / "config.py").write_text("# Stripe configuration credentials\nAPI_KEY = 'sk_test_123'\n")
+
+    billing_dir = repo / "src" / "billing"
+    billing_dir.mkdir(parents=True)
+    (billing_dir / "handler.py").write_text(
+        "def handle_webhook(event):\n"
+        "    return {'status': 'processed'}\n"
+    )
+
+    unrelated_dir = repo / "src" / "logging"
+    unrelated_dir.mkdir(parents=True)
+    (unrelated_dir / "logger.py").write_text("def log_event(msg):\n    print(msg)\n")
+
+    payload = map_codebase.map_repository(str(repo), goal="stripe webhook")
+    all_scoped = [f for c in payload["clusters"] for f in c["files"]]
+
+    # Path match on 'stripe'
+    assert "src/stripe/config.py" in all_scoped
+    # Content match on 'webhook'
+    assert "src/billing/handler.py" in all_scoped
+    # Unrelated omitted
+    assert "src/logging/logger.py" not in all_scoped
+
+
 def test_polyglot_entrypoint_detection(sample_polyglot_repo):
     """Detects exact string entrypoint types across Python, JS/TS, Go, and Rust."""
     payload = map_codebase.map_repository(str(sample_polyglot_repo))
@@ -426,3 +457,29 @@ def test_fallback_semantics_parity():
     assert not map_codebase.is_reviewable_source("src/pkg/test_inline.py")
     assert not map_codebase.is_reviewable_source(".git/config")
     assert map_codebase.is_reviewable_source("src/pkg/core.py")
+
+
+def test_fallback_cluster_file_list_line_counts(tmp_path):
+    """Verify embedded fallback cluster_file_list preserves line counts during overflow consolidation."""
+    # Build fallback cluster_file_list function
+    file_entries = [
+        ("auth/login.py", 120),
+        ("billing/stripe.py", 150),
+        ("reports/gen.py", 80),
+        ("analytics/stats.py", 90),
+    ]
+
+    # Test fallback consolidation with max_clusters=2 (1 primary + 1 shared_utils overflow)
+    # Import fallback directly from embedded definition
+    clusters = map_codebase.cluster_file_list(
+        repo_root=tmp_path,
+        file_entries=file_entries,
+        max_clusters=2,
+    )
+    assert len(clusters) <= 2
+    shared_cluster = next((c for c in clusters if c["domain"] == "shared_utils"), None)
+    if shared_cluster:
+        assert shared_cluster["total_lines"] > 0
+        assert shared_cluster["total_lines"] == sum(
+            lines for path, lines in file_entries if path in shared_cluster["files"]
+        )

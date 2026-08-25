@@ -100,12 +100,12 @@ except ImportError:
         sorted_domains = sorted(domain_buckets.items(), key=lambda it: sum(num_lines for _, num_lines in it[1]), reverse=True)
         if max_clusters == 1 or len(sorted_domains) > max_clusters:
             primary = dict(sorted_domains[: max(0, max_clusters - 1)])
-            overflow = [f for _, items in sorted_domains[max(0, max_clusters - 1):] for f, _ in items]
+            overflow = [item for _, items in sorted_domains[max(0, max_clusters - 1):] for item in items]
             if overflow:
                 if "shared_utils" in primary:
-                    primary["shared_utils"].extend([(f, 0) for f in overflow])
+                    primary["shared_utils"].extend(overflow)
                 else:
-                    primary["shared_utils"] = [(f, 0) for f in overflow]
+                    primary["shared_utils"] = overflow
             domain_buckets = primary
         clusters = []
         for domain, items in domain_buckets.items():
@@ -406,7 +406,8 @@ def extract_internal_imports(file_path: Path, repo_root: Path) -> Set[str]:
 def filter_files_by_goal(repo_root: Path, all_files: List[str], goal: str) -> List[str]:
     """Filter and expand files based on natural language intent keywords and direct imports.
     
-    Prefers path and component stem matches first; falls back to content scan if no path matches exist.
+    A file matches if its path components/stem OR its content matches goal keywords (using boundary matching).
+    Then expands direct 1-hop internal imports for all matched files.
     """
     keywords = [
         w.lower() for w in re.findall(r"[a-zA-Z0-9_]{3,}", goal)
@@ -415,37 +416,40 @@ def filter_files_by_goal(repo_root: Path, all_files: List[str], goal: str) -> Li
     if not keywords:
         return all_files
 
-    # Step 1: Scan path components and stems for word-boundary matches (e.g. 'cli' matches 'cli/main.py' not 'client.py')
-    path_matched: Set[str] = set()
+    matched_files: Set[str] = set()
+
     for rel_path in all_files:
         p = Path(rel_path)
-        # Check all path segments and stem with boundary
+        # 1. Check path components and stem with boundary
         segments = list(p.parts[:-1]) + [p.stem]
+        is_matched = False
         for seg in segments:
             for kw in keywords:
                 if re.search(r"(?:^|[^a-zA-Z0-9])" + re.escape(kw) + r"(?:[^a-zA-Z0-9]|$)", seg, re.IGNORECASE):
-                    path_matched.add(rel_path)
+                    matched_files.add(rel_path)
+                    is_matched = True
                     break
+            if is_matched:
+                break
 
-    matched_files: Set[str] = set(path_matched)
+        if is_matched:
+            continue
 
-    # Step 2: Content fallback if no path matches were found
-    if not matched_files:
-        for rel_path in all_files:
-            p = repo_root / rel_path
-            try:
-                content = p.read_text(encoding="utf-8", errors="replace")
-                for kw in keywords:
-                    if re.search(r"(?:^|[^a-zA-Z0-9])" + re.escape(kw) + r"(?:[^a-zA-Z0-9]|$)", content, re.IGNORECASE):
-                        matched_files.add(rel_path)
-                        break
-            except Exception:
-                continue
+        # 2. Check file content with boundary
+        file_full_path = repo_root / rel_path
+        try:
+            content = file_full_path.read_text(encoding="utf-8", errors="replace")
+            for kw in keywords:
+                if re.search(r"(?:^|[^a-zA-Z0-9])" + re.escape(kw) + r"(?:[^a-zA-Z0-9]|$)", content, re.IGNORECASE):
+                    matched_files.add(rel_path)
+                    break
+        except Exception:
+            continue
 
     if not matched_files:
         return all_files
 
-    # Step 3: Expand direct 1-hop imports for all matched files
+    # 3. Expand direct 1-hop imports for all matched files
     expanded_files = set(matched_files)
     for rel_path in matched_files:
         p = repo_root / rel_path
