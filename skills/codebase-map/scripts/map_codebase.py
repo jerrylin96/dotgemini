@@ -85,7 +85,45 @@ except ImportError:
     def sanitize_id(raw_str: str) -> str:
         return re.sub(r"[^a-zA-Z0-9_]", "_", raw_str).strip("_")
 
-    def cluster_file_list(
+    def _embedded_cluster_file_list(
+        repo_root: Path,
+        file_entries: List[Tuple[str, int]],
+        max_clusters: int = 5,
+        max_lines: int = 3000,
+    ) -> List[Dict[str, Any]]:
+        if max_clusters < 1:
+            raise ValueError(f"max_clusters must be >= 1, got {max_clusters}")
+        domain_buckets: Dict[str, List[Tuple[str, int]]] = collections.defaultdict(list)
+        for rel, lines in file_entries:
+            domain = get_domain_key(rel)
+            domain_buckets[domain].append((rel, lines))
+        sorted_domains = sorted(domain_buckets.items(), key=lambda it: sum(num_lines for _, num_lines in it[1]), reverse=True)
+        if max_clusters == 1 or len(sorted_domains) > max_clusters:
+            primary = dict(sorted_domains[: max(0, max_clusters - 1)])
+            overflow = [item for _, items in sorted_domains[max(0, max_clusters - 1):] for item in items]
+            if overflow:
+                if "shared_utils" in primary:
+                    primary["shared_utils"].extend(overflow)
+                else:
+                    primary["shared_utils"] = overflow
+            domain_buckets = primary
+        clusters = []
+        for domain, items in domain_buckets.items():
+            clusters.append({
+                "id": f"cluster_{sanitize_id(domain)}",
+                "name": f"Domain: {domain.title()}",
+                "domain": domain,
+                "files": sorted(f for f, _ in items),
+                "total_lines": sum(num_lines for _, num_lines in items),
+                "is_monolithic": False,
+                "tests": [],
+            })
+        return clusters
+
+    cluster_file_list = _embedded_cluster_file_list
+else:
+    # Also expose _embedded_cluster_file_list for direct unit test verification
+    def _embedded_cluster_file_list(
         repo_root: Path,
         file_entries: List[Tuple[str, int]],
         max_clusters: int = 5,
@@ -403,18 +441,48 @@ def extract_internal_imports(file_path: Path, repo_root: Path) -> Set[str]:
     return referenced_files
 
 
+def expand_keyword_variants(word: str) -> Set[str]:
+    """Generate lightweight singular/plural variants for a keyword without broad fuzzing."""
+    w = word.lower()
+    variants = {w}
+
+    # 1. Singularization
+    if w.endswith("ies") and len(w) > 4:
+        variants.add(w[:-3] + "y")  # policies -> policy, entries -> entry
+    elif w.endswith(("sses", "shes", "ches", "xes", "zes")):
+        variants.add(w[:-2])  # classes -> class, boxes -> box
+    elif w.endswith("s") and not w.endswith("ss") and len(w) > 3:
+        variants.add(w[:-1])  # webhooks -> webhook, sessions -> session, routes -> route
+
+    # 2. Pluralization (only if singular-like)
+    if w.endswith("y") and len(w) > 2 and w[-2] not in "aeiou":
+        variants.add(w[:-1] + "ies")  # policy -> policies
+    elif w.endswith(("sh", "ch", "x", "z")) or w.endswith("ss"):
+        variants.add(w + "es")  # class -> classes, box -> boxes
+    elif not w.endswith("s"):
+        variants.add(w + "s")  # webhook -> webhooks, session -> sessions
+
+    return variants
+
+
 def filter_files_by_goal(repo_root: Path, all_files: List[str], goal: str) -> List[str]:
     """Filter and expand files based on natural language intent keywords and direct imports.
     
     A file matches if its path components/stem OR its content matches goal keywords (using boundary matching).
     Then expands direct 1-hop internal imports for all matched files.
     """
-    keywords = [
+    raw_keywords = [
         w.lower() for w in re.findall(r"[a-zA-Z0-9_]{3,}", goal)
         if w.lower() not in STOPWORDS
     ]
-    if not keywords:
+    if not raw_keywords:
         return all_files
+
+    keywords: Set[str] = set()
+    for raw_kw in raw_keywords:
+        for variant in expand_keyword_variants(raw_kw):
+            if variant not in STOPWORDS and len(variant) >= 3:
+                keywords.add(variant)
 
     matched_files: Set[str] = set()
 

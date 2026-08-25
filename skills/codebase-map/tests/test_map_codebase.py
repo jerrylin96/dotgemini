@@ -201,7 +201,7 @@ def test_intent_scoping_content_fallback_and_stopwords(tmp_path):
 
 
 def test_intent_scoping_multi_keyword_path_and_content_union(tmp_path):
-    """Goal scoping combines path matches and content matches without skipping content scans."""
+    """Goal scoping combines path matches and content matches with plural/singular keyword normalization."""
     repo = tmp_path / "union_goal_repo"
     repo.mkdir()
 
@@ -220,12 +220,13 @@ def test_intent_scoping_multi_keyword_path_and_content_union(tmp_path):
     unrelated_dir.mkdir(parents=True)
     (unrelated_dir / "logger.py").write_text("def log_event(msg):\n    print(msg)\n")
 
-    payload = map_codebase.map_repository(str(repo), goal="stripe webhook")
+    # Plural goal 'webhooks' must match singular 'webhook' in handle_webhook
+    payload = map_codebase.map_repository(str(repo), goal="I want to add Stripe webhooks")
     all_scoped = [f for c in payload["clusters"] for f in c["files"]]
 
     # Path match on 'stripe'
     assert "src/stripe/config.py" in all_scoped
-    # Content match on 'webhook'
+    # Content match on 'webhook' from plural 'webhooks'
     assert "src/billing/handler.py" in all_scoped
     # Unrelated omitted
     assert "src/logging/logger.py" not in all_scoped
@@ -460,8 +461,7 @@ def test_fallback_semantics_parity():
 
 
 def test_fallback_cluster_file_list_line_counts(tmp_path):
-    """Verify embedded fallback cluster_file_list preserves line counts during overflow consolidation."""
-    # Build fallback cluster_file_list function
+    """Verify embedded fallback _embedded_cluster_file_list preserves line counts during overflow consolidation."""
     file_entries = [
         ("auth/login.py", 120),
         ("billing/stripe.py", 150),
@@ -469,17 +469,16 @@ def test_fallback_cluster_file_list_line_counts(tmp_path):
         ("analytics/stats.py", 90),
     ]
 
-    # Test fallback consolidation with max_clusters=2 (1 primary + 1 shared_utils overflow)
-    # Import fallback directly from embedded definition
-    clusters = map_codebase.cluster_file_list(
+    # Test embedded fallback consolidation with max_clusters=2 (1 primary + 1 shared_utils overflow)
+    clusters = map_codebase._embedded_cluster_file_list(
         repo_root=tmp_path,
         file_entries=file_entries,
         max_clusters=2,
     )
     assert len(clusters) <= 2
     shared_cluster = next((c for c in clusters if c["domain"] == "shared_utils"), None)
-    if shared_cluster:
-        assert shared_cluster["total_lines"] > 0
-        assert shared_cluster["total_lines"] == sum(
-            lines for path, lines in file_entries if path in shared_cluster["files"]
-        )
+    assert shared_cluster is not None
+    assert shared_cluster["total_lines"] > 0
+    assert shared_cluster["total_lines"] == sum(
+        lines for path, lines in file_entries if path in shared_cluster["files"]
+    )
