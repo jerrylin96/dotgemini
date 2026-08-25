@@ -1,0 +1,16 @@
+[SIGNOFF e78deaf]: human comprehension and risk attestation
+
+Signoff-Spec-Version: 1.0
+Signoff-Status: VERIFIED_BY_HUMAN
+Signoff-Timestamp: 2026-08-22T03:01:27Z
+Signoff-Base-SHA: dc69f2f3eb8a083736cf5604992d2b689859520e
+Signoff-Reviewed-Commit-SHA: e78deafd960c746e15bb287a79aa58eb57e1de72
+Signoff-Reviewed-Tree-SHA: d3e6be90d850d357dd7d5a227235d42208b50fc0
+Signoff-Harness-ID: antigravity-cli
+Signoff-Conversation-ID: 89ae8048-3ca1-4f03-a9ba-e506bc037bcd
+Signoff-Transcript-Digest: sha256:87460d2731cb39ee420a92a52d922f18666cb4e5d0574b3c91926fe3c5b9a2e2
+Signoff-Transcript-Bytes: 186311
+Signoff-Tradeoff: canonical signoff CI is less robust for 2-parent merge resolution
+Signoff-Risk: none
+Signoff-Verified-By: jerrylin247365@gmail.com
+Signoff-Agent: harness=antigravity-cli/N/A model=Gemini-3.7-Flash-High reasoning=N/A interview=standard/software-general
