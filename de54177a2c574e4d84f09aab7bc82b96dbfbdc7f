@@ -1,0 +1,17 @@
+[SIGNOFF f16a33e]: human comprehension and risk attestation
+
+Signoff-Spec-Version: 1.0
+Signoff-Status: VERIFIED_BY_HUMAN
+Signoff-Timestamp: 2026-08-31T19:55:43Z
+Signoff-Base-SHA: 8a2d59e0956f27186e5dbe1bc91fc0dabe9c4d90
+Signoff-Reviewed-Commit-SHA: f16a33e17225cf5f97886088403865b2562685e9
+Signoff-Reviewed-Tree-SHA: de54177a2c574e4d84f09aab7bc82b96dbfbdc7f
+Signoff-Harness-ID: antigravity-cli
+Signoff-Conversation-ID: 465ef178-d099-4dce-886b-6939834050c8
+Signoff-Transcript-Digest: sha256:a15161e5cfe37765e00aa2bc0d7b83678ec34e6e4ab0eac8939489ab8f084d9f
+Signoff-Transcript-Bytes: 353186
+Signoff-Tradeoff: Linear commit walkthroughs exclude merge commits via --no-merges; conflict resolution changes are inspected in cumulative file view [f]
+Signoff-Tradeoff: Root commits fall back to Git empty tree 4b825dc642cb6eb9a060e54bf8d69288fbee4904 for 2-dot listing and direct git show for diffs/stats, forbidding 3-dot expressions
+Signoff-Risk: Multi-commit branches with noisy/fixup commits produce verbose commit series if reviewer does not switch to cumulative file view [f]
+Signoff-Verified-By: jerrylin247365@gmail.com
+Signoff-Agent: harness=antigravity-cli/N/A model=gemini-3.7-flash reasoning=N/A interview=standard/software-general
