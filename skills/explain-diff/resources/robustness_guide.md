@@ -12,11 +12,14 @@ This guide details best practices and compatibility standards for safely extract
 - Quote all shell paths and parameters in commands to handle paths containing spaces or special characters.
 
 ## 3. Temporary File Roles
-- `temp_diff_stat.txt`: Stores changed-file statistics.
-- `temp_diff_all.txt`: Stores complete diff hunks and context.
-- `temp_diff.txt`: Stores the per-file walkthrough diff. Dynamically extract each file's diff to a single stable location, overwriting it for each selected file.
+- `temp_commits.txt`: Stores chronological commit history (`git log --no-merges --reverse ...`).
+- `temp_commit_stat.txt`: Stores per-commit changed-file statistics (`git show --stat ...`).
+- `temp_commit_diff.txt`: Stores per-commit per-file diff hunks (`git show <sha> -- <file>`).
+- `temp_diff_stat.txt`: Stores cumulative changed-file statistics.
+- `temp_diff_all.txt`: Stores complete cumulative diff hunks and context.
+- `temp_diff.txt`: Stores the per-file cumulative walkthrough diff. Dynamically extract each file's diff to a single stable location, overwriting it for each selected file.
 - `temp_diff_paths.txt`: Stores null-delimited name-status list.
-- **Git Log Truncation**: Retrieve commit subjects via `git log --oneline <reference_commit_hash>..<commit_hash>`. If the history is extremely long and risks stdout truncation, redirect it to a temp file (`temp_diff_log.txt`) and read it via `view_file`.
+- **Git Log Truncation**: Retrieve commit subjects via `git log --oneline <reference_commit_hash>..<commit_hash>`. If the history is extremely long and risks stdout truncation, redirect it to a temp file (`temp_commits.txt` or `temp_diff_log.txt`) and read it via `view_file`.
 
 ## 4. Special Git Cases
 - **Renames & Modes**: Explicitly check diff headers for renames (`rename from ...`), mode changes (`old mode ... new mode`), and binary files (`Binary files ... differ`).

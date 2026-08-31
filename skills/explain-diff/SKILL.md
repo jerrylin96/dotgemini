@@ -1,11 +1,11 @@
 ---
 name: explain-diff
-description: Interactive, neutral diff explanation walkthrough (overall summary, per-hunk walkthroughs, Q&A). Do not use to find bugs/quality issues.
+description: Interactive, neutral diff explanation walkthrough (overall summary, per-hunk and commit-by-commit walkthroughs, Q&A). Do not use to find bugs/quality issues.
 ---
 
 # Diff Explanation Walkthrough
 
-Resolve context, generate the diff, and interactively explain it: overall summary first, then per-hunk explanations of whichever changes the user picks, with drill-down Q&A.
+Resolve context, generate the diff, and interactively explain it: overall summary first (including commit series narrative for multi-commit changesets), then walkthroughs by commit or by file, with drill-down Q&A.
 
 ## Core Rules
 > [!IMPORTANT]
@@ -15,7 +15,7 @@ Resolve context, generate the diff, and interactively explain it: overall summar
 
 ## Context Resolution
 
-Two modes, chosen by what the user provides:
+Three modes, chosen by what the user provides:
 
 * **Commit mode**: The user names a specific commit SHA or range. Skip the resolver and diff directly in the active workspace:
   - Single commit: `git show <sha>` (diff vs. its parent).
@@ -34,35 +34,67 @@ Two modes, chosen by what the user provides:
 > [!TIP]
 > **Subagent Delegation**: If the changeset is exceptionally large (many files or large diffs), the main agent should delegate the task. Invoke the built-in `research` subagent (optimized for read-only exploration) to analyze the diff chunks in the background and draft the overall summary and file-by-file gists; wait for its report before presenting the summary/menu.
 
-1. **Get the Diff Safely**: To prevent terminal command output truncation (which silently trims long diff outputs or lines), do NOT read the raw output of `git diff` directly from the terminal tool. Instead:
+1. **Get the Diff Safely & Extract Commits**: To prevent terminal command output truncation (which silently trims long diff outputs or lines), do NOT read raw git outputs directly from the terminal. Instead:
    a. **Create Scratch Directory**: Run `mkdir -p "<appDataDir>/brain/<conversation-id>/scratch"` to ensure the path exists.
-   b. **Write Statistics**: Save the changed-file statistics:
+   b. **Extract Commit List**: Write chronological commit history to scratch file:
+      `git log --no-merges --reverse --format="%h %s (%an)" "<reference_commit_hash>..<commit_hash>" > "<appDataDir>/brain/<conversation-id>/scratch/temp_commits.txt"`
+   c. **Write Statistics**: Save the changed-file statistics:
       `git diff "<reference_commit_hash>...<commit_hash>" --stat > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_stat.txt"`
-   c. **Write Complete Diff**: Save the full diff output for overall analysis:
+   d. **Write Complete Diff**: Save the full diff output for overall analysis:
       `git diff "<reference_commit_hash>...<commit_hash>" > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_all.txt"`
-   d. **Enumerate Paths**: For unusually large changesets, run null-delimited path/status enumeration (not stats):
+   e. **Enumerate Paths**: For unusually large changesets, run null-delimited path/status enumeration:
       `git diff "<reference_commit_hash>...<commit_hash>" --name-status -z > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_paths.txt"`
-   e. **Dynamic Per-File Walkthrough**: Only after the user selects a specific file, write/overwrite its target diff:
-      `git diff "<reference_commit_hash>...<commit_hash>" -- "<file>" > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff.txt"`
-   f. **Read via File Viewer**: Read the respective files (`temp_diff_stat.txt`, `temp_diff_all.txt`, or `temp_diff.txt`) using the `view_file` tool to guarantee paginated, untruncated access to every hunk.
+   f. **Read via File Viewer**: Read `temp_commits.txt`, `temp_diff_stat.txt`, and `temp_diff_all.txt` using `view_file` to determine total commit count ($K$) and file count.
 
    *Execution & Robustness Directives:*
    - **Use `view_file`**: Read files in chunks of 800 lines max. *Reason: Prevents terminal truncation.*
    - **Create and Quote Paths**: Run `mkdir -p` first; quote all paths in commands. *Reason: Handles directories with special characters/spaces safely.*
-   - **Manage Scratch Files**: Keep naming distinct (e.g. `temp_diff_stat.txt`, `temp_diff_all.txt`, `temp_diff.txt`, `temp_diff_paths.txt`). *Reason: Avoids concurrency name collisions.*
+   - **Manage Scratch Files**: Keep naming distinct (`temp_commits.txt`, `temp_commit_stat.txt`, `temp_commit_diff.txt`, `temp_diff_stat.txt`, `temp_diff_all.txt`, `temp_diff.txt`, `temp_diff_paths.txt`). *Reason: Avoids concurrency name collisions.*
    - **Parse Large Diff Stats**: Run `git diff ... --name-status -z` strictly for path and status enumeration. *Reason: Handles renames and non-standard characters safely.*
-   - **Sequential Reading & EOF**: Read until file viewer lines exceed calculated count. *Reason: Avoids terminal cutoff.*
    - **Omit Binary Files**: Skip text diffs for binary files; report their changes in the summary. *Reason: Prevents binary content corruption.*
-   - **Clean Up Safely**: Delete only temporary files when done. *Reason: Leaves repository and worktree untouched.*
+   - **Clean Up Safely**: Delete only temporary scratch files when done. *Reason: Leaves repository and worktree untouched.*
    - **Reference Guide**: For full detail on tools compatibility, EOF edge cases, and path safety, see [robustness_guide.md](resources/robustness_guide.md).
 
-2. **Overall Summary**: Open with a short summary of the whole changeset: what it does, why (inferred), and the changes grouped into logical themes (a theme may span files). Include scale (files touched, insertions/deletions).
-3. **Navigation Menu**: Present a numbered menu of changed files — path, `+/-` stats, hunk count, one-line gist — plus:
-   - `[a]` walk through every file in order,
-   - `[s]` expand the overall summary,
-   - `[q]` finish.
-   Ask the user to pick. This mirrors the branch-selection interaction of adversarial-review.
-4. **Explain a Selection**: For the chosen file, go **hunk by hunk**: quote each hunk verbatim in a fenced `diff` block, then explain in plain language what changed, why, and how it connects to the rest of the changeset. Pull surrounding context from `worktree_path` or `git show` when a hunk is unclear in isolation.
-   - **Targeted Prose/Text Highlights**: For text/markup formats (e.g., `.tex`, `.md`, `.txt`, `.rst`) or whenever a modified line is long, identify and explicitly highlight the precise inline edits (e.g., `word_A` -> `word_B`) so that subtle changes are not lost in long diff paragraphs.
-5. **Drill-down**: After each file, invite follow-up questions (e.g. callers of a changed function, prior behavior via `git log`/`git blame`, related hunks elsewhere). Answer them, then re-present the menu abbreviated, marking already-explained files, until the user picks `[q]` or confirms they are done.
-6. Output everything directly in chat. Do not save reports to files unless requested.
+2. **Overall Summary**:
+   - Open with a concise summary of the whole changeset: purpose, inferred why, and logical themes. Include scale (files touched, insertions/deletions, and commit count $K$).
+   - **Commit Series Timeline**: If multi-commit ($K > 1$), list the chronological commit sequence from `temp_commits.txt` with SHA, author, and commit subject.
+
+3. **Dual-Lens Navigation Menu**:
+   - **Single commit ($K \le 1$)**: Present standard file list directly:
+     - `[1..N]` choose specific file,
+     - `[a]` walk through every file in order,
+     - `[s]` expand the overall summary,
+     - `[q]` finish.
+   - **Multi-commit ($K > 1$)**: Present dual-lens choice:
+     ```text
+     Select walkthrough lens:
+       [c] Commit-by-commit walkthrough (chronological narrative: 1 → K)
+       [f] File-by-file walkthrough (cumulative changeset across all commits)
+       [c1..cK] Jump directly to a specific commit
+       [s] Expand overall summary
+       [q] Finish
+     ```
+
+4. **Commit-by-Commit Walkthrough Flow (`[c]`)**:
+   For the selected commit (or iterating sequentially from commit 1 to $K$):
+   a. **Commit Header**: Display commit SHA, author, and full commit message.
+   b. **Commit File Stat**: Extract commit-specific file statistics:
+      `git show --stat --format="" "<sha>" > "<appDataDir>/brain/<conversation-id>/scratch/temp_commit_stat.txt"`
+   c. **Hunk Inspection**: For each modified file in the commit, extract diff:
+      `git show "<sha>" -- "<file>" > "<appDataDir>/brain/<conversation-id>/scratch/temp_commit_diff.txt"`
+      Read with `view_file` and quote diff hunks verbatim in fenced `diff` blocks. Explain what changed, why, and how it fits into the commit sequence.
+   d. **Intra-Commit Transition**:
+      - `[n]` Next commit in series
+      - `[p]` Previous commit
+      - `[f]` Switch to cumulative file-by-file view
+      - `[q]` Finish
+
+5. **File-by-File Walkthrough Flow (`[f]`)**:
+   For cumulative file walkthrough:
+   a. Present numbered menu of changed files (path, `+/-` stats, hunk count, one-line gist).
+   b. For the chosen file, write target diff to `temp_diff.txt` (`git diff "<reference_commit_hash>...<commit_hash>" -- "<file>" > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff.txt"`).
+   c. Go hunk by hunk: quote each hunk verbatim in fenced `diff` block, explain what changed and why.
+   d. **Targeted Prose/Text Highlights**: For text/markup formats (`.tex`, `.md`, `.txt`, `.rst`), highlight precise inline edits (`word_A` -> `word_B`).
+
+6. **Drill-down & Q&A**:
+   After each commit or file, invite follow-up questions (callers of changed functions, prior behavior via `git log`/`git blame`, related hunks). Output everything directly in chat. Do not save reports to files unless requested.
