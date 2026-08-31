@@ -18,7 +18,7 @@ Resolve context, generate the diff, and interactively explain it: overall summar
 Three modes, chosen by what the user provides:
 
 * **Commit mode**: The user names a specific commit SHA or range. Skip the resolver and diff directly in the active workspace:
-  - Single commit: `<commit_hash>` is `<sha>`, `<reference_commit_hash>` is `<sha>^` (for root/parentless commits, use `git show <sha>` directly as fallback).
+  - Single commit: `<commit_hash>` is `<sha>`, `<reference_commit_hash>` is `<sha>^` (for root/parentless commits without a parent, set `<reference_commit_hash>` to the Git empty tree `4b825dc642cb6eb9a060e54bf8d69288fbee4904` or use `git show <sha>` directly for stats/diffs, treating `temp_commits.txt` as $K=1$).
   - Range: `git diff <a>...<b>` where `<reference_commit_hash>` is `<a>` and `<commit_hash>` is `<b>`.
 * **PR mode**: The user names a pull/merge request (number or web URL). Use the same resolver with the PR target — `--pr <N>`, or pass `#N`/the URL positionally. It fetches the PR head ref from the remote, so fork PRs work without a local branch; see [adversarial-review/SKILL.md](../adversarial-review/SKILL.md) for details, the extra `pr_number` JSON field, and the PR-baseline note (`--reference` override, optional best-effort `gh pr view` for the PR title/description — the description makes the "why" in the summary much better, but `gh` is never required).
 * **Branch mode (default)**: The user names a branch or gives no target. Reuse the adversarial-review branch resolver — same script, same worktree cache, same protocol:

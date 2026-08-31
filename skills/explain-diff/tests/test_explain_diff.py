@@ -96,5 +96,6 @@ def test_robustness_guide_commit_safety(robustness_guide_content):
 
 def test_agents_md_sync(agents_content):
     # AGENTS.md must describe explain-diff with commit walkthrough capabilities
-    assert "[explain-diff/SKILL.md]" in agents_content
-    assert "commit-by-commit" in agents_content or "commit" in agents_content.lower()
+    explain_diff_lines = [line for line in agents_content.splitlines() if "[explain-diff/SKILL.md]" in line]
+    assert explain_diff_lines, "explain-diff entry not found in AGENTS.md"
+    assert "commit-by-commit" in explain_diff_lines[0], f"Expected 'commit-by-commit' in line: {explain_diff_lines[0]}"
