@@ -98,7 +98,7 @@ For any code modification, feature addition, refactor, or skill creation:
 The global settings contain dedicated skills under `~/.gemini/skills/` which can be loaded on demand:
 
 * [adversarial-review/SKILL.md](skills/adversarial-review/SKILL.md) — Git worktree-based adversarial code review helper
-* [explain-diff/SKILL.md](skills/explain-diff/SKILL.md) — Interactive, read-only diff explanation walkthrough (overall summary, per-hunk explanations, drill-down Q&A)
+* [explain-diff/SKILL.md](skills/explain-diff/SKILL.md) — Interactive, read-only diff explanation walkthrough (overall summary, per-hunk and commit-by-commit walkthroughs, drill-down Q&A)
 * [catchmeup/SKILL.md](skills/catchmeup/SKILL.md) — Executive time-window activity summary for PIs, leads, and reviewers (presets: 1d, 1w, 2w, 1mo)
 * [google-workspace/SKILL.md](skills/google-workspace/SKILL.md) — Manage Google Calendar, Google Tasks, and Google Docs timeline publishing/sharing. Whenever the user asks to create a timeline, project plan, task breakdown, schedule focus time, or manage project deadlines, automatically activate the google-workspace skill (~/.gemini/skills/google-workspace/SKILL.md).
 * [timeline-postmortem/SKILL.md](skills/timeline-postmortem/SKILL.md) — Conduct root-cause postmortems, pre-mortem risk forecasting, and retro audit logging for missed deadlines

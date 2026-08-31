@@ -5,6 +5,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SKILL_MD = REPO_ROOT / "skills" / "explain-diff" / "SKILL.md"
 ROBUSTNESS_GUIDE = REPO_ROOT / "skills" / "explain-diff" / "resources" / "robustness_guide.md"
+AGENTS_MD = REPO_ROOT / "AGENTS.md"
 
 
 @pytest.fixture
@@ -17,6 +18,12 @@ def skill_content():
 def robustness_guide_content():
     assert ROBUSTNESS_GUIDE.exists(), f"robustness_guide.md not found at {ROBUSTNESS_GUIDE}"
     return ROBUSTNESS_GUIDE.read_text(encoding="utf-8")
+
+
+@pytest.fixture
+def agents_content():
+    assert AGENTS_MD.exists(), f"AGENTS.md not found at {AGENTS_MD}"
+    return AGENTS_MD.read_text(encoding="utf-8")
 
 
 def test_skill_frontmatter_and_metadata(skill_content):
@@ -34,21 +41,34 @@ def test_commit_extraction_directives(skill_content):
     assert "temp_commits.txt" in skill_content
 
 
+def test_commit_mode_reference_hash(skill_content):
+    # Single-commit mode defines reference hash as <sha>^ with root commit fallback
+    assert "<sha>^" in skill_content
+    assert "root" in skill_content.lower()
+
+
 def test_dual_lens_navigation_menu_contract(skill_content):
     # Must specify dual-lens menu tokens: [c] commit-by-commit and [f] file-by-file
     assert "[c]" in skill_content
     assert "[f]" in skill_content
     assert "commit-by-commit" in skill_content.lower() or "commit narrative" in skill_content.lower()
     assert "file-by-file" in skill_content.lower() or "cumulative" in skill_content.lower()
+    # Navigation controls across flows
+    assert "[a]" in skill_content  # walk all files
+    assert "[s]" in skill_content  # expand summary
+    assert "[q]" in skill_content  # finish
 
 
 def test_commit_walkthrough_protocol(skill_content):
-    # Must document commit-specific walkthrough commands (git show <sha>)
+    # Must document commit-specific walkthrough commands (git show <sha>) and message extraction
     assert "git show" in skill_content
+    assert "temp_commit_msg.txt" in skill_content
     assert "temp_commit_stat.txt" in skill_content
     assert "temp_commit_diff.txt" in skill_content
     # Intra-commit navigation tokens
-    assert "[n]" in skill_content or "Next commit" in skill_content
+    assert "[n]" in skill_content
+    assert "[p]" in skill_content
+    assert "[s]" in skill_content
 
 
 def test_single_vs_multi_commit_branching(skill_content):
@@ -69,4 +89,12 @@ def test_robustness_guide_commit_safety(robustness_guide_content):
     # Robustness guide should include guidance on commit diff extraction safety
     content_lower = robustness_guide_content.lower()
     assert "commit" in content_lower
+    assert "temp_commit_msg.txt" in robustness_guide_content
+    assert "temp_commits.txt" in robustness_guide_content
     assert "scratch" in content_lower
+
+
+def test_agents_md_sync(agents_content):
+    # AGENTS.md must describe explain-diff with commit walkthrough capabilities
+    assert "[explain-diff/SKILL.md]" in agents_content
+    assert "commit-by-commit" in agents_content or "commit" in agents_content.lower()

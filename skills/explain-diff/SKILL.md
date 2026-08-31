@@ -18,8 +18,8 @@ Resolve context, generate the diff, and interactively explain it: overall summar
 Three modes, chosen by what the user provides:
 
 * **Commit mode**: The user names a specific commit SHA or range. Skip the resolver and diff directly in the active workspace:
-  - Single commit: `git show <sha>` (diff vs. its parent).
-  - Range: `git diff <a>...<b>`.
+  - Single commit: `<commit_hash>` is `<sha>`, `<reference_commit_hash>` is `<sha>^` (for root/parentless commits, use `git show <sha>` directly as fallback).
+  - Range: `git diff <a>...<b>` where `<reference_commit_hash>` is `<a>` and `<commit_hash>` is `<b>`.
 * **PR mode**: The user names a pull/merge request (number or web URL). Use the same resolver with the PR target — `--pr <N>`, or pass `#N`/the URL positionally. It fetches the PR head ref from the remote, so fork PRs work without a local branch; see [adversarial-review/SKILL.md](../adversarial-review/SKILL.md) for details, the extra `pr_number` JSON field, and the PR-baseline note (`--reference` override, optional best-effort `gh pr view` for the PR title/description — the description makes the "why" in the summary much better, but `gh` is never required).
 * **Branch mode (default)**: The user names a branch or gives no target. Reuse the adversarial-review branch resolver — same script, same worktree cache, same protocol:
   ```bash
@@ -38,19 +38,21 @@ Three modes, chosen by what the user provides:
    a. **Create Scratch Directory**: Run `mkdir -p "<appDataDir>/brain/<conversation-id>/scratch"` to ensure the path exists.
    b. **Extract Commit List**: Write chronological commit history to scratch file:
       `git log --no-merges --reverse --format="%h %s (%an)" "<reference_commit_hash>..<commit_hash>" > "<appDataDir>/brain/<conversation-id>/scratch/temp_commits.txt"`
+      *(Note: `--no-merges` extracts linear commits for the chronological narrative; any changes from merge conflict resolutions are captured in the cumulative file-by-file diff).*
    c. **Write Statistics**: Save the changed-file statistics:
       `git diff "<reference_commit_hash>...<commit_hash>" --stat > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_stat.txt"`
    d. **Write Complete Diff**: Save the full diff output for overall analysis:
       `git diff "<reference_commit_hash>...<commit_hash>" > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_all.txt"`
    e. **Enumerate Paths**: For unusually large changesets, run null-delimited path/status enumeration:
       `git diff "<reference_commit_hash>...<commit_hash>" --name-status -z > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_paths.txt"`
-   f. **Read via File Viewer**: Read `temp_commits.txt`, `temp_diff_stat.txt`, and `temp_diff_all.txt` using `view_file` to determine total commit count ($K$) and file count.
+   f. **Read via File Viewer**: Read `temp_commits.txt`, `temp_diff_stat.txt`, and `temp_diff_all.txt` using `view_file` to determine total commit count ($K$, where $K$ is the number of commits in `temp_commits.txt`) and file count.
 
    *Execution & Robustness Directives:*
    - **Use `view_file`**: Read files in chunks of 800 lines max. *Reason: Prevents terminal truncation.*
    - **Create and Quote Paths**: Run `mkdir -p` first; quote all paths in commands. *Reason: Handles directories with special characters/spaces safely.*
-   - **Manage Scratch Files**: Keep naming distinct (`temp_commits.txt`, `temp_commit_stat.txt`, `temp_commit_diff.txt`, `temp_diff_stat.txt`, `temp_diff_all.txt`, `temp_diff.txt`, `temp_diff_paths.txt`). *Reason: Avoids concurrency name collisions.*
+   - **Manage Scratch Files**: Keep naming distinct (`temp_commits.txt`, `temp_commit_msg.txt`, `temp_commit_stat.txt`, `temp_commit_diff.txt`, `temp_diff_stat.txt`, `temp_diff_all.txt`, `temp_diff.txt`, `temp_diff_paths.txt`). *Reason: Avoids concurrency name collisions.*
    - **Parse Large Diff Stats**: Run `git diff ... --name-status -z` strictly for path and status enumeration. *Reason: Handles renames and non-standard characters safely.*
+   - **Sequential Reading & EOF**: Read until file viewer lines exceed calculated count. *Reason: Avoids terminal cutoff.*
    - **Omit Binary Files**: Skip text diffs for binary files; report their changes in the summary. *Reason: Prevents binary content corruption.*
    - **Clean Up Safely**: Delete only temporary scratch files when done. *Reason: Leaves repository and worktree untouched.*
    - **Reference Guide**: For full detail on tools compatibility, EOF edge cases, and path safety, see [robustness_guide.md](resources/robustness_guide.md).
@@ -70,14 +72,16 @@ Three modes, chosen by what the user provides:
      Select walkthrough lens:
        [c] Commit-by-commit walkthrough (chronological narrative: 1 → K)
        [f] File-by-file walkthrough (cumulative changeset across all commits)
-       [c1..cK] Jump directly to a specific commit
+       [c1..cK] Jump directly to a specific commit (e.g. c1, c2)
        [s] Expand overall summary
        [q] Finish
      ```
 
 4. **Commit-by-Commit Walkthrough Flow (`[c]`)**:
    For the selected commit (or iterating sequentially from commit 1 to $K$):
-   a. **Commit Header**: Display commit SHA, author, and full commit message.
+   a. **Commit Header**: Extract full commit message and metadata:
+      `git log -1 --format="%H %an%n%B" "<sha>" > "<appDataDir>/brain/<conversation-id>/scratch/temp_commit_msg.txt"`
+      Read with `view_file` and display commit SHA, author, and complete commit message.
    b. **Commit File Stat**: Extract commit-specific file statistics:
       `git show --stat --format="" "<sha>" > "<appDataDir>/brain/<conversation-id>/scratch/temp_commit_stat.txt"`
    c. **Hunk Inspection**: For each modified file in the commit, extract diff:
@@ -86,12 +90,18 @@ Three modes, chosen by what the user provides:
    d. **Intra-Commit Transition**:
       - `[n]` Next commit in series
       - `[p]` Previous commit
+      - `[s]` Expand overall summary
       - `[f]` Switch to cumulative file-by-file view
       - `[q]` Finish
 
 5. **File-by-File Walkthrough Flow (`[f]`)**:
    For cumulative file walkthrough:
-   a. Present numbered menu of changed files (path, `+/-` stats, hunk count, one-line gist).
+   a. Present numbered menu of changed files (path, `+/-` stats, hunk count, one-line gist) plus:
+      - `[1..N]` choose specific file,
+      - `[a]` walk through every file in order,
+      - `[c]` switch back to commit-by-commit walkthrough (if $K > 1$),
+      - `[s]` expand the overall summary,
+      - `[q]` finish.
    b. For the chosen file, write target diff to `temp_diff.txt` (`git diff "<reference_commit_hash>...<commit_hash>" -- "<file>" > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff.txt"`).
    c. Go hunk by hunk: quote each hunk verbatim in fenced `diff` block, explain what changed and why.
    d. **Targeted Prose/Text Highlights**: For text/markup formats (`.tex`, `.md`, `.txt`, `.rst`), highlight precise inline edits (`word_A` -> `word_B`).
