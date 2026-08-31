@@ -45,6 +45,14 @@ def test_commit_mode_reference_hash(skill_content):
     # Single-commit mode defines reference hash as <sha>^ with root commit fallback
     assert "<sha>^" in skill_content
     assert "root" in skill_content.lower()
+    assert "4b825dc642cb6eb9a060e54bf8d69288fbee4904" in skill_content
+    assert "git show" in skill_content
+
+
+def test_katex_rendering(skill_content):
+    # KaTeX inline math must use single backslash for <= to render properly
+    assert r"$K \le 1$" in skill_content
+    assert r"$K \\le 1$" not in skill_content
 
 
 def test_dual_lens_navigation_menu_contract(skill_content):
