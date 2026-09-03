@@ -163,7 +163,7 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
        *(Prohibition: NEVER include secrets, tokens, credentials, or `.env` contents in the compaction block)*. Specify the `<appDataDir>/brain/<conversation-id>/review_manifest_<feature>.md` path to preserve reasoning state across context isolation.
      - The subagent inspects both the code diff and `${FEATURE_SLUG}/spec.md` / `plan.md` to verify implementation-to-spec parity. Repeat fix-commit-push loop until verdict is `APPROVE` with zero open `[CRITICAL]` findings. Post review report in chat.
      - *Subagent Lifecycle Cleanup*: Once the subagent finishes and posts its review report, the parent agent MUST kill the dangling subagent instance using `manage_subagents` (`Action: "kill"`, `ConversationIds: [<subagent_conversation_id>]`).
-   - **Step 7c (Idempotent Ephemeral Cleanup)**:
+   - **Step 7b (Idempotent Ephemeral Cleanup)**:
      - *Only after* `Adversarial Code Reviewer` issues verdict of `APPROVE`, purge the ephemeral review folder:
        ```bash
        cd "${WORKTREE_PATH}"
@@ -176,7 +176,7 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
        fi
        ```
      - This guarantees that upon squash or rebase merge to `<base_branch>`, zero ephemeral files pollute the primary tree.
-   - **Step 7b (Ephemeral Post-Review Audit Report Artifact & Scratchpad Update)**:
+   - **Step 7c (Ephemeral Post-Review Audit Report Artifact & Scratchpad Update)**:
      - Update `<appDataDir>/brain/<conversation-id>/scratch/scratchpad.md` with post-review findings and subagent verdict.
      - Generate formal `review_report_<feature>.md` artifact strictly within the ephemeral conversation directory (`<appDataDir>/brain/<conversation-id>/`).
      - **Prohibition on Obsidian Dumping**: Do NOT write `review_report_<feature>.md` to Obsidian vaults or the git workspace tree. Its content is ephemeral audit evidence for chat review and GitHub PR description/comments only.
