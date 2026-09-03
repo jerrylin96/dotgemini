@@ -1,0 +1,18 @@
+[SIGNOFF 53d1307]: human comprehension and risk attestation
+
+Signoff-Spec-Version: 1.0
+Signoff-Status: VERIFIED_BY_HUMAN
+Signoff-Timestamp: 2026-09-03T02:30:21Z
+Signoff-Base-SHA: 72461c4b52fcc140223b1c045988c5b5aec4d74b
+Signoff-Reviewed-Commit-SHA: 53d130771b68b65290b568878e0f82fa74be5590
+Signoff-Reviewed-Tree-SHA: 8c39b38ff614d524de3c252158e815233950d029
+Signoff-Harness-ID: antigravity-cli
+Signoff-Conversation-ID: e66ffdb5-87ac-43c8-b939-da1658a829d0
+Signoff-Transcript-Digest: sha256:62b10cb5e5d35c617d57a38a7bfc6eeaede5c838e90533fcb9a62809d9ae10e0
+Signoff-Transcript-Bytes: 549269
+Signoff-Tradeoff: Every diff hunk is assigned strictly to one topic; rare contiguous hunks touching multiple concerns are treated atomically and not artificially split
+Signoff-Tradeoff: Copy detection enforces --find-renames --find-copies for intra-diff copies, while --find-copies-harder is excluded to avoid repository-wide O(N*M) traversal
+Signoff-Tradeoff: Single-commit changesets cleanly omit the commit walkthrough lens [c]
+Signoff-Risk: Path-limited file diffs rely on global status metadata when copy/rename source paths are outside the pathspec
+Signoff-Verified-By: jerrylin247365@gmail.com
+Signoff-Agent: harness=antigravity-cli/N/A model=gemini-3.7-flash reasoning=N/A interview=standard/software-general
