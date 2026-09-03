@@ -38,6 +38,16 @@ class TestRemoteSpecPlanWorkflow(unittest.TestCase):
             content,
             "make-feature/SKILL.md must assign BASE_BRANCH in Step 1",
         )
+        self.assertNotIn(
+            'BASE_BRANCH="${1:-',
+            content,
+            "make-feature/SKILL.md must not use ${1:- for BASE_BRANCH",
+        )
+        self.assertNotIn(
+            '"<base_branch>"',
+            content,
+            "make-feature/SKILL.md must not leave unsubstituted <base_branch> in assignment",
+        )
         self.assertIn(
             "SANITIZED_FEATURE=",
             content,
@@ -75,8 +85,12 @@ class TestRemoteSpecPlanWorkflow(unittest.TestCase):
         self.assertIn("spec: address review feedback", content)
         self.assertIn("plan: address review feedback", content)
 
-        # 6. Early abort teardown routines for Step 2c and 3c (must cd out of worktree first and require explicit confirmation)
+        # 6. Early abort teardown routines for Step 2c and 3c (must cd out of worktree first, require explicit confirmation, and use grep -F)
         self.assertIn("abort feature", content.lower())
+        self.assertTrue(
+            "grep -F" in content or "porcelain" in content,
+            "make-feature/SKILL.md abort routine must use grep -F or porcelain for worktree matching",
+        )
         self.assertIn("git branch -D", content)
         self.assertIn("git push origin --delete", content)
         self.assertIn("git worktree prune", content)
@@ -108,6 +122,11 @@ class TestRemoteSpecPlanWorkflow(unittest.TestCase):
             phase2_text,
             "make-feature/SKILL.md Phase 2 must define Step 5 GREEN commit message",
         )
+        self.assertIn(
+            "git diff --cached --quiet",
+            phase2_text,
+            "make-feature/SKILL.md Phase 2 must guard GREEN commit with git diff --cached --quiet",
+        )
 
         # 10. Heavy Mode per-slice 2-stage commit cadence
         self.assertIn("test(slice-N): add RED test suite (failing)", content)
@@ -131,6 +150,11 @@ class TestRemoteSpecPlanWorkflow(unittest.TestCase):
             "git diff --cached --quiet",
             phase3_text,
             "make-feature/SKILL.md Phase 3 cleanup commit must be guarded against empty diff",
+        )
+        self.assertNotIn(
+            "this repository preserves merge commits",
+            content.lower(),
+            "make-feature/SKILL.md must not assume repo merge-commit policy",
         )
 
         # 12. Ephemeral review report rule (prohibiting Obsidian)
@@ -229,6 +253,10 @@ class TestRemoteSpecPlanWorkflow(unittest.TestCase):
         self.assertIn("/grill-me", lifecycle_content)
         self.assertIn("<feature-name>-<hash>/spec.md", lifecycle_content)
         self.assertIn("<feature-name>-<hash>/plan.md", lifecycle_content)
+        self.assertIn("→", lifecycle_content)
+        self.assertNotIn(r"$\to$", lifecycle_content)
+        self.assertIn("→", readme_content)
+        self.assertNotIn(r"$\to$", readme_content)
 
         # 3. incremental-implementation/SKILL.md
         incremental_content = INCREMENTAL_SKILL_PATH.read_text(encoding="utf-8")

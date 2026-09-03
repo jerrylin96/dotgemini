@@ -34,12 +34,13 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
 1. **Phase 1a (Spec & Adversarial Spec Review Gate)**:
    - **Goal**: Worktree initialized, in-tree spec drafted in `<feature-name>-<hash>/spec.md`, committed and pushed to remote origin for external review, subagent spec review approved, and sequential human approval granted.
    - **Step 1 (Resolve Branch, Pre-flight Remote & Initialize Worktree)**:
-     - Resolve target base branch (e.g. `main`, `develop`) and record repository root:
+     - Identify target base branch (ask user or detect default integration branch, defaulting to `main`):
        ```bash
        PRIMARY_REPO="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-       BASE_BRANCH="${1:-<base_branch>}"
-       HASH=$(LC_ALL=C tr -dc 'a-f0-9' < /dev/urandom | head -c 6)
-       SANITIZED_FEATURE=$(echo "<feature-name>" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9._-' '-')
+       BASE_BRANCH=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@')
+       BASE_BRANCH="${BASE_BRANCH:-main}"
+       HASH=$(openssl rand -hex 3 2>/dev/null || LC_ALL=C tr -dc 'a-f0-9' < /dev/urandom | head -c 6)
+       SANITIZED_FEATURE=$(echo "<feature-name>" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9._-' '-' | sed 's/^-*//;s/-*$//')
        FEATURE_SLUG="${SANITIZED_FEATURE}-${HASH}"
        BRANCH_NAME="gemini/${FEATURE_SLUG}"
        WORKTREE_PATH="$HOME/.gemini/tmp/worktrees/gemini_${FEATURE_SLUG}"
@@ -52,13 +53,16 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
          REMOTE_ENABLED=false
        fi
        ```
-     - Create isolated git worktree off designated base branch (`<base_branch>`):
+     - Create isolated git worktree off verified base branch (`BASE_BRANCH`):
        ```bash
        git fetch origin >/dev/null 2>&1 || true
        if git rev-parse --verify "origin/${BASE_BRANCH}" >/dev/null 2>&1; then
          git worktree add -b "${BRANCH_NAME}" "${WORKTREE_PATH}" "origin/${BASE_BRANCH}"
-       else
+       elif git rev-parse --verify "${BASE_BRANCH}" >/dev/null 2>&1; then
          git worktree add -b "${BRANCH_NAME}" "${WORKTREE_PATH}" "${BASE_BRANCH}"
+       else
+         echo "Error: Target base branch '${BASE_BRANCH}' does not exist." >&2
+         exit 1
        fi
        ```
      - Initialize scratchpad:
@@ -88,7 +92,7 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
        > PAUSE and obtain explicit confirmation ("abort feature") before executing teardown; a rejection of the spec content alone means REVISE, not teardown.
        ```bash
        cd "${PRIMARY_REPO}"
-       if git worktree list | grep -q "${WORKTREE_PATH}"; then
+       if git worktree list | grep -F -q -- "${WORKTREE_PATH}"; then
          git worktree remove "${WORKTREE_PATH}" --force
        fi
        if git show-ref --verify --quiet "refs/heads/${BRANCH_NAME}"; then
@@ -151,10 +155,10 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
    - **Step 5 (Stage & Commit GREEN Implementation)**:
      ```bash
      cd "${WORKTREE_PATH}"
-     git add <modified_files>
-     git commit -m "feat: implement feature to make tests pass (GREEN)"
+     git add -- <modified_files>
+     git diff --cached --quiet || git commit -m "feat: implement feature to make tests pass (GREEN)"
      ```
-     *(Note: In Heavy Mode, slice commits and pushes already occurred inside Step 4e tip; Step 5 is a no-op if the working tree is already clean).*
+     *(Note: In Heavy Mode, slice commits and pushes already occurred inside Step 4e tip; the `git diff --cached --quiet` guard ensures Step 5 is a clean no-op if the working tree is already clean).*
 
 4. **Phase 3 (Push, Adversarial Code Review Gate & Ephemeral Folder Cleanup)**:
    - **Goal**: Feature implementation pushed to `origin`, subagent `/adversarial-review` executed, ephemeral review folder purged from git tree, and post-review report artifact created in ephemeral conversation brain.
@@ -192,7 +196,7 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
          fi
        fi
        ```
-     - This guarantees that upon merge or rebase to `<base_branch>`, zero ephemeral files pollute the primary tree. Note: The spec and plan remain permanently accessible in branch commit history (as this repository preserves merge commits). In Step 8 / Phase 4, the agent presents the commit SHAs and links of the spec and plan commits to the human engineer so they can be consulted during `/explain-diff` and `/signoff` after in-tree copies are removed.
+     - This guarantees that upon merge or rebase to `<base_branch>`, zero ephemeral files pollute the primary tree. Note: After cleanup, the spec and plan exist only in the feature-branch commit history. In Step 8 / Phase 4, the agent presents the commit SHAs and links of the spec and plan commits to the human engineer so they can be consulted during `/explain-diff` and `/signoff` after in-tree copies are removed.
    - **Step 7c (Ephemeral Post-Review Audit Report Artifact & Scratchpad Update)**:
      - Update `<appDataDir>/brain/<conversation-id>/scratch/scratchpad.md` with post-review findings and subagent verdict.
      - Generate formal `review_report_<feature>.md` artifact strictly within the ephemeral conversation directory (`<appDataDir>/brain/<conversation-id>/`).
