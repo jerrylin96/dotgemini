@@ -37,12 +37,12 @@ Applicable **ONLY** to `spec-review` and `plan-review` modes.
 > **Artifact Mode Bypass Rules**: When executing `spec-review` or `plan-review`, the review subagent MUST NOT:
 > - Ask the user or parent agent to select a feature branch.
 > - Invoke `resolve_branches.py`.
-> - Create or use a git worktree.
+> - Create a separate git worktree or manage checkouts (the worktree is created and managed by the parent builder agent).
 > - Generate or read a git diff.
 > - Run test, linter, or environment setup scripts (`setup_review_env.py`, `run_in_env.py`).
 
-### Execution Procedure for Spec & Plan Artifacts:
-1. Read the target artifact directly via `view_file` using the file path provided under `Target Artifact Paths` in the Context Compaction Block.
+### Execution Procedure for Spec & Plan Documents:
+1. Read the target spec or plan directly via `view_file` using the file path provided under `Target Artifact Paths` in the Context Compaction Block. When executing under `/make-feature`, `Target Artifact Paths` will point at `${WORKTREE_PATH}/${FEATURE_SLUG}/spec.md` or `plan.md` in the feature worktree (which strictly supersedes `/artifact` and Obsidian); reading that path via `view_file` is permitted and does not violate the bypass rule against creating a git worktree (it is read-only). For standalone runs outside git worktrees, this may be an artifact path.
 2. Apply mode-specific checklist:
    - **`spec-review` Checklist**: Scope completeness, unstated assumptions, missing edge cases, security/architectural risks, non-negotiables.
    - **`plan-review` Checklist**: Atomic task decomposition, explicit TDD RED/GREEN specs, executable verify commands, dependency ordering, worktree/env isolation safety.
@@ -64,7 +64,7 @@ Applicable **ONLY** to `test-review` mode.
 The review subagent MUST be provided with:
 - **Target Worktree Path**: Absolute path under `~/.gemini/tmp/worktrees/`.
 - **Designated RED Test Paths**: Specific test file path(s) or pytest node IDs.
-- **Approved Spec Path**: Target `/spec` artifact path.
+- **Approved Spec Path**: Target in-tree `${FEATURE_SLUG}/spec.md` path (or `/spec` artifact path for standalone runs).
 - **Task Slice Info**: (Optional) Relevant plan task item.
 
 > [!IMPORTANT]

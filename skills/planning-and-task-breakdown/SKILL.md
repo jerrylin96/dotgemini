@@ -5,7 +5,7 @@ description: Decompose specs into small, verifiable tasks with acceptance criter
 
 ## Overview
 
-Transforms a specification or feature request into granular, actionable, testable units of work. Every non-trivial change follows the unified [make-feature](../make-feature/SKILL.md) pipeline — after drafting the `/plan` artifact, the agent **pauses for explicit human approval** before creating worktrees or writing code.
+Transforms a specification or feature request into granular, actionable, testable units of work. Every non-trivial change follows the unified [make-feature](../make-feature/SKILL.md) pipeline — after drafting the plan document (in-tree `${FEATURE_SLUG}/plan.md` under `make-feature`), the agent **pauses for explicit human approval** before writing code.
 
 ## When to Use
 
@@ -68,7 +68,7 @@ When Sequential Subagents strategy is selected:
 #### Strategy Triggers & Conventions:
 - **Auto-Recommendation**: Agent recommends `Sequential Subagents` if the task breakdown contains 5 or more complex multi-file slices.
 - **User Override Conventions**: If user prompt includes intent signals (`heavy`, `subagent per slice`, or external plan handoff) or command invocation conventions (`/plan heavy`, `/make-feature heavy`), agent proactively selects `Sequential Subagents` execution strategy.
-- **Per-Slice Review Gate**: Under `Sequential Subagents` (Heavy Mode), each slice builder subagent undergoes a per-slice `Adversarial Test Reviewer` gate after writing RED tests, and a per-slice `Adversarial Code Reviewer` gate after writing GREEN implementation before committing and handing off to the next slice subagent.
+- **Per-Slice Review Gate**: Under `Sequential Subagents` (Heavy Mode), each slice builder subagent executes a 2-stage commit cadence: undergoes a per-slice `Adversarial Test Reviewer` gate after writing RED tests, commits and pushes `test(slice-N): add RED test suite (failing)`, and a per-slice `Adversarial Code Reviewer` gate after writing GREEN implementation before committing and pushing `feat(slice-N): implement slice N (GREEN)` and handing off to the next slice subagent.
 - **External Plan Handoff Definition**: An external plan handoff refers to a plan produced outside this repository's `/plan` process, including pre-architected plans imported from frontier models.
 
 ### Step 2c: Subagent Adversarial Plan Review
@@ -79,10 +79,10 @@ When executing under `/make-feature` Phase 1b, parent agent invokes `invoke_suba
 
 - Create the plan as a reviewable document with a checklist for tracking progress
 - Every task must include TDD RED/GREEN specifications and an empirical verify step (prohibiting unverified claims).
-- **PAUSE**: Do not create worktrees or write code until the human engineer explicitly approves the audited plan (`make-feature` Step 3c).
+- **PAUSE**: Do not write code until the human engineer explicitly approves the audited plan (`make-feature` Step 3c). Provide clickable links to GitHub remote file and local worktree file.
 
-> [!TIP]
-> Store the plan as an artifact with `RequestFeedback: true` in `<appDataDir>/brain/<conversation-id>/`.
+> [!IMPORTANT]
+> When executing under [make-feature](../make-feature/SKILL.md) Phase 1b, the plan is written directly to `${FEATURE_SLUG}/plan.md` (e.g. `<feature-name>-<hash>/plan.md`) in the isolated worktree and committed/pushed to `origin`. This in-tree location strictly supersedes `/artifact` and Obsidian vault storage for feature development. For standalone plan usage outside git feature branches, store as an artifact with `RequestFeedback: true`.
 
 
 ## Common Rationalizations
@@ -104,7 +104,7 @@ When executing under `/make-feature` Phase 1b, parent agent invokes `invoke_suba
 
 ## Verification
 
-- [ ] Plan exists (artifact, or repo document such as `tasks/plan.md`) and covers full scope
+- [ ] Plan exists (in-tree `${FEATURE_SLUG}/plan.md` when using `make-feature`, superseding Obsidian/artifact paths) and covers full scope
 - [ ] Tasks are clear, atomic, and ordered
 - [ ] TDD RED test spec and GREEN implementation target defined for every task
 - [ ] Every task has exact empirical verification command
