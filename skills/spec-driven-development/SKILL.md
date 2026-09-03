@@ -26,8 +26,8 @@ Define what to build. Identify ambiguities, missing requirements, assumptions.
 
 Cover: **Objectives**, **Scope**, **Project Structure**, **Code Style**, **Testing Strategy**, **Boundaries** (non-goals, constraints).
 
-> [!TIP]
-> Store the spec as an artifact with `RequestFeedback: true` so the human gets a review prompt, or persist in an Obsidian vault per `AGENTS.md §9`.
+> [!IMPORTANT]
+> When executing under [make-feature](../make-feature/SKILL.md) Phase 1a, the spec is written directly to `${FEATURE_SLUG}/spec.md` (e.g. `<feature-name>-<hash>/spec.md`) in the isolated worktree and committed/pushed to `origin`. This in-tree location strictly supersedes `/artifact` and Obsidian vault storage for feature development. For standalone spec usage outside git feature branches, store as an artifact with `RequestFeedback: true`.
 
 ### 2b. Subagent Adversarial Spec Review
 
@@ -66,4 +66,4 @@ Break the approved spec into small, verifiable tasks.
 - [ ] Human has reviewed and explicitly approved spec (`make-feature` Step 2c pause)
 - [ ] Success criteria are specific, measurable, testable
 - [ ] Constraints explicitly defined
-- [ ] Spec persisted (artifact, vault, or repo document such as `SPEC.md`)
+- [ ] Spec persisted (in-tree `${FEATURE_SLUG}/spec.md` when using `make-feature`, superseding Obsidian/artifact paths)

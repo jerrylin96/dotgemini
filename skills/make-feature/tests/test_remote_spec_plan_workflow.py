@@ -1,6 +1,5 @@
 import re
 from pathlib import Path
-import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 MAKE_FEATURE_PATH = REPO_ROOT / "skills" / "make-feature" / "SKILL.md"
@@ -55,7 +54,7 @@ def test_make_feature_skill_lifecycle():
     )
 
     # 7. Phase 2 Step 4: Redundant git worktree add removed from Phase 2 Step 4
-    phase2_match = re.search(r"Phase 2.*?Phase 3", content, re.DOTALL)
+    phase2_match = re.search(r"3\.\s*\*\*Phase 2.*?4\.\s*\*\*Phase 3", content, re.DOTALL)
     assert phase2_match is not None, "Phase 2 section not found"
     phase2_text = phase2_match.group(0)
     assert "git worktree add" not in phase2_text, (
@@ -81,7 +80,7 @@ def test_make_feature_skill_lifecycle():
     )
 
     # 11. Idempotent Step 7c cleanup with --ignore-unmatch in Phase 3
-    phase3_match = re.search(r"Phase 3.*?Phase 4", content, re.DOTALL)
+    phase3_match = re.search(r"4\.\s*\*\*Phase 3.*?5\.\s*\*\*Phase 4", content, re.DOTALL)
     assert phase3_match is not None, "Phase 3 section not found"
     phase3_text = phase3_match.group(0)
     assert "git rm -rf --ignore-unmatch" in phase3_text, (
