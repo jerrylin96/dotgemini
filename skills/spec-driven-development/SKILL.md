@@ -5,7 +5,7 @@ description: Creates specs before coding. Maps to `/spec`. Use when starting a n
 
 ## Overview
 
-Write the spec before the code. Every non-trivial change follows the unified [make-feature](../make-feature/SKILL.md) pipeline — after drafting the `/spec` artifact, the agent **pauses for explicit human approval** before advancing to `/plan`.
+Write the spec before the code. Every non-trivial change follows the unified [make-feature](../make-feature/SKILL.md) pipeline — after drafting the spec document (in-tree `${FEATURE_SLUG}/spec.md` under `make-feature`), the agent **pauses for explicit human approval** before advancing to `/plan`.
 
 ## When to Use
 

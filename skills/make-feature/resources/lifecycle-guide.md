@@ -10,12 +10,12 @@ Quick reference for `/make-feature` milestone gates and associated slash command
 
 All codebase modifications (features, bug fixes, refactors, config edits, and skill updates) follow the unified `/make-feature` sequential milestone pipeline without exception:
 
-1. **Stage 0 (Interactive Alignment)**: Conduct interactive Q&A (`/grill-me`) to resolve unknowns and scope.
-2. **Phase 1a (Spec & Spec Review)**: Draft `/spec`, run `Adversarial Spec Reviewer` subagent loop until `APPROVE`. **PAUSE** for explicit human approval.
-3. **Phase 1b (Plan & Plan Review)**: Draft `/plan`, run `Adversarial Plan Reviewer` subagent loop until `APPROVE`. **PAUSE** for explicit human approval.
-4. **Phase 2 (Build & RED Test Review)**: Create isolated worktree branch (`gemini/<feature-name>`), write RED test suite, run `Adversarial Test Reviewer` subagent loop until `APPROVE`, write GREEN code, test via `run_in_env.py`, commit locally.
-5. **Phase 3 (Push & Code Review)**: Push feature branch to `origin` and run `Adversarial Code Reviewer` subagent loop until `APPROVE`.
-6. **Phase 4 (Human Signoff & Merge)**: **PAUSE**. Present review report to human engineer. Merge only upon explicit user confirmation.
+1. **Stage 0 (Interactive Alignment Gate)**: Conduct interactive Q&A (`/grill-me`) to clarify non-negotiables, edge cases, and scope boundaries before drafting `/spec`.
+2. **Phase 1a (Spec & Spec Review Gate)**: Create isolated worktree branch (`gemini/<feature-name>-<hash>`) under `~/.gemini/tmp/worktrees/`, draft in-tree spec `<feature-name>-<hash>/spec.md` (superseding `/artifact` and Obsidian), commit and push to `origin` for remote review, run subagent `Adversarial Spec Reviewer` loop until `APPROVE`, **PAUSE** for explicit human approval (or trigger early abort teardown on rejection).
+3. **Phase 1b (Plan & Plan Review Gate)**: Draft in-tree plan `<feature-name>-<hash>/plan.md` with explicit TDD targets, commit and push to `origin`, run subagent `Adversarial Plan Reviewer` loop until `APPROVE`, **PAUSE** for explicit human approval (or trigger early abort teardown on rejection).
+4. **Phase 2 (Build, Worktree & RED Test Remote Push Gate)**: Write RED test suite, run subagent `Adversarial Test Reviewer` loop until `APPROVE`, stage, commit, and push failing RED test suite to `origin` (`test: add RED test suite (failing)`), implement GREEN code, and verify 100% test pass via `run_in_env.py`. (In Heavy Mode, enforce a per-slice 2-stage commit cadence: `test(slice-N)` pushed $\to$ `feat(slice-N)` pushed).
+5. **Phase 3 (Push, Adversarial Code Review Gate & Ephemeral Cleanup)**: Push GREEN code to `origin`, run subagent `Adversarial Code Reviewer` loop until `APPROVE`, execute idempotent ephemeral folder cleanup (`git rm -rf --ignore-unmatch "<feature-name>-<hash>"`), and generate post-review audit report artifact strictly within conversation brain (prohibiting Obsidian dumping).
+6. **Phase 4 (Human Signoff, PR Creation & Manual Merge)**: **PAUSE**. Present review report to human engineer. Human engineer creates Pull Request and merges into base branch before worktree is pruned.
 
 ---
 

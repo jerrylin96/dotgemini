@@ -5,7 +5,7 @@ description: Decompose specs into small, verifiable tasks with acceptance criter
 
 ## Overview
 
-Transforms a specification or feature request into granular, actionable, testable units of work. Every non-trivial change follows the unified [make-feature](../make-feature/SKILL.md) pipeline — after drafting the `/plan` artifact, the agent **pauses for explicit human approval** before creating worktrees or writing code.
+Transforms a specification or feature request into granular, actionable, testable units of work. Every non-trivial change follows the unified [make-feature](../make-feature/SKILL.md) pipeline — after drafting the plan document (in-tree `${FEATURE_SLUG}/plan.md` under `make-feature`), the agent **pauses for explicit human approval** before writing code.
 
 ## When to Use
 

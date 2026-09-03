@@ -163,7 +163,7 @@ When performing reviews, running tests, or inspecting code in this codebase:
 
 ## 9. User-Facing Artifacts
 
-* **Feature Lifecycle Ephemerality**: All feature development artifacts (`spec.md`, `plan.md`, `review_manifest.md`, `review_report.md`, `scratchpad.md`) are **100% ephemeral**. Active specs and plans live in-tree in `<feature-name>-<hash>/` on the remote feature branch and are purged prior to merge. Review reports (`review_report_<feature>.md`) and manifests are strictly ephemeral evidence for chat context and GitHub PR descriptions/comments. **Do NOT write feature review reports, specs, or plans to Obsidian vaults or the git workspace tree.**
+* **Feature Lifecycle Ephemerality**: All feature development artifacts (`spec.md`, `plan.md`, `review_manifest.md`, `review_report.md`, `scratchpad.md`) are **100% ephemeral**. Active specs and plans live in-tree exclusively on the isolated feature branch worktree under `<feature-name>-<hash>/` and are purged prior to merge. Review reports (`review_report_<feature>.md`) and manifests are strictly ephemeral evidence for chat context and GitHub PR descriptions/comments. **Do NOT write feature review reports, specs, or plans to Obsidian vaults, the primary workspace, or `<base_branch>`.**
 * **Obsidian Vault Scope**: Centralized Obsidian Vaults (resolved in order: `ANTIGRAVITY_OBSIDIAN_VAULT` env var, `"obsidian_vault_path"` in `~/.gemini/antigravity-cli/settings.json`, or local fallbacks `~/Desktop/antigravity_vault` and `~/Documents/antigravity_vault`) are strictly reserved for non-feature, living project assets:
   1. Living system architecture documentation.
   2. High-level project roadmaps, milestone timelines, and sprint deliverables.

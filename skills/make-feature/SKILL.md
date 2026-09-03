@@ -16,9 +16,9 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
 
 ## Core Rules
 > [!IMPORTANT]
-> - **Branch Naming**: Always prefix the feature branch with `gemini/` and append a deterministic 6-character hex suffix: `gemini/<feature-name>-<hash>` (e.g., `gemini/user-auth-e4a9b2`).
+> - **Branch Naming**: Always prefix the feature branch with `gemini/` and append a 6-character hex suffix: `gemini/<feature-name>-<hash>` (e.g., `gemini/user-auth-e4a9b2`).
 > - **Ephemeral Review Folder**: Store active feature specs and plans in `<feature-name>-<hash>/` at the root of the isolated worktree. This folder is synchronized to remote origin for third-party agent review and strictly purged before merge.
-> - **Strict Ephemerality (No Obsidian Clutter)**: All feature lifecycle artifacts (`spec.md`, `plan.md`, `review_manifest.md`, `review_report.md`, `scratchpad.md`) are 100% ephemeral. Do NOT write review reports, specs, or plans to Obsidian vaults or the git workspace tree.
+> - **Strict Ephemerality (No Obsidian Clutter)**: All feature lifecycle artifacts (`spec.md`, `plan.md`, `review_manifest.md`, `review_report.md`, `scratchpad.md`) are 100% ephemeral. In-tree specs and plans are permitted exclusively within the isolated feature worktree under `${FEATURE_SLUG}/` and strictly purged before merge. Do NOT write review reports, specs, or plans to Obsidian vaults, the primary workspace, or `<base_branch>`.
 > - **No Primary Branch Pollution**: Never run `git checkout -b` or modify files directly in the user's primary repository working directory. Always use a worktree.
 > - **Worktree Cleanup**: Once the branch has been successfully pushed to the remote repository and signed off, prune/delete the worktree to save disk space and keep the workspace clean.
 
@@ -34,16 +34,21 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
 1. **Phase 1a (Spec & Adversarial Spec Review Gate)**:
    - **Goal**: Worktree initialized, in-tree spec drafted in `<feature-name>-<hash>/spec.md`, committed and pushed to remote origin for external review, subagent spec review approved, and sequential human approval granted.
    - **Step 1 (Resolve Branch, Pre-flight Remote & Initialize Worktree)**:
-     - Derive 6-character alphanumeric hex suffix and paths:
+     - Resolve target base branch (e.g. `main`, `develop`):
        ```bash
-       HASH=$(LC_ALL=C tr -dc 'a-f0-9' < /dev/urandom | head -c 6)
-       FEATURE_SLUG="<feature-name>-${HASH}"
+       BASE_BRANCH="${1:-main}"
+       ```
+     - Derive sanitized feature slug and random 6-character hex suffix:
+       ```bash
+       HASH=$(openssl rand -hex 3 2>/dev/null || LC_ALL=C tr -dc 'a-f0-9' < /dev/urandom | head -c 6)
+       SANITIZED_FEATURE=$(echo "<feature-name>" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9._-' '-')
+       FEATURE_SLUG="${SANITIZED_FEATURE}-${HASH}"
        BRANCH_NAME="gemini/${FEATURE_SLUG}"
        WORKTREE_PATH="$HOME/.gemini/tmp/worktrees/gemini_${FEATURE_SLUG}"
        ```
      - Remote pre-flight check:
        ```bash
-       if git remote get-url origin 2>/dev/null; then
+       if git remote get-url origin >/dev/null 2>&1; then
          REMOTE_ENABLED=true
        else
          REMOTE_ENABLED=false
@@ -51,8 +56,12 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
        ```
      - Create isolated git worktree off designated base branch (`<base_branch>`):
        ```bash
-       git fetch origin 2>/dev/null || true
-       git worktree add -b "${BRANCH_NAME}" "${WORKTREE_PATH}" "origin/${BASE_BRANCH}" 2>/dev/null || git worktree add -b "${BRANCH_NAME}" "${WORKTREE_PATH}" "${BASE_BRANCH}"
+       git fetch origin >/dev/null 2>&1 || true
+       if git rev-parse --verify "origin/${BASE_BRANCH}" >/dev/null 2>&1; then
+         git worktree add -b "${BRANCH_NAME}" "${WORKTREE_PATH}" "origin/${BASE_BRANCH}"
+       else
+         git worktree add -b "${BRANCH_NAME}" "${WORKTREE_PATH}" "${BASE_BRANCH}"
+       fi
        ```
      - Initialize scratchpad:
        ```bash
@@ -78,11 +87,18 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
      - **PAUSE** and wait for explicit human approval of `/spec`. Provide clickable links to GitHub remote file and local worktree file.
      - **Early Abort Teardown**: If the human engineer rejects or cancels the feature at Step 2c:
        ```bash
-       git worktree remove "${WORKTREE_PATH}" --force
-       git branch -D "${BRANCH_NAME}"
+       PRIMARY_REPO=$(git rev-parse --show-toplevel 2>/dev/null || echo "$HOME/.gemini")
+       cd "${PRIMARY_REPO}"
+       if git worktree list | grep -q "${WORKTREE_PATH}"; then
+         git worktree remove "${WORKTREE_PATH}" --force
+       fi
+       if git show-ref --verify --quiet "refs/heads/${BRANCH_NAME}"; then
+         git branch -D "${BRANCH_NAME}"
+       fi
        if [ "$REMOTE_ENABLED" = true ]; then
          git push origin --delete "${BRANCH_NAME}" 2>/dev/null || true
        fi
+       git worktree prune
        ```
 
 2. **Phase 1b (Plan & Adversarial Plan Review Gate)**:
@@ -132,13 +148,14 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
      - Update `<appDataDir>/brain/<conversation-id>/scratch/scratchpad.md` with build step findings and empirical test logs.
      - Create review manifest artifact in ephemeral conversation directory (`<appDataDir>/brain/<conversation-id>/review_manifest_<feature>.md`).
    - **Step 4g (HARD GATE: Human Approval of Review Manifest)**:
-     - **PAUSE**. Present `review_manifest_<feature>.md` artifact to user in chat and wait for explicit approval before pushing to remote origin or launching Phase 3 subagent review.
+     - **PAUSE**. Present `review_manifest_<feature>.md` artifact to user in chat and wait for explicit approval before launching Phase 3 subagent review (noting that RED tests were pushed to origin at Step 4d).
    - **Step 5 (Stage & Commit GREEN Implementation)**:
      ```bash
      cd "${WORKTREE_PATH}"
      git add <modified_files>
      git commit -m "feat: implement feature to make tests pass (GREEN)"
      ```
+     *(Note: In Heavy Mode, slice commits and pushes already occurred inside Step 4e tip; Step 5 is a no-op if the working tree is already clean).*
 
 4. **Phase 3 (Push, Adversarial Code Review Gate & Ephemeral Folder Cleanup)**:
    - **Goal**: Feature implementation pushed to `origin`, subagent `/adversarial-review` executed, ephemeral review folder purged from git tree, and post-review report artifact created in ephemeral conversation brain.
@@ -169,9 +186,11 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
        cd "${WORKTREE_PATH}"
        if [ -d "${FEATURE_SLUG}" ]; then
          git rm -rf --ignore-unmatch "${FEATURE_SLUG}"
-         git commit -m "chore: remove ephemeral spec and plan before signoff"
-         if [ "$REMOTE_ENABLED" = true ]; then
-           git push origin "${BRANCH_NAME}"
+         if ! git diff --cached --quiet; then
+           git commit -m "chore: remove ephemeral spec and plan before signoff"
+           if [ "$REMOTE_ENABLED" = true ]; then
+             git push origin "${BRANCH_NAME}"
+           fi
          fi
        fi
        ```
