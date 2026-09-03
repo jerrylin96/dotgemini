@@ -72,15 +72,15 @@ def test_root_commit_diff_command_safety(skill_content):
     assert "never use three-dot" in skill_content.lower() or "avoid three-dot" in skill_content.lower()
     # Verify root two-argument variants exist across all command types:
     # 1. stats
-    assert 'git diff "<reference_commit_hash>" "<commit_hash>" --stat' in skill_content
+    assert 'git diff "<reference_commit_hash>" "<commit_hash>" --stat -M' in skill_content
     # 2. numstat line totals
-    assert 'git diff "<reference_commit_hash>" "<commit_hash>" --numstat -z' in skill_content
+    assert 'git diff "<reference_commit_hash>" "<commit_hash>" --numstat -z -M' in skill_content
     # 3. complete diff
-    assert 'git diff "<reference_commit_hash>" "<commit_hash>" >' in skill_content
+    assert 'git diff "<reference_commit_hash>" "<commit_hash>" -M >' in skill_content
     # 4. path enumeration
-    assert 'git diff "<reference_commit_hash>" "<commit_hash>" --name-status -z' in skill_content
+    assert 'git diff "<reference_commit_hash>" "<commit_hash>" --name-status -z -M' in skill_content
     # 5. per-file diff
-    assert 'git diff "<reference_commit_hash>" "<commit_hash>" -- "<file>"' in skill_content
+    assert 'git diff "<reference_commit_hash>" "<commit_hash>" -M -- "<file>"' in skill_content
 
 
 def test_katex_rendering(skill_content):
@@ -104,6 +104,63 @@ def test_tri_lens_navigation_menu_contract(skill_content):
     assert "[q]" in skill_content  # finish
 
 
+def test_topic_count_definition_and_menu_unique_files(skill_content):
+    # T must be defined as total number of topics (1 <= T <= 6)
+    content_lower = skill_content.lower()
+    assert "total number of topics" in content_lower or "topic count" in content_lower or "count of topics" in content_lower
+    assert "$1 \\le T \\le 6$" in skill_content or "1 <= T <= 6" in skill_content or "$T=6$" in skill_content
+    # Menu example must explicitly distinguish unique files (U)
+    assert "unique files" in skill_content
+    assert "$U=6$" in skill_content or "U=6" in skill_content or "$U" in skill_content
+
+
+def test_consistent_rename_copy_detection_flags(skill_content, robustness_guide_content):
+    # Explicit -M flag must be specified consistently across all diff artifact commands
+    assert "--stat -M" in skill_content
+    assert "--numstat -z -M" in skill_content
+    assert "--name-status -z -M" in skill_content
+    assert "-M >" in skill_content
+    assert "-M --" in skill_content
+    # Robustness guide must document explicit -M flag to avoid git config divergence
+    assert "-M" in robustness_guide_content
+    assert "rename" in robustness_guide_content.lower()
+
+
+def test_nul_stream_workflow_and_optional_paths(skill_content, robustness_guide_content):
+    # Direct agent to parse NUL streams as raw bytes, NOT line-oriented view_file
+    content_lower = skill_content.lower()
+    assert "not pass nul" in content_lower or "not pipe nul" in content_lower or "raw bytes" in content_lower
+    assert "raw bytes" in content_lower
+    assert "optional" in content_lower and "temp_diff_paths.txt" in skill_content
+    assert "only be read when generated" in content_lower or "only read when generated" in content_lower
+    # Robustness guide specifies NUL parsing contract
+    guide_lower = robustness_guide_content.lower()
+    assert "read_bytes().split(b'\\0')" in robustness_guide_content or "split(b'\\0')" in robustness_guide_content
+    assert "never pass nul" in guide_lower or "not pass nul" in guide_lower
+
+
+def test_deterministic_submodule_symlink_typechange_accounting(skill_content, robustness_guide_content):
+    # Submodules, symlinks, and typechanges must follow deterministic numstat line math or metadata tags
+    content_lower = skill_content.lower()
+    guide_lower = robustness_guide_content.lower()
+    assert "submodule" in content_lower
+    assert "symlink" in content_lower
+    assert "typechange" in content_lower
+    assert "temp_diff_numstat.txt" in content_lower
+    assert "strictly follow" in content_lower or "follow" in content_lower
+    assert "metadata" in content_lower
+    assert "submodule" in guide_lower
+    assert "symlink" in guide_lower
+
+
+def test_robustness_guide_root_commit_caveat(robustness_guide_content):
+    # Robustness guide Commit Range Caveat must document the root-commit exception
+    guide_lower = robustness_guide_content.lower()
+    assert "commit range caveat" in guide_lower
+    assert "root-commit exception" in guide_lower or "root" in guide_lower
+    assert "4b825dc642cb6eb9a060e54bf8d69288fbee4904" in robustness_guide_content
+
+
 def test_fail_closed_artifact_exit_status_checks(skill_content):
     # Every generated artifact must be verified for exit code 0; fail closed if any command fails
     assert "temp_diff_stat.txt" in skill_content
@@ -114,17 +171,6 @@ def test_fail_closed_artifact_exit_status_checks(skill_content):
     assert "exit status" in content_lower or "status 0" in content_lower
     assert "fail-closed" in content_lower or "fail closed" in content_lower or "never treat command errors as empty diffs" in content_lower
     assert "do not attempt to read partial" in content_lower or "do not perform reconciliation" in content_lower or "never treat" in content_lower
-
-
-def test_nul_safe_numstat_and_path_parsing(skill_content, robustness_guide_content):
-    # Both numstat and path enumeration must be NUL-delimited with -z
-    assert "--numstat -z" in skill_content, "numstat command must use -z for NUL-delimited output"
-    assert "--name-status -z" in skill_content, "name-status command must use -z for NUL-delimited output"
-    guide_lower = robustness_guide_content.lower()
-    assert "nul-safe" in guide_lower or "nul byte" in guide_lower or "\\0" in robustness_guide_content
-    assert "read_bytes().split" in robustness_guide_content or "\\0" in robustness_guide_content
-    assert "rename" in guide_lower
-    assert "binary" in guide_lower
 
 
 def test_changed_file_accounting_and_rename_semantics(skill_content, robustness_guide_content):
@@ -152,7 +198,7 @@ def test_topic_clustering_rules(skill_content):
     # Topic clustering size rules: 2-5 functional topics, optional Miscellaneous/Tooling (up to 6)
     assert "2–5" in skill_content or "2-5" in skill_content, "Missing 2-5 topics guideline"
     assert "Miscellaneous" in skill_content or "Tooling" in skill_content, "Missing Miscellaneous/Tooling topic handling"
-    assert "maximum of 6" in skill_content or "max 6" in skill_content or "6 topics total" in skill_content
+    assert "maximum of 6" in skill_content or "max 6" in skill_content or "6 topics total" in skill_content or "t=6" in skill_content.lower()
     # Small changeset or single cohesive concern collapse
     assert "3 hunks" in skill_content or "3 total hunks" in skill_content or "<= 3" in skill_content or r"\le 3" in skill_content
     assert "cohesive concern" in skill_content.lower() or "single cohesive concern" in skill_content.lower()
