@@ -34,13 +34,11 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
 1. **Phase 1a (Spec & Adversarial Spec Review Gate)**:
    - **Goal**: Worktree initialized, in-tree spec drafted in `<feature-name>-<hash>/spec.md`, committed and pushed to remote origin for external review, subagent spec review approved, and sequential human approval granted.
    - **Step 1 (Resolve Branch, Pre-flight Remote & Initialize Worktree)**:
-     - Resolve target base branch (e.g. `main`, `develop`):
+     - Resolve target base branch (e.g. `main`, `develop`) and record repository root:
        ```bash
-       BASE_BRANCH="${1:-main}"
-       ```
-     - Derive sanitized feature slug and random 6-character hex suffix:
-       ```bash
-       HASH=$(openssl rand -hex 3 2>/dev/null || LC_ALL=C tr -dc 'a-f0-9' < /dev/urandom | head -c 6)
+       PRIMARY_REPO="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+       BASE_BRANCH="${1:-<base_branch>}"
+       HASH=$(LC_ALL=C tr -dc 'a-f0-9' < /dev/urandom | head -c 6)
        SANITIZED_FEATURE=$(echo "<feature-name>" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9._-' '-')
        FEATURE_SLUG="${SANITIZED_FEATURE}-${HASH}"
        BRANCH_NAME="gemini/${FEATURE_SLUG}"
@@ -67,7 +65,7 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
        ```bash
        mkdir -p "<appDataDir>/brain/<conversation-id>/scratch"
        ```
-       Create `<appDataDir>/brain/<conversation-id>/scratch/scratchpad.md` immediately recording `BRANCH_NAME`, `WORKTREE_PATH`, `FEATURE_SLUG`, and active base branch.
+       Create `<appDataDir>/brain/<conversation-id>/scratch/scratchpad.md` immediately recording `PRIMARY_REPO`, `BRANCH_NAME`, `WORKTREE_PATH`, `FEATURE_SLUG`, and active base branch.
    - **Step 2 (Draft In-Tree `/spec` & Remote Push)**:
      - Create review folder: `mkdir -p "${WORKTREE_PATH}/${FEATURE_SLUG}"`.
      - Write spec to `${WORKTREE_PATH}/${FEATURE_SLUG}/spec.md` ([spec-driven-development](../spec-driven-development/SKILL.md)). *Note: This in-tree file strictly supersedes `/artifact` and Obsidian storage.*
@@ -86,8 +84,9 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
    - **Step 2c (Human Approval Gate & Early Abort Routine)**:
      - **PAUSE** and wait for explicit human approval of `/spec`. Provide clickable links to GitHub remote file and local worktree file.
      - **Early Abort Teardown**: If the human engineer rejects or cancels the feature at Step 2c:
+       > [!CAUTION]
+       > PAUSE and obtain explicit confirmation ("abort feature") before executing teardown; a rejection of the spec content alone means REVISE, not teardown.
        ```bash
-       PRIMARY_REPO=$(git rev-parse --show-toplevel 2>/dev/null || echo "$HOME/.gemini")
        cd "${PRIMARY_REPO}"
        if git worktree list | grep -q "${WORKTREE_PATH}"; then
          git worktree remove "${WORKTREE_PATH}" --force
@@ -119,7 +118,7 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
      - On any `REVISE` iteration, update `${FEATURE_SLUG}/plan.md`, commit (`git commit -m "plan: address review feedback"`), and push to `origin` if `REMOTE_ENABLED=true`.
    - **Step 3c (Human Approval Gate & Early Abort Routine)**:
      - **PAUSE** and wait for explicit human approval of `/plan`. Provide clickable links to GitHub remote file and local worktree file.
-     - **Early Abort Teardown**: If rejected or cancelled, execute the same abort teardown routine as Step 2c.
+     - **Early Abort Teardown**: If rejected or cancelled, execute the same abort teardown routine as Step 2c (obtaining explicit confirmation ("abort feature") first).
 
 3. **Phase 2 (Build, Worktree & RED Test Remote Push Gate)**:
    - **Goal**: TDD RED tests written, RED test subagent review passed, failing RED test suite committed and pushed to remote origin, GREEN implementation written, 100% test pass verified.
@@ -148,7 +147,7 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
      - Update `<appDataDir>/brain/<conversation-id>/scratch/scratchpad.md` with build step findings and empirical test logs.
      - Create review manifest artifact in ephemeral conversation directory (`<appDataDir>/brain/<conversation-id>/review_manifest_<feature>.md`).
    - **Step 4g (HARD GATE: Human Approval of Review Manifest)**:
-     - **PAUSE**. Present `review_manifest_<feature>.md` artifact to user in chat and wait for explicit approval before launching Phase 3 subagent review (noting that RED tests were pushed to origin at Step 4d).
+     - **PAUSE**. Present `review_manifest_<feature>.md` artifact to user in chat and wait for explicit approval before pushing the GREEN implementation to remote origin or launching Phase 3 subagent review (noting that RED tests were pushed to origin at Step 4d).
    - **Step 5 (Stage & Commit GREEN Implementation)**:
      ```bash
      cd "${WORKTREE_PATH}"
@@ -186,15 +185,14 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
        cd "${WORKTREE_PATH}"
        if [ -d "${FEATURE_SLUG}" ]; then
          git rm -rf --ignore-unmatch "${FEATURE_SLUG}"
-         if ! git diff --cached --quiet; then
-           git commit -m "chore: remove ephemeral spec and plan before signoff"
-           if [ "$REMOTE_ENABLED" = true ]; then
-             git push origin "${BRANCH_NAME}"
-           fi
+         git diff --cached --quiet || git commit -m "chore: remove ephemeral spec and plan before signoff"
+         rm -rf -- "${FEATURE_SLUG}"
+         if [ "$REMOTE_ENABLED" = true ]; then
+           git push origin "${BRANCH_NAME}"
          fi
        fi
        ```
-     - This guarantees that upon squash or rebase merge to `<base_branch>`, zero ephemeral files pollute the primary tree.
+     - This guarantees that upon merge or rebase to `<base_branch>`, zero ephemeral files pollute the primary tree. Note: The spec and plan remain permanently accessible in branch commit history (as this repository preserves merge commits). In Step 8 / Phase 4, the agent presents the commit SHAs and links of the spec and plan commits to the human engineer so they can be consulted during `/explain-diff` and `/signoff` after in-tree copies are removed.
    - **Step 7c (Ephemeral Post-Review Audit Report Artifact & Scratchpad Update)**:
      - Update `<appDataDir>/brain/<conversation-id>/scratch/scratchpad.md` with post-review findings and subagent verdict.
      - Generate formal `review_report_<feature>.md` artifact strictly within the ephemeral conversation directory (`<appDataDir>/brain/<conversation-id>/`).
@@ -207,7 +205,7 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
 
 5. **Phase 4 (Human Signoff, PR Creation & Manual Merge)**:
    - **Goal**: Human engineer reviews post-review audit report artifact, creates Pull Request, and manually merges feature branch to target integration branch (`<base_branch>`).
-   - **Step 8 (Human Review, PR Creation & Integration Gate)**: **PAUSE**. Update `<appDataDir>/brain/<conversation-id>/scratch/scratchpad.md` pre-signoff with final completion status. Present review report, diff summary, and remote feature branch link to user.
+   - **Step 8 (Human Review, PR Creation & Integration Gate)**: **PAUSE**. Update `<appDataDir>/brain/<conversation-id>/scratch/scratchpad.md` pre-signoff with final completion status. Present review report, diff summary, spec/plan commit SHAs, and remote feature branch link to user.
    - **Human Ownership of PR Creation & Integration**:
      > [!CAUTION]
      > - **Human PR & Merge Ownership**: Creating Pull Requests (PRs), reviewing PR diffs, and merging code *into* the target integration branch (`<base_branch>`, e.g., `main`, `develop`, `staging`, `release/*`, etc.) is **ALWAYS performed manually by the human engineer**. The AI agent is strictly forbidden from creating PRs or merging directly into the primary integration branch.
@@ -215,6 +213,7 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
    - Recommended tools for user: [/explain-diff](../explain-diff/SKILL.md) and [/signoff](../signoff/SKILL.md).
    - Once merged manually by the user, clean up scratchpad and remove worktree:
      ```bash
+     cd "${PRIMARY_REPO}"
      rm -- "<appDataDir>/brain/<conversation-id>/scratch/scratchpad.md"
      git worktree remove "${WORKTREE_PATH}" --force
      git worktree prune

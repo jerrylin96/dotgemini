@@ -42,7 +42,7 @@ Applicable **ONLY** to `spec-review` and `plan-review` modes.
 > - Run test, linter, or environment setup scripts (`setup_review_env.py`, `run_in_env.py`).
 
 ### Execution Procedure for Spec & Plan Documents:
-1. Read the target spec or plan directly via `view_file` using the file path provided under `Target Artifact Paths` in the Context Compaction Block. When executing under `/make-feature`, this path is the in-tree `${WORKTREE_PATH}/${FEATURE_SLUG}/spec.md` or `plan.md` in the feature worktree (which strictly supersedes `/artifact` and Obsidian). For standalone runs outside git worktrees, this may be an artifact path.
+1. Read the target spec or plan directly via `view_file` using the file path provided under `Target Artifact Paths` in the Context Compaction Block. When executing under `/make-feature`, `Target Artifact Paths` will point at `${WORKTREE_PATH}/${FEATURE_SLUG}/spec.md` or `plan.md` in the feature worktree (which strictly supersedes `/artifact` and Obsidian); reading that path via `view_file` is permitted and does not violate the bypass rule against creating a git worktree (it is read-only). For standalone runs outside git worktrees, this may be an artifact path.
 2. Apply mode-specific checklist:
    - **`spec-review` Checklist**: Scope completeness, unstated assumptions, missing edge cases, security/architectural risks, non-negotiables.
    - **`plan-review` Checklist**: Atomic task decomposition, explicit TDD RED/GREEN specs, executable verify commands, dependency ordering, worktree/env isolation safety.

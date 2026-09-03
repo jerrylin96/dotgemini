@@ -24,9 +24,9 @@ All codebase modifications (features, bug fixes, refactors, config edits, and sk
 | Gate | Slash Command / Role | Skill | What It Produces |
 |---|---|---|---|
 | **Align** | `/grill-me` | [spec-driven-development](../../spec-driven-development/SKILL.md) | Clarified scope & user constraints |
-| **Spec** | `/spec` | [spec-driven-development](../../spec-driven-development/SKILL.md) | Requirements artifact (Pauses for human approval) |
+| **Spec** | `/spec` | [spec-driven-development](../../spec-driven-development/SKILL.md) | In-tree spec (`<feature-name>-<hash>/spec.md`) (Pauses for human approval) |
 | **Spec Review** | `Adversarial Spec Reviewer` | [adversarial-review](../../adversarial-review/SKILL.md) | Verified spec free of scope gaps & ambiguity |
-| **Plan** | `/plan` | [planning-and-task-breakdown](../../planning-and-task-breakdown/SKILL.md) | Ordered task list (Pauses for human approval) |
+| **Plan** | `/plan` | [planning-and-task-breakdown](../../planning-and-task-breakdown/SKILL.md) | In-tree plan (`<feature-name>-<hash>/plan.md`) (Pauses for human approval) |
 | **Plan Review** | `Adversarial Plan Reviewer` | [adversarial-review](../../adversarial-review/SKILL.md) | Verified plan with atomic tasks & TDD targets |
 | **Build** | `/build` | [incremental-implementation](../../incremental-implementation/SKILL.md) | Working code in thin vertical slices |
 | **Test** | `/test` | [test-driven-development](../../test-driven-development/SKILL.md) | RED test suite proving requirements |
