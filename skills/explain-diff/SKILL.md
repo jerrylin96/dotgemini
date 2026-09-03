@@ -1,11 +1,11 @@
 ---
 name: explain-diff
-description: Interactive, neutral diff explanation walkthrough (overall summary, per-hunk and commit-by-commit walkthroughs, Q&A). Do not use to find bugs/quality issues.
+description: Interactive, neutral diff explanation walkthrough (overall summary, topic-by-topic, per-hunk, and commit-by-commit walkthroughs, Q&A). Do not use to find bugs/quality issues.
 ---
 
 # Diff Explanation Walkthrough
 
-Resolve context, generate the diff, and interactively explain it: overall summary first (including commit series narrative for multi-commit changesets), then walkthroughs by commit or by file, with drill-down Q&A.
+Resolve context, generate the diff, and interactively explain it: overall summary first (including commit series narrative for multi-commit changesets), then walkthroughs by topic, by commit, or by file, with drill-down Q&A.
 
 ## Core Rules
 > [!IMPORTANT]
@@ -18,7 +18,7 @@ Resolve context, generate the diff, and interactively explain it: overall summar
 Three modes, chosen by what the user provides:
 
 * **Commit mode**: The user names a specific commit SHA or range. Skip the resolver and diff directly in the active workspace:
-  - Single commit: `<commit_hash>` is `<sha>`, `<reference_commit_hash>` is `<sha>^`. For root/parentless commits (no parent), set `<reference_commit_hash>` to the Git empty tree `4b825dc642cb6eb9a060e54bf8d69288fbee4904` for the two-dot commit list step (1b), and use two-argument `git diff <empty-tree> <sha>` or `git show <sha>` directly for stats/diffs (steps 1c–1e, 5b); never use three-dot `...` with the empty tree as tree objects do not support merge-base resolution.
+  - Single commit: `<commit_hash>` is `<sha>`, `<reference_commit_hash>` is `<sha>^`. For root/parentless commits (no parent), set `<reference_commit_hash>` to the Git empty tree `4b825dc642cb6eb9a060e54bf8d69288fbee4904` for the two-dot commit list step (1b), and use two-argument `git diff <empty-tree> <sha>` or `git show <sha>` directly for stats/diffs (steps 1c–1e, 6b); never use three-dot `...` with the empty tree as tree objects do not support merge-base resolution.
   - Range: `git diff <a>...<b>` where `<reference_commit_hash>` is `<a>` and `<commit_hash>` is `<b>`.
 * **PR mode**: The user names a pull/merge request (number or web URL). Use the same resolver with the PR target — `--pr <N>`, or pass `#N`/the URL positionally. It fetches the PR head ref from the remote, so fork PRs work without a local branch; see [adversarial-review/SKILL.md](../adversarial-review/SKILL.md) for details, the extra `pr_number` JSON field, and the PR-baseline note (`--reference` override, optional best-effort `gh pr view` for the PR title/description — the description makes the "why" in the summary much better, but `gh` is never required).
 * **Branch mode (default)**: The user names a branch or gives no target. Reuse the adversarial-review branch resolver — same script, same worktree cache, same protocol:
@@ -32,7 +32,7 @@ Three modes, chosen by what the user provides:
 ## Execution Steps
 
 > [!TIP]
-> **Subagent Delegation**: If the changeset is exceptionally large (many files or large diffs), the main agent should delegate the task. Invoke the built-in `research` subagent (optimized for read-only exploration) to analyze the diff chunks in the background and draft the overall summary and file-by-file gists; wait for its report before presenting the summary/menu.
+> **Subagent Delegation**: If the changeset is exceptionally large (many files or large diffs), the main agent should delegate the task. Invoke the built-in `research` subagent (optimized for read-only exploration) to analyze the diff chunks in the background and draft the overall summary and topic/file clusters; wait for its report before presenting the summary/menu.
 
 1. **Get the Diff Safely & Extract Commits**: To prevent terminal command output truncation (which silently trims long diff outputs or lines), do NOT read raw git outputs directly from the terminal. Instead:
    a. **Create Scratch Directory**: Run `mkdir -p "<appDataDir>/brain/<conversation-id>/scratch"` to ensure the path exists.
@@ -57,27 +57,57 @@ Three modes, chosen by what the user provides:
    - **Clean Up Safely**: Delete only temporary scratch files when done. *Reason: Leaves repository and worktree untouched.*
    - **Reference Guide**: For full detail on tools compatibility, EOF edge cases, and path safety, see [robustness_guide.md](resources/robustness_guide.md).
 
-2. **Overall Summary**:
-   - Open with a concise summary of the whole changeset: purpose, inferred why, and logical themes. Include scale (files touched, insertions/deletions, and commit count $K$).
+2. **Overall Summary & Topic Clustering**:
+   - **Empty Diff Early Exit**: If `git diff` produces no changes, output: `No differences detected between <reference> and <target>.` and exit cleanly without rendering an empty navigation menu.
+   - **Concise Changeset Summary**: Open with a concise summary of the whole changeset: purpose, inferred why, and logical themes. Include scale (files touched, insertions/deletions, and commit count $K$).
+   - **Topic Clustering Protocol**:
+     - **Semantic Hunk Grouping**: Group diff hunks across files into 2–5 cohesive functional topics/themes based on architecture and concern (e.g. Domain/Data Models, Service/Business Logic, Public API & Endpoints, Test Coverage, Config & Tooling).
+     - **Small Changeset Collapse**: For single-file diffs or small changesets ($\le 3$ total hunks), clustering collapses gracefully into 1 topic (`[t1]`), avoiding artificial fragmentation.
+     - **Orphan/Unclustered Changes**: Any unclustered changes (e.g. lockfiles, version bumps, formatting) are assigned to an explicit `[Miscellaneous / Tooling]` topic so zero changes are silently omitted.
+     - **Large Diff Scaling Ingestion**: For exceptionally large changesets, inspect `temp_diff_stat.txt` and `temp_diff_paths.txt` first to partition files into logical clusters before reading individual file diffs via `view_file`.
    - **Commit Series Timeline**: If multi-commit ($K > 1$), list the chronological commit sequence from `temp_commits.txt` with SHA, author, and commit subject.
 
-3. **Dual-Lens Navigation Menu**:
-   - **Single commit ($K \le 1$)**: Present standard file list directly:
-     - `[1..N]` choose specific file,
-     - `[a]` walk through every file in order,
-     - `[s]` expand the overall summary,
-     - `[q]` finish.
-   - **Multi-commit ($K > 1$)**: Present dual-lens choice:
-     ```text
-     Select walkthrough lens:
-       [c] Commit-by-commit walkthrough (chronological narrative: 1 → K)
-       [f] File-by-file walkthrough (cumulative changeset across all commits)
-       [c1..cK] Jump directly to a specific commit (e.g. c1, c2)
-       [s] Expand overall summary
-       [q] Finish
-     ```
+3. **Tri-Lens Navigation Menu**:
+   Present the navigation menu with Topic mode as the recommended default view:
+   ```text
+   Summary: 3 topics across 6 files (+112 / -28)
 
-4. **Commit-by-Commit Walkthrough Flow (`[c]`)**:
+   Topics:
+     [t1] Domain Models & Migrations (models.py, alembic/versions/...) [+40/-5, 3 hunks]
+     [t2] API Route Handlers & Serialization (routes.py, schemas.py) [+48/-15, 5 hunks]
+     [t3] End-to-End Test Suite (tests/test_routes.py, conftest.py) [+24/-8, 2 hunks]
+
+   Walkthrough Lenses:
+     [t] Topic-by-topic walkthrough (cross-file synthesis across functional themes; recommended)
+     [f] File-by-file walkthrough (cumulative changeset across all files)
+     [c] Commit-by-commit walkthrough (chronological narrative: 1 → K; available when K > 1)
+     [t1..tT] Jump directly to a specific topic
+     [c1..cK] Jump directly to a specific commit (when K > 1)
+     [1..N] Jump directly to a specific file (under file mode)
+     [a] Walk through every file in order
+     [s] Expand overall summary
+     [q] Finish
+   ```
+   If single commit ($K \le 1$), the commit-by-commit option `[c]` is omitted or noted as single commit.
+
+4. **Topic-by-Topic Walkthrough Flow (`[t]`)**:
+   For each topic (or user-selected `[t1..tT]`):
+   a. **Topic Narrative**: Open with a 2–3 sentence narrative explaining what this topic achieves, why it was implemented, and the overarching design decision.
+   b. **Verbatim Cross-File Hunks**:
+      - Quote every relevant text hunk verbatim in fenced `diff` blocks, preceded by an explicit file header tag (e.g., `[src/auth/middleware.py:L45-L68]`).
+      - **Binary Files**: Summarized with metadata tags (e.g., `[binary file: assets/logo.png (+12 KB / -0 KB)]`) without corrupting text hunks.
+      - **Deleted Files**: Explicitly tagged with `[deleted file: legacy/old_auth.py (-85 lines)]`.
+   c. **Cross-File Interaction Commentary**: Directly explain how the changes across the different files connect and operate together (e.g. how the new model column feeds the API serializer).
+   d. **Targeted Prose/Text Highlights**: For text/markup formats (`.tex`, `.md`, `.txt`, `.rst`) or long modified lines, highlight the precise inline edits (`word_A` -> `word_B`).
+   e. **Topic Progression & Transition**:
+      - `[n]` Next topic in sequence
+      - `[m]` Re-display topic navigation menu (with completed topics marked `[✓]`)
+      - `[f]` Switch to file-by-file view
+      - `[c]` Switch to commit-by-commit view (if $K > 1$)
+      - `[s]` Expand overall summary
+      - `[q]` Finish
+
+5. **Commit-by-Commit Walkthrough Flow (`[c]`)**:
    For the selected commit (or iterating sequentially from commit 1 to $K$):
    a. **Commit Header**: Extract full commit message and metadata:
       `git log -1 --format="%H %an%n%B" "<sha>" > "<appDataDir>/brain/<conversation-id>/scratch/temp_commit_msg.txt"`
@@ -90,21 +120,23 @@ Three modes, chosen by what the user provides:
    d. **Intra-Commit Transition**:
       - `[n]` Next commit in series
       - `[p]` Previous commit
-      - `[s]` Expand overall summary
+      - `[t]` Switch to topic-by-topic view
       - `[f]` Switch to cumulative file-by-file view
+      - `[s]` Expand overall summary
       - `[q]` Finish
 
-5. **File-by-File Walkthrough Flow (`[f]`)**:
+6. **File-by-File Walkthrough Flow (`[f]`)**:
    For cumulative file walkthrough:
    a. Present numbered menu of changed files (path, `+/-` stats, hunk count, one-line gist) plus:
       - `[1..N]` choose specific file,
       - `[a]` walk through every file in order,
-      - `[c]` switch back to commit-by-commit walkthrough (if $K > 1$),
+      - `[t]` switch to topic-by-topic walkthrough (recommended),
+      - `[c]` switch to commit-by-commit walkthrough (if $K > 1$),
       - `[s]` expand the overall summary,
       - `[q]` finish.
    b. For the chosen file, write target diff to `temp_diff.txt` (`git diff "<reference_commit_hash>...<commit_hash>" -- "<file>" > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff.txt"`).
    c. Go hunk by hunk: quote each hunk verbatim in fenced `diff` block, explain what changed and why.
    d. **Targeted Prose/Text Highlights**: For text/markup formats (`.tex`, `.md`, `.txt`, `.rst`), highlight precise inline edits (`word_A` -> `word_B`).
 
-6. **Drill-down & Q&A**:
-   After each commit or file, invite follow-up questions (callers of changed functions, prior behavior via `git log`/`git blame`, related hunks). Output everything directly in chat. Do not save reports to files unless requested.
+7. **Drill-down & Q&A**:
+   After each topic, commit, or file, invite follow-up questions (callers of changed functions, prior behavior via `git log`/`git blame`, related hunks). Output everything directly in chat. Do not save reports to files unless requested.
