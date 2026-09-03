@@ -18,7 +18,7 @@ Resolve context, generate the diff, and interactively explain it: overall summar
 Three modes, chosen by what the user provides:
 
 * **Commit mode**: The user names a specific commit SHA or range. Skip the resolver and diff directly in the active workspace:
-  - Single commit: `<commit_hash>` is `<sha>`, `<reference_commit_hash>` is `<sha>^`. For root/parentless commits (no parent), set `<reference_commit_hash>` to the Git empty tree `4b825dc642cb6eb9a060e54bf8d69288fbee4904` for the two-dot commit list step (1b), and use two-argument `git diff <empty-tree> <sha>` or `git show <sha>` directly for stats/diffs (steps 1c–1e, 6b); never use three-dot `...` with the empty tree as tree objects do not support merge-base resolution.
+  - Single commit: `<commit_hash>` is `<sha>`, `<reference_commit_hash>` is `<sha>^`. For root/parentless commits (no parent), set `<reference_commit_hash>` to the Git empty tree `4b825dc642cb6eb9a060e54bf8d69288fbee4904` for the two-dot commit list step (1b), and use two-argument `git diff <empty-tree> <sha>` or `git show <sha>` directly for stats/diffs (steps 1c–1f, 6b); never use three-dot `...` with the empty tree as tree objects do not support merge-base resolution.
   - Range: `git diff <a>...<b>` where `<reference_commit_hash>` is `<a>` and `<commit_hash>` is `<b>`.
 * **PR mode**: The user names a pull/merge request (number or web URL). Use the same resolver with the PR target — `--pr <N>`, or pass `#N`/the URL positionally. It fetches the PR head ref from the remote, so fork PRs work without a local branch; see [adversarial-review/SKILL.md](../adversarial-review/SKILL.md) for details, the extra `pr_number` JSON field, and the PR-baseline note (`--reference` override, optional best-effort `gh pr view` for the PR title/description — the description makes the "why" in the summary much better, but `gh` is never required).
 * **Branch mode (default)**: The user names a branch or gives no target. Reuse the adversarial-review branch resolver — same script, same worktree cache, same protocol:
@@ -44,11 +44,11 @@ Three modes, chosen by what the user provides:
         `git diff "<reference_commit_hash>...<commit_hash>" --stat > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_stat.txt"`
       - Root commit (where `<reference_commit_hash>` is the empty tree `4b825dc642cb6eb9a060e54bf8d69288fbee4904`):
         `git diff "<reference_commit_hash>" "<commit_hash>" --stat > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_stat.txt"`
-   d. **Write Numstat Line Totals**: Save machine-readable line and file totals for exact text reconciliation.
+   d. **Write Numstat Line Totals**: Save machine-readable NUL-delimited line and file totals for exact text reconciliation.
       - Normal commit/branch range:
-        `git diff "<reference_commit_hash>...<commit_hash>" --numstat > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_numstat.txt"`
+        `git diff "<reference_commit_hash>...<commit_hash>" --numstat -z > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_numstat.txt"`
       - Root commit (empty tree):
-        `git diff "<reference_commit_hash>" "<commit_hash>" --numstat > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_numstat.txt"`
+        `git diff "<reference_commit_hash>" "<commit_hash>" --numstat -z > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_numstat.txt"`
    e. **Write Complete Diff**: Save the full diff output for overall analysis.
       - Normal commit/branch range:
         `git diff "<reference_commit_hash>...<commit_hash>" > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_all.txt"`
@@ -59,10 +59,11 @@ Three modes, chosen by what the user provides:
         `git diff "<reference_commit_hash>...<commit_hash>" --name-status -z > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_paths.txt"`
       - Root commit (empty tree):
         `git diff "<reference_commit_hash>" "<commit_hash>" --name-status -z > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_paths.txt"`
-   g. **Read via File Viewer**: Read `temp_commits.txt`, `temp_diff_stat.txt`, `temp_diff_numstat.txt`, and `temp_diff_all.txt` using `view_file`. Determine total commit count ($K$, where $K$ is the number of commits in `temp_commits.txt`), unique changed-file count, exact text addition/deletion line counts from `temp_diff_numstat.txt`, and derive total hunk count directly from `temp_diff_all.txt` (by counting `@@ ... @@` hunk headers).
-   h. **Empty Diff Early Exit & Error Verification (Fail Closed)**:
-      - Verify the exit status of the git diff command. If Git exited with non-zero status (e.g. invalid SHA, bad revision, or unknown ref), stop immediately and report the Git error output. Never treat command errors as empty diffs.
-      - Only if Git exited with status 0 AND `temp_diff_all.txt` contains 0 lines/bytes of diff, output:
+   g. **Read via File Viewer & NUL Parsing**: Read `temp_commits.txt`, `temp_diff_stat.txt`, `temp_diff_numstat.txt`, and `temp_diff_all.txt` using `view_file`. For NUL-delimited streams (`temp_diff_numstat.txt`, `temp_diff_paths.txt`), split on NUL (`\0`) bytes per [robustness_guide.md](resources/robustness_guide.md) §5 to safely process paths with spaces, newlines, or Unicode. Determine total commit count ($K$, where $K$ is the number of commits in `temp_commits.txt`), unique changed-file entity count ($U$), exact text addition/deletion line counts from `temp_diff_numstat.txt`, and derive total hunk count ($H$) directly from `temp_diff_all.txt` (by counting `@@ ... @@` hunk headers).
+   h. **Fail-Closed Artifact & Exit Status Verification**:
+      - Verify the exit status (code 0) for **every** generated Git artifact: `temp_diff_stat.txt` (1c), `temp_diff_numstat.txt` (1d), `temp_diff_all.txt` (1e), and `temp_diff_paths.txt` (1f, when generated).
+      - If ANY command fails with a non-zero exit status (e.g. invalid SHA, bad revision, permission error, or unknown ref), STOP execution immediately and report the Git command error output. Do NOT attempt to read partial scratch files, reconcile statistics, or evaluate empty diffs if any artifact generation failed.
+      - Only if ALL required diff commands exited with status 0 AND `temp_diff_all.txt` contains 0 lines/bytes of diff, output:
         `No differences detected between <reference> and <target>.`
         and terminate cleanly without rendering an empty navigation menu. This applies across branch, PR, and commit modes.
 
@@ -77,7 +78,7 @@ Three modes, chosen by what the user provides:
    - **Reference Guide**: For full detail on tools compatibility, EOF edge cases, and path safety, see [robustness_guide.md](resources/robustness_guide.md).
 
 2. **Overall Summary & Topic Clustering**:
-   - **Concise Changeset Summary**: Open with a concise summary of the whole changeset: purpose, inferred why, and logical themes. Include scale (unique files touched, insertions/deletions, hunk count, and commit count $K$).
+   - **Concise Changeset Summary**: Open with a concise summary of the whole changeset: purpose, inferred why, and logical themes. Include scale (unique changed files touched, insertions/deletions, hunk count, and commit count $K$).
    - **Topic Clustering Protocol**:
      - **Deterministic Ordering & Tie-Breaker**: Order topics by architectural dependency and data-flow sequence (e.g. Domain/Data Models & Schema $\to$ Service & Business Logic $\to$ Public API & Endpoints $\to$ Test Suite & Fixtures $\to$ Tooling/Config). For topics with no clear architectural dependency, apply a deterministic tie-breaker: alphabetical order of topic name, followed by POSIX lexical order of the first changed file path in the topic.
      - **Semantic Hunk Grouping**: Group diff hunks across files into 2–5 cohesive functional topics/themes based on architecture and concern, plus an optional `[Miscellaneous / Tooling]` topic for unclustered changes (for a maximum of 6 topics total).
@@ -85,20 +86,23 @@ Three modes, chosen by what the user provides:
      - **Coverage & Reconciliation Invariant**:
        Every diff hunk must be assigned to exactly one topic (no dropped hunks, no duplicate hunks).
        Explicitly distinguish:
-       - **Unique changed-file count ($U$)**: The number of distinct file paths modified across the changeset.
-       - **File-topic membership count ($M$)**: The sum of file references across topics. A file MAY belong to multiple topics when its hunks touch separate functional concerns; in such cases, $M \ge U$ and topic membership counts are not required to equal the unique changed-file count.
+       - **Unique changed-file entity count ($U$)**: The number of distinct changed-file records matching `git diff --stat`'s summary ("N files changed"). A pure rename (`old_path -> new_path`) counts as **1 changed-file entity** in $U$ (not 2 paths). Copies, submodules, symlinks, and typechanges each count as **1 changed-file entity** in $U$.
+       - **File-topic membership count ($M$)**: The sum of file references across topics. A file MAY belong to multiple topics when its hunks touch separate functional concerns; in such cases, $M \ge U$ and topic membership counts are not required to equal the unique changed-file entity count. A rename contributes 1 to its topic's file list.
        - **Total hunk count ($H$)**: The sum of hunks across all topics must reconcile exactly with the total hunk count derived from `temp_diff_all.txt` ($\sum \text{hunks}(T_i) = H$).
        - **Text insertion/deletion counts**: The sum of line additions and deletions across all topics must reconcile with the text totals from `temp_diff_numstat.txt`.
        - **Binary byte sizes**: Reconciled separately from text lines (binary files appear as `- - <path>` in `numstat`). Binary byte sizes are never added to text line counts.
        - **Renames and mode-only changes**: Mode-only changes (file mode changed with 0 line additions/deletions) and pure renames are assigned to the functional topic of the affected subsystem and contribute 0 to text line counts.
      - **Orphan/Unclustered Changes**: Any unclustered changes (e.g. lockfiles, version bumps, formatting) are assigned to an explicit `[Miscellaneous / Tooling]` topic so zero changes are silently omitted.
-     - **Binary, Deletion, Rename & Mode Handling**:
+     - **Binary, Deletion, Rename, Submodule & Symlink Handling**:
        - **Binary files**: Counted in topic file lists with explicit old-size/new-size byte formats derived from `git diff --stat` (e.g. `Bin old -> new bytes`) or blob inspection (`git cat-file -s` / `git ls-tree`): `[binary file: <path> (old: X bytes -> new: Y bytes)]` (or `[binary addition: <path> (new: Y bytes)]`). Binary bytes are kept strictly separate from text-line counts.
        - **Binary deletions**: Counted with old blob size: `[binary deletion: <path> (old: X bytes)]`.
        - **Deleted text files**: Counted with line reductions and tagged: `[deleted file: <path> (-N lines)]`.
        - **Mode-only changes**: Counted with mode change metadata: `[mode change: <path> (mode <old> -> <new>, 0 lines)]`.
-       - **Renames**: Grouped with the functional topic of the affected subsystem: `[rename: <old-path> -> <new-path>]`.
-     - **Large Diff Scaling Ingestion**: When changesets are exceptionally large, inspect `temp_diff_stat.txt`, `temp_diff_numstat.txt`, and `temp_diff_paths.txt` first to partition files into logical clusters before reading individual file diffs via `view_file` (see [robustness_guide.md](resources/robustness_guide.md) §4).
+       - **Renames**: Grouped with the functional topic of the affected subsystem and counted as 1 entity in $U$: `[rename: <old-path> -> <new-path>]`.
+       - **Copies**: Counted as 1 entity in $U$ (the target file): `[copy: <source-path> -> <target-path>]`.
+       - **Submodules**: Counted as 1 entity in $U$ with 0 text lines: `[submodule: <path> (<old_sha> -> <new_sha>)]`.
+       - **Symlinks & Typechanges**: Counted as 1 entity in $U$: `[symlink: <path> -> <target>]` or `[typechange: <path> (<old_type> -> <new_type>)]`.
+     - **Large Diff Scaling Ingestion**: When changesets are exceptionally large, inspect `temp_diff_stat.txt`, `temp_diff_numstat.txt`, and `temp_diff_paths.txt` first to partition files into logical clusters before reading individual file diffs via `view_file` (see [robustness_guide.md](resources/robustness_guide.md) §4–5).
    - **Commit Series Timeline**: If multi-commit ($K > 1$), list the chronological commit sequence from `temp_commits.txt` with SHA, author, and commit subject.
 
 3. **Tri-Lens Navigation Menu**:
@@ -131,6 +135,8 @@ Three modes, chosen by what the user provides:
       - **Binary Deletions**: Explicitly tagged with `[binary deletion: assets/old_logo.png (old: 8192 bytes)]`.
       - **Deleted Files**: Explicitly tagged with `[deleted file: legacy/old_auth.py (-85 lines)]`.
       - **Mode Changes**: Explicitly tagged with `[mode change: scripts/run.sh (mode 100644 -> 100755, 0 lines)]`.
+      - **Renames & Copies**: Explicitly tagged with `[rename: old_file.py -> new_file.py]` or `[copy: template.py -> instance.py]`.
+      - **Submodules & Symlinks**: Explicitly tagged with `[submodule: vendor/lib (old_sha -> new_sha)]` or `[symlink: link_path -> target]`.
    c. **Cross-File Interaction Commentary**: Directly explain how the changes across the different files connect and operate together (e.g. how the new model column feeds the API serializer).
    d. **Targeted Prose/Text Highlights**: For text/markup formats (`.tex`, `.md`, `.txt`, `.rst`) or long modified lines, highlight the precise inline edits (`word_A` -> `word_B`).
    e. **Topic Progression & Transition**:

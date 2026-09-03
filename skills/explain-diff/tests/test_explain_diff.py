@@ -57,6 +57,13 @@ def test_commit_mode_reference_hash(skill_content):
     assert "git show" in skill_content
 
 
+def test_root_commit_cross_reference_corrected(skill_content):
+    # Root-commit guidance must reference steps 1c-1f and 6b to include path enumeration
+    assert re.search(r"steps?\s+1c[–-]1f,\s*6b", skill_content), (
+        "SKILL.md must reference 'steps 1c–1f, 6b' for root-commit empty-tree direct diff commands"
+    )
+
+
 def test_root_commit_diff_command_safety(skill_content):
     # Root commits with empty tree must use two-argument git diff and avoid three-dot syntax
     assert 'git diff "<reference_commit_hash>" "<commit_hash>"' in skill_content, (
@@ -67,7 +74,7 @@ def test_root_commit_diff_command_safety(skill_content):
     # 1. stats
     assert 'git diff "<reference_commit_hash>" "<commit_hash>" --stat' in skill_content
     # 2. numstat line totals
-    assert 'git diff "<reference_commit_hash>" "<commit_hash>" --numstat' in skill_content
+    assert 'git diff "<reference_commit_hash>" "<commit_hash>" --numstat -z' in skill_content
     # 3. complete diff
     assert 'git diff "<reference_commit_hash>" "<commit_hash>" >' in skill_content
     # 4. path enumeration
@@ -97,11 +104,51 @@ def test_tri_lens_navigation_menu_contract(skill_content):
     assert "[q]" in skill_content  # finish
 
 
+def test_fail_closed_artifact_exit_status_checks(skill_content):
+    # Every generated artifact must be verified for exit code 0; fail closed if any command fails
+    assert "temp_diff_stat.txt" in skill_content
+    assert "temp_diff_numstat.txt" in skill_content
+    assert "temp_diff_all.txt" in skill_content
+    assert "temp_diff_paths.txt" in skill_content
+    content_lower = skill_content.lower()
+    assert "exit status" in content_lower or "status 0" in content_lower
+    assert "fail-closed" in content_lower or "fail closed" in content_lower or "never treat command errors as empty diffs" in content_lower
+    assert "do not attempt to read partial" in content_lower or "do not perform reconciliation" in content_lower or "never treat" in content_lower
+
+
+def test_nul_safe_numstat_and_path_parsing(skill_content, robustness_guide_content):
+    # Both numstat and path enumeration must be NUL-delimited with -z
+    assert "--numstat -z" in skill_content, "numstat command must use -z for NUL-delimited output"
+    assert "--name-status -z" in skill_content, "name-status command must use -z for NUL-delimited output"
+    guide_lower = robustness_guide_content.lower()
+    assert "nul-safe" in guide_lower or "nul byte" in guide_lower or "\\0" in robustness_guide_content
+    assert "read_bytes().split" in robustness_guide_content or "\\0" in robustness_guide_content
+    assert "rename" in guide_lower
+    assert "binary" in guide_lower
+
+
+def test_changed_file_accounting_and_rename_semantics(skill_content, robustness_guide_content):
+    content_lower = skill_content.lower()
+    guide_lower = robustness_guide_content.lower()
+    # Changed-file entity count U vs membership count M
+    assert "unique changed-file" in content_lower or "unique changed-file entity count" in content_lower
+    assert "file-topic membership count" in content_lower
+    assert "m >= u" in content_lower or r"m \ge u" in content_lower or "m ≥ u" in content_lower or "membership" in content_lower
+    # Renames count as 1 entity in U
+    assert "pure rename" in content_lower or "rename" in content_lower
+    assert "1 changed-file entity" in content_lower or "1 changed-file record" in guide_lower or "1 changed file" in guide_lower
+    # Copies, submodules, and symlinks accounted for
+    assert "copy" in content_lower
+    assert "submodule" in content_lower
+    assert "symlink" in content_lower or "typechange" in content_lower
+    # Reconciliation against git diff --stat
+    assert "git diff --stat" in content_lower
+    assert "reconcile" in content_lower
+
+
 def test_topic_clustering_rules(skill_content):
-    # Empty diff early exit with fail-closed error check
+    # Empty diff early exit
     assert "No differences detected" in skill_content, "Missing empty diff early exit message"
-    assert "status 0" in skill_content or "exit status" in skill_content.lower()
-    assert "error" in skill_content.lower()
     # Topic clustering size rules: 2-5 functional topics, optional Miscellaneous/Tooling (up to 6)
     assert "2–5" in skill_content or "2-5" in skill_content, "Missing 2-5 topics guideline"
     assert "Miscellaneous" in skill_content or "Tooling" in skill_content, "Missing Miscellaneous/Tooling topic handling"
@@ -118,9 +165,6 @@ def test_topic_clustering_rules(skill_content):
     content_lower = skill_content.lower()
     assert "exactly one topic" in content_lower, "Missing requirement assigning each hunk to exactly one topic"
     assert "reconcile" in content_lower, "Missing stat reconciliation requirement"
-    assert "unique changed-file count" in content_lower or "distinct file paths" in content_lower
-    assert "file-topic membership count" in content_lower
-    assert "may belong to multiple topics" in content_lower or "span distinct" in content_lower
     assert "temp_diff_numstat.txt" in skill_content
     assert "temp_diff_all.txt" in skill_content
     assert "temp_diff_stat.txt" in skill_content
