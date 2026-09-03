@@ -39,13 +39,27 @@ Three modes, chosen by what the user provides:
    b. **Extract Commit List**: Write chronological commit history to scratch file:
       `git log --no-merges --reverse --format="%h %s (%an)" "<reference_commit_hash>..<commit_hash>" > "<appDataDir>/brain/<conversation-id>/scratch/temp_commits.txt"`
       *(Note: `--no-merges` extracts linear commits for the chronological narrative; any changes from merge conflict resolutions are captured in the cumulative file-by-file diff).*
-   c. **Write Statistics**: Save the changed-file statistics:
-      `git diff "<reference_commit_hash>...<commit_hash>" --stat > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_stat.txt"`
-   d. **Write Complete Diff**: Save the full diff output for overall analysis:
-      `git diff "<reference_commit_hash>...<commit_hash>" > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_all.txt"`
-   e. **Enumerate Paths**: For unusually large changesets, run null-delimited path/status enumeration:
-      `git diff "<reference_commit_hash>...<commit_hash>" --name-status -z > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_paths.txt"`
+   c. **Write Statistics**: Save the changed-file statistics.
+      - Normal commit/branch range:
+        `git diff "<reference_commit_hash>...<commit_hash>" --stat > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_stat.txt"`
+      - Root commit (where `<reference_commit_hash>` is the empty tree `4b825dc642cb6eb9a060e54bf8d69288fbee4904`):
+        `git diff "<reference_commit_hash>" "<commit_hash>" --stat > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_stat.txt"`
+   d. **Write Complete Diff**: Save the full diff output for overall analysis.
+      - Normal commit/branch range:
+        `git diff "<reference_commit_hash>...<commit_hash>" > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_all.txt"`
+      - Root commit (empty tree):
+        `git diff "<reference_commit_hash>" "<commit_hash>" > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_all.txt"`
+   e. **Enumerate Paths**: For unusually large changesets, run null-delimited path/status enumeration.
+      - Normal commit/branch range:
+        `git diff "<reference_commit_hash>...<commit_hash>" --name-status -z > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_paths.txt"`
+      - Root commit (empty tree):
+        `git diff "<reference_commit_hash>" "<commit_hash>" --name-status -z > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_paths.txt"`
    f. **Read via File Viewer**: Read `temp_commits.txt`, `temp_diff_stat.txt`, and `temp_diff_all.txt` using `view_file` to determine total commit count ($K$, where $K$ is the number of commits in `temp_commits.txt`) and file count.
+   g. **Empty Diff Early Exit & Error Verification (Fail Closed)**:
+      - Verify the exit status of the git diff command. If Git exited with non-zero status (e.g. invalid SHA, bad revision, or unknown ref), stop immediately and report the Git error output. Never treat command errors as empty diffs.
+      - Only if Git exited with status 0 AND `temp_diff_all.txt` contains 0 lines/bytes of diff, output:
+        `No differences detected between <reference> and <target>.`
+        and terminate cleanly without rendering an empty navigation menu. This applies across branch, PR, and commit modes.
 
    *Execution & Robustness Directives:*
    - **Use `view_file`**: Read files in chunks of 800 lines max. *Reason: Prevents terminal truncation.*
@@ -58,13 +72,18 @@ Three modes, chosen by what the user provides:
    - **Reference Guide**: For full detail on tools compatibility, EOF edge cases, and path safety, see [robustness_guide.md](resources/robustness_guide.md).
 
 2. **Overall Summary & Topic Clustering**:
-   - **Empty Diff Early Exit**: If `git diff` produces no changes, output: `No differences detected between <reference> and <target>.` and exit cleanly without rendering an empty navigation menu.
    - **Concise Changeset Summary**: Open with a concise summary of the whole changeset: purpose, inferred why, and logical themes. Include scale (files touched, insertions/deletions, and commit count $K$).
    - **Topic Clustering Protocol**:
-     - **Semantic Hunk Grouping**: Group diff hunks across files into 2–5 cohesive functional topics/themes based on architecture and concern (e.g. Domain/Data Models, Service/Business Logic, Public API & Endpoints, Test Coverage, Config & Tooling).
+     - **Deterministic Ordering**: Order topics by architectural dependency and data-flow sequence (e.g. Domain/Data Models & Schema $\to$ Service & Business Logic $\to$ Public API & Endpoints $\to$ Test Suite & Fixtures $\to$ Tooling/Config).
+     - **Semantic Hunk Grouping**: Group diff hunks across files into 2–5 cohesive functional topics/themes based on architecture and concern.
      - **Small Changeset Collapse**: For single-file diffs or small changesets ($\le 3$ total hunks), clustering collapses gracefully into 1 topic (`[t1]`), avoiding artificial fragmentation.
+     - **Coverage & Reconciliation Invariant**: Every diff hunk must be assigned to exactly one topic (no dropped hunks, no duplicate hunks). The sum of topic file counts, insertion/deletion line counts, and hunk counts must reconcile with the complete diff stats from `temp_diff_stat.txt`.
      - **Orphan/Unclustered Changes**: Any unclustered changes (e.g. lockfiles, version bumps, formatting) are assigned to an explicit `[Miscellaneous / Tooling]` topic so zero changes are silently omitted.
-     - **Large Diff Scaling Ingestion**: For exceptionally large changesets, inspect `temp_diff_stat.txt` and `temp_diff_paths.txt` first to partition files into logical clusters before reading individual file diffs via `view_file`.
+     - **Binary, Deletion, Rename & Mode Handling**:
+       - Binary files: counted in topic file counts with metadata size tags (`[binary file: <path> (+X KB / -0 KB)]`).
+       - Deleted files: counted with line reductions and tagged (`[deleted file: <path> (-N lines)]`).
+       - Renames and mode changes: grouped with the functional topic of the affected subsystem.
+     - **Large Diff Scaling Ingestion**: When changesets are exceptionally large, inspect `temp_diff_stat.txt` and `temp_diff_paths.txt` first to partition files into logical clusters before reading individual file diffs via `view_file` (see [robustness_guide.md](resources/robustness_guide.md) §4).
    - **Commit Series Timeline**: If multi-commit ($K > 1$), list the chronological commit sequence from `temp_commits.txt` with SHA, author, and commit subject.
 
 3. **Tri-Lens Navigation Menu**:
@@ -80,15 +99,13 @@ Three modes, chosen by what the user provides:
    Walkthrough Lenses:
      [t] Topic-by-topic walkthrough (cross-file synthesis across functional themes; recommended)
      [f] File-by-file walkthrough (cumulative changeset across all files)
-     [c] Commit-by-commit walkthrough (chronological narrative: 1 → K; available when K > 1)
+     [c] Commit-by-commit walkthrough (chronological narrative: 1 → K)
      [t1..tT] Jump directly to a specific topic
      [c1..cK] Jump directly to a specific commit (when K > 1)
-     [1..N] Jump directly to a specific file (under file mode)
-     [a] Walk through every file in order
      [s] Expand overall summary
      [q] Finish
    ```
-   If single commit ($K \le 1$), the commit-by-commit option `[c]` is omitted or noted as single commit.
+   If single commit ($K \le 1$), omit `[c]` from the walkthrough lenses.
 
 4. **Topic-by-Topic Walkthrough Flow (`[t]`)**:
    For each topic (or user-selected `[t1..tT]`):
@@ -101,7 +118,8 @@ Three modes, chosen by what the user provides:
    d. **Targeted Prose/Text Highlights**: For text/markup formats (`.tex`, `.md`, `.txt`, `.rst`) or long modified lines, highlight the precise inline edits (`word_A` -> `word_B`).
    e. **Topic Progression & Transition**:
       - `[n]` Next topic in sequence
-      - `[m]` Re-display topic navigation menu (with completed topics marked `[✓]`)
+      - `[p]` Previous topic in sequence
+      - `[m]` Re-display top-level navigation menu (with completed topics marked `[✓]`)
       - `[f]` Switch to file-by-file view
       - `[c]` Switch to commit-by-commit view (if $K > 1$)
       - `[s]` Expand overall summary
@@ -119,7 +137,8 @@ Three modes, chosen by what the user provides:
       Read with `view_file` and quote diff hunks verbatim in fenced `diff` blocks. Explain what changed, why, and how it fits into the commit sequence.
    d. **Intra-Commit Transition**:
       - `[n]` Next commit in series
-      - `[p]` Previous commit
+      - `[p]` Previous commit in series
+      - `[m]` Re-display top-level navigation menu
       - `[t]` Switch to topic-by-topic view
       - `[f]` Switch to cumulative file-by-file view
       - `[s]` Expand overall summary
@@ -130,11 +149,16 @@ Three modes, chosen by what the user provides:
    a. Present numbered menu of changed files (path, `+/-` stats, hunk count, one-line gist) plus:
       - `[1..N]` choose specific file,
       - `[a]` walk through every file in order,
+      - `[m]` re-display top-level navigation menu,
       - `[t]` switch to topic-by-topic walkthrough (recommended),
       - `[c]` switch to commit-by-commit walkthrough (if $K > 1$),
       - `[s]` expand the overall summary,
       - `[q]` finish.
-   b. For the chosen file, write target diff to `temp_diff.txt` (`git diff "<reference_commit_hash>...<commit_hash>" -- "<file>" > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff.txt"`).
+   b. For the chosen file, write target diff to `temp_diff.txt`:
+      - Normal commit/branch range:
+        `git diff "<reference_commit_hash>...<commit_hash>" -- "<file>" > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff.txt"`
+      - Root commit (empty tree):
+        `git diff "<reference_commit_hash>" "<commit_hash>" -- "<file>" > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff.txt"`
    c. Go hunk by hunk: quote each hunk verbatim in fenced `diff` block, explain what changed and why.
    d. **Targeted Prose/Text Highlights**: For text/markup formats (`.tex`, `.md`, `.txt`, `.rst`), highlight precise inline edits (`word_A` -> `word_B`).
 
