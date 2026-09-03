@@ -1,0 +1,17 @@
+[SIGNOFF 1d4d92e]: human comprehension and risk attestation
+
+Signoff-Spec-Version: 1.0
+Signoff-Status: VERIFIED_BY_HUMAN
+Signoff-Timestamp: 2026-09-03T04:24:32Z
+Signoff-Base-SHA: 86f1fe9c157f840e41b89c02170cc0f7cb334938
+Signoff-Reviewed-Commit-SHA: 1d4d92ee585746f2293dbe1a36414f522b4f9384
+Signoff-Reviewed-Tree-SHA: dae41e609e31aaabde5c48395c3480864a777f34
+Signoff-Harness-ID: antigravity-cli
+Signoff-Conversation-ID: 5a8a7a6b-ff93-44b8-8e12-93177af165b9
+Signoff-Transcript-Digest: sha256:2eee02f7ffcde6fcb95703e667d4267e68af37fba6867198c2c9dc50e669cf77
+Signoff-Transcript-Bytes: 738978
+Signoff-Tradeoff: Early worktree creation and remote in-tree spec/plan pushes enable third-party agent review before implementation code is written
+Signoff-Tradeoff: Ephemeral in-tree review folders are purged from git tree before signoff to prevent repository bloat, remaining accessible only in branch commit history
+Signoff-Risk: Post-purge spec and plan reviews rely on accessing historical commit SHAs rather than direct tree inspection on base branch
+Signoff-Verified-By: jerrylin247365@gmail.com
+Signoff-Agent: harness=antigravity-cli/N/A model=gemini-3.8-flash reasoning=N/A interview=standard/software-general
