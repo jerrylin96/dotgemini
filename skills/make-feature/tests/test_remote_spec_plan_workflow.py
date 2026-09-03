@@ -23,10 +23,20 @@ class TestRemoteSpecPlanWorkflow(unittest.TestCase):
             "tr -dc 'a-f0-9' < /dev/urandom | head -c 6" in content or "openssl rand -hex 3" in content,
             "make-feature/SKILL.md must specify 6-character hex hash derivation",
         )
+        self.assertNotIn(
+            "deterministic",
+            content.lower(),
+            "make-feature/SKILL.md must not describe /dev/urandom as deterministic",
+        )
         self.assertIn(
-            'BASE_BRANCH="${1:-main}"',
+            "PRIMARY_REPO=",
             content,
-            "make-feature/SKILL.md must assign BASE_BRANCH before use",
+            "make-feature/SKILL.md must record PRIMARY_REPO",
+        )
+        self.assertIn(
+            "BASE_BRANCH=",
+            content,
+            "make-feature/SKILL.md must assign BASE_BRANCH in Step 1",
         )
         self.assertIn(
             "SANITIZED_FEATURE=",
@@ -65,12 +75,8 @@ class TestRemoteSpecPlanWorkflow(unittest.TestCase):
         self.assertIn("spec: address review feedback", content)
         self.assertIn("plan: address review feedback", content)
 
-        # 6. Early abort teardown routines for Step 2c and 3c (must cd out of worktree first)
-        self.assertIn(
-            "PRIMARY_REPO=",
-            content,
-            "make-feature/SKILL.md abort routine must resolve PRIMARY_REPO before worktree remove",
-        )
+        # 6. Early abort teardown routines for Step 2c and 3c (must cd out of worktree first and require explicit confirmation)
+        self.assertIn("abort feature", content.lower())
         self.assertIn("git branch -D", content)
         self.assertIn("git push origin --delete", content)
         self.assertIn("git worktree prune", content)
@@ -93,6 +99,10 @@ class TestRemoteSpecPlanWorkflow(unittest.TestCase):
         )
 
         # 9. Step 4g & Step 5 GREEN implementation commit
+        self.assertTrue(
+            "pushing the green implementation" in content.lower(),
+            "Step 4g must clarify approval is before pushing GREEN implementation",
+        )
         self.assertIn(
             "feat: implement feature to make tests pass (GREEN)",
             phase2_text,
@@ -197,6 +207,11 @@ class TestRemoteSpecPlanWorkflow(unittest.TestCase):
             "README.md must not say 'before creating worktrees'",
         )
         self.assertIn("Phase 1a & 1b", readme_content)
+        self.assertIn(
+            "proactively selects `Sequential Subagents` execution strategy",
+            readme_content,
+            "README.md must preserve canonical heavy mode trigger sentence",
+        )
 
         # 2. lifecycle-guide.md
         lifecycle_content = LIFECYCLE_GUIDE_PATH.read_text(encoding="utf-8")
@@ -211,6 +226,9 @@ class TestRemoteSpecPlanWorkflow(unittest.TestCase):
         self.assertIsNotNone(phase1a_match, "lifecycle-guide.md Phase 1a not found")
         self.assertIn("gemini/<feature-name>-<hash>", phase1a_match.group(0))
         self.assertIn("git rm -rf --ignore-unmatch", lifecycle_content)
+        self.assertIn("/grill-me", lifecycle_content)
+        self.assertIn("<feature-name>-<hash>/spec.md", lifecycle_content)
+        self.assertIn("<feature-name>-<hash>/plan.md", lifecycle_content)
 
         # 3. incremental-implementation/SKILL.md
         incremental_content = INCREMENTAL_SKILL_PATH.read_text(encoding="utf-8")
