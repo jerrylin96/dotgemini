@@ -72,15 +72,15 @@ def test_root_commit_diff_command_safety(skill_content):
     assert "never use three-dot" in skill_content.lower() or "avoid three-dot" in skill_content.lower()
     # Verify root two-argument variants exist across all command types:
     # 1. stats
-    assert 'git diff "<reference_commit_hash>" "<commit_hash>" --stat -M' in skill_content
+    assert 'git diff "<reference_commit_hash>" "<commit_hash>" --stat --find-renames --find-copies' in skill_content
     # 2. numstat line totals
-    assert 'git diff "<reference_commit_hash>" "<commit_hash>" --numstat -z -M' in skill_content
+    assert 'git diff "<reference_commit_hash>" "<commit_hash>" --numstat -z --find-renames --find-copies' in skill_content
     # 3. complete diff
-    assert 'git diff "<reference_commit_hash>" "<commit_hash>" -M >' in skill_content
+    assert 'git diff "<reference_commit_hash>" "<commit_hash>" --find-renames --find-copies >' in skill_content
     # 4. path enumeration
-    assert 'git diff "<reference_commit_hash>" "<commit_hash>" --name-status -z -M' in skill_content
+    assert 'git diff "<reference_commit_hash>" "<commit_hash>" --name-status -z --find-renames --find-copies' in skill_content
     # 5. per-file diff
-    assert 'git diff "<reference_commit_hash>" "<commit_hash>" -M -- "<file>"' in skill_content
+    assert 'git diff "<reference_commit_hash>" "<commit_hash>" --find-renames --find-copies -- "<file>"' in skill_content
 
 
 def test_katex_rendering(skill_content):
@@ -109,21 +109,27 @@ def test_topic_count_definition_and_menu_unique_files(skill_content):
     content_lower = skill_content.lower()
     assert "total number of topics" in content_lower or "topic count" in content_lower or "count of topics" in content_lower
     assert "$1 \\le T \\le 6$" in skill_content or "1 <= T <= 6" in skill_content or "$T=6$" in skill_content
-    # Menu example must explicitly distinguish unique files (U)
-    assert "unique files" in skill_content
-    assert "$U=6$" in skill_content or "U=6" in skill_content or "$U" in skill_content
+    # Menu example must explicitly distinguish unique files (U) without embedding raw KaTeX inside text code fence
+    assert "Summary: 3 topics across 6 unique files (+112 / -28)" in skill_content
+    assert "($T=3$)" not in skill_content, "KaTeX math syntax should not be embedded inside text code fences"
+    assert "$U$" in skill_content, "Notation $U$ should be explained in prose where math renders"
 
 
 def test_consistent_rename_copy_detection_flags(skill_content, robustness_guide_content):
-    # Explicit -M flag must be specified consistently across all diff artifact commands
-    assert "--stat -M" in skill_content
-    assert "--numstat -z -M" in skill_content
-    assert "--name-status -z -M" in skill_content
-    assert "-M >" in skill_content
-    assert "-M --" in skill_content
-    # Robustness guide must document explicit -M flag to avoid git config divergence
-    assert "-M" in robustness_guide_content
-    assert "rename" in robustness_guide_content.lower()
+    # Explicit rename and copy flags must be specified consistently across all diff artifact commands
+    assert "--stat --find-renames --find-copies" in skill_content
+    assert "--numstat -z --find-renames --find-copies" in skill_content
+    assert "--name-status -z --find-renames --find-copies" in skill_content
+    assert "--find-renames --find-copies >" in skill_content
+    assert "--find-renames --find-copies --" in skill_content
+    # Robustness guide must document explicit flags to avoid git config divergence and explain exclusion of --find-copies-harder
+    assert "--find-renames" in robustness_guide_content
+    assert "--find-copies" in robustness_guide_content
+    assert "--find-copies-harder" in robustness_guide_content
+    assert "performance" in robustness_guide_content.lower() or "cost" in robustness_guide_content.lower()
+    # Path-limited diff representation explanation
+    assert "path-limited" in skill_content.lower() or "outside the pathspec" in skill_content.lower()
+    assert "path-limited" in robustness_guide_content.lower() or "outside the pathspec" in robustness_guide_content.lower()
 
 
 def test_nul_stream_workflow_and_optional_paths(skill_content, robustness_guide_content):
@@ -137,20 +143,22 @@ def test_nul_stream_workflow_and_optional_paths(skill_content, robustness_guide_
     guide_lower = robustness_guide_content.lower()
     assert "read_bytes().split(b'\\0')" in robustness_guide_content or "split(b'\\0')" in robustness_guide_content
     assert "never pass nul" in guide_lower or "not pass nul" in guide_lower
+    # C record parser handling in NUL stream
+    assert "c<score>" in guide_lower or "c090" in guide_lower or "copy" in guide_lower
 
 
 def test_deterministic_submodule_symlink_typechange_accounting(skill_content, robustness_guide_content):
     # Submodules, symlinks, and typechanges must follow deterministic numstat line math or metadata tags
     content_lower = skill_content.lower()
-    guide_lower = robustness_guide_content.lower()
     assert "submodule" in content_lower
     assert "symlink" in content_lower
     assert "typechange" in content_lower
     assert "temp_diff_numstat.txt" in content_lower
     assert "strictly follow" in content_lower or "follow" in content_lower
     assert "metadata" in content_lower
-    assert "submodule" in guide_lower
-    assert "symlink" in guide_lower
+    # Tab alignment on numstat binary rows
+    assert r"-\t-\t<path>" in skill_content or r"-\t-\t" in skill_content
+    assert r"-\t-\t<path>" in robustness_guide_content or r"-\t-\t" in robustness_guide_content
 
 
 def test_robustness_guide_root_commit_caveat(robustness_guide_content):
