@@ -44,18 +44,23 @@ Three modes, chosen by what the user provides:
         `git diff "<reference_commit_hash>...<commit_hash>" --stat > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_stat.txt"`
       - Root commit (where `<reference_commit_hash>` is the empty tree `4b825dc642cb6eb9a060e54bf8d69288fbee4904`):
         `git diff "<reference_commit_hash>" "<commit_hash>" --stat > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_stat.txt"`
-   d. **Write Complete Diff**: Save the full diff output for overall analysis.
+   d. **Write Numstat Line Totals**: Save machine-readable line and file totals for exact text reconciliation.
+      - Normal commit/branch range:
+        `git diff "<reference_commit_hash>...<commit_hash>" --numstat > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_numstat.txt"`
+      - Root commit (empty tree):
+        `git diff "<reference_commit_hash>" "<commit_hash>" --numstat > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_numstat.txt"`
+   e. **Write Complete Diff**: Save the full diff output for overall analysis.
       - Normal commit/branch range:
         `git diff "<reference_commit_hash>...<commit_hash>" > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_all.txt"`
       - Root commit (empty tree):
         `git diff "<reference_commit_hash>" "<commit_hash>" > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_all.txt"`
-   e. **Enumerate Paths**: For unusually large changesets, run null-delimited path/status enumeration.
+   f. **Enumerate Paths**: For unusually large changesets, run null-delimited path/status enumeration.
       - Normal commit/branch range:
         `git diff "<reference_commit_hash>...<commit_hash>" --name-status -z > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_paths.txt"`
       - Root commit (empty tree):
         `git diff "<reference_commit_hash>" "<commit_hash>" --name-status -z > "<appDataDir>/brain/<conversation-id>/scratch/temp_diff_paths.txt"`
-   f. **Read via File Viewer**: Read `temp_commits.txt`, `temp_diff_stat.txt`, and `temp_diff_all.txt` using `view_file` to determine total commit count ($K$, where $K$ is the number of commits in `temp_commits.txt`) and file count.
-   g. **Empty Diff Early Exit & Error Verification (Fail Closed)**:
+   g. **Read via File Viewer**: Read `temp_commits.txt`, `temp_diff_stat.txt`, `temp_diff_numstat.txt`, and `temp_diff_all.txt` using `view_file`. Determine total commit count ($K$, where $K$ is the number of commits in `temp_commits.txt`), unique changed-file count, exact text addition/deletion line counts from `temp_diff_numstat.txt`, and derive total hunk count directly from `temp_diff_all.txt` (by counting `@@ ... @@` hunk headers).
+   h. **Empty Diff Early Exit & Error Verification (Fail Closed)**:
       - Verify the exit status of the git diff command. If Git exited with non-zero status (e.g. invalid SHA, bad revision, or unknown ref), stop immediately and report the Git error output. Never treat command errors as empty diffs.
       - Only if Git exited with status 0 AND `temp_diff_all.txt` contains 0 lines/bytes of diff, output:
         `No differences detected between <reference> and <target>.`
@@ -64,7 +69,7 @@ Three modes, chosen by what the user provides:
    *Execution & Robustness Directives:*
    - **Use `view_file`**: Read files in chunks of 800 lines max. *Reason: Prevents terminal truncation.*
    - **Create and Quote Paths**: Run `mkdir -p` first; quote all paths in commands. *Reason: Handles directories with special characters/spaces safely.*
-   - **Manage Scratch Files**: Keep naming distinct (`temp_commits.txt`, `temp_commit_msg.txt`, `temp_commit_stat.txt`, `temp_commit_diff.txt`, `temp_diff_stat.txt`, `temp_diff_all.txt`, `temp_diff.txt`, `temp_diff_paths.txt`). *Reason: Avoids concurrency name collisions.*
+   - **Manage Scratch Files**: Keep naming distinct (`temp_commits.txt`, `temp_commit_msg.txt`, `temp_commit_stat.txt`, `temp_commit_diff.txt`, `temp_diff_stat.txt`, `temp_diff_numstat.txt`, `temp_diff_all.txt`, `temp_diff.txt`, `temp_diff_paths.txt`). *Reason: Avoids concurrency name collisions.*
    - **Parse Large Diff Stats**: Run `git diff ... --name-status -z` strictly for path and status enumeration. *Reason: Handles renames and non-standard characters safely.*
    - **Sequential Reading & EOF**: Read until file viewer lines exceed calculated count. *Reason: Avoids terminal cutoff.*
    - **Omit Binary Files**: Skip text diffs for binary files; report their changes in the summary. *Reason: Prevents binary content corruption.*
@@ -72,18 +77,28 @@ Three modes, chosen by what the user provides:
    - **Reference Guide**: For full detail on tools compatibility, EOF edge cases, and path safety, see [robustness_guide.md](resources/robustness_guide.md).
 
 2. **Overall Summary & Topic Clustering**:
-   - **Concise Changeset Summary**: Open with a concise summary of the whole changeset: purpose, inferred why, and logical themes. Include scale (files touched, insertions/deletions, and commit count $K$).
+   - **Concise Changeset Summary**: Open with a concise summary of the whole changeset: purpose, inferred why, and logical themes. Include scale (unique files touched, insertions/deletions, hunk count, and commit count $K$).
    - **Topic Clustering Protocol**:
-     - **Deterministic Ordering**: Order topics by architectural dependency and data-flow sequence (e.g. Domain/Data Models & Schema $\to$ Service & Business Logic $\to$ Public API & Endpoints $\to$ Test Suite & Fixtures $\to$ Tooling/Config).
-     - **Semantic Hunk Grouping**: Group diff hunks across files into 2–5 cohesive functional topics/themes based on architecture and concern.
-     - **Small Changeset Collapse**: For single-file diffs or small changesets ($\le 3$ total hunks), clustering collapses gracefully into 1 topic (`[t1]`), avoiding artificial fragmentation.
-     - **Coverage & Reconciliation Invariant**: Every diff hunk must be assigned to exactly one topic (no dropped hunks, no duplicate hunks). The sum of topic file counts, insertion/deletion line counts, and hunk counts must reconcile with the complete diff stats from `temp_diff_stat.txt`.
+     - **Deterministic Ordering & Tie-Breaker**: Order topics by architectural dependency and data-flow sequence (e.g. Domain/Data Models & Schema $\to$ Service & Business Logic $\to$ Public API & Endpoints $\to$ Test Suite & Fixtures $\to$ Tooling/Config). For topics with no clear architectural dependency, apply a deterministic tie-breaker: alphabetical order of topic name, followed by POSIX lexical order of the first changed file path in the topic.
+     - **Semantic Hunk Grouping**: Group diff hunks across files into 2–5 cohesive functional topics/themes based on architecture and concern, plus an optional `[Miscellaneous / Tooling]` topic for unclustered changes (for a maximum of 6 topics total).
+     - **Small Changeset & Single-Concern Collapse**: For single-file diffs, small changesets ($\le 3$ total hunks), or multi-file changesets where all modifications serve a single cohesive concern (e.g. global renaming, unified refactor, or version bump), clustering collapses gracefully into 1 topic (`[t1]`), avoiding artificial fragmentation.
+     - **Coverage & Reconciliation Invariant**:
+       Every diff hunk must be assigned to exactly one topic (no dropped hunks, no duplicate hunks).
+       Explicitly distinguish:
+       - **Unique changed-file count ($U$)**: The number of distinct file paths modified across the changeset.
+       - **File-topic membership count ($M$)**: The sum of file references across topics. A file MAY belong to multiple topics when its hunks touch separate functional concerns; in such cases, $M \ge U$ and topic membership counts are not required to equal the unique changed-file count.
+       - **Total hunk count ($H$)**: The sum of hunks across all topics must reconcile exactly with the total hunk count derived from `temp_diff_all.txt` ($\sum \text{hunks}(T_i) = H$).
+       - **Text insertion/deletion counts**: The sum of line additions and deletions across all topics must reconcile with the text totals from `temp_diff_numstat.txt`.
+       - **Binary byte sizes**: Reconciled separately from text lines (binary files appear as `- - <path>` in `numstat`). Binary byte sizes are never added to text line counts.
+       - **Renames and mode-only changes**: Mode-only changes (file mode changed with 0 line additions/deletions) and pure renames are assigned to the functional topic of the affected subsystem and contribute 0 to text line counts.
      - **Orphan/Unclustered Changes**: Any unclustered changes (e.g. lockfiles, version bumps, formatting) are assigned to an explicit `[Miscellaneous / Tooling]` topic so zero changes are silently omitted.
      - **Binary, Deletion, Rename & Mode Handling**:
-       - Binary files: counted in topic file counts with metadata size tags (`[binary file: <path> (+X KB / -0 KB)]`).
-       - Deleted files: counted with line reductions and tagged (`[deleted file: <path> (-N lines)]`).
-       - Renames and mode changes: grouped with the functional topic of the affected subsystem.
-     - **Large Diff Scaling Ingestion**: When changesets are exceptionally large, inspect `temp_diff_stat.txt` and `temp_diff_paths.txt` first to partition files into logical clusters before reading individual file diffs via `view_file` (see [robustness_guide.md](resources/robustness_guide.md) §4).
+       - **Binary files**: Counted in topic file lists with explicit old-size/new-size byte formats derived from `git diff --stat` (e.g. `Bin old -> new bytes`) or blob inspection (`git cat-file -s` / `git ls-tree`): `[binary file: <path> (old: X bytes -> new: Y bytes)]` (or `[binary addition: <path> (new: Y bytes)]`). Binary bytes are kept strictly separate from text-line counts.
+       - **Binary deletions**: Counted with old blob size: `[binary deletion: <path> (old: X bytes)]`.
+       - **Deleted text files**: Counted with line reductions and tagged: `[deleted file: <path> (-N lines)]`.
+       - **Mode-only changes**: Counted with mode change metadata: `[mode change: <path> (mode <old> -> <new>, 0 lines)]`.
+       - **Renames**: Grouped with the functional topic of the affected subsystem: `[rename: <old-path> -> <new-path>]`.
+     - **Large Diff Scaling Ingestion**: When changesets are exceptionally large, inspect `temp_diff_stat.txt`, `temp_diff_numstat.txt`, and `temp_diff_paths.txt` first to partition files into logical clusters before reading individual file diffs via `view_file` (see [robustness_guide.md](resources/robustness_guide.md) §4).
    - **Commit Series Timeline**: If multi-commit ($K > 1$), list the chronological commit sequence from `temp_commits.txt` with SHA, author, and commit subject.
 
 3. **Tri-Lens Navigation Menu**:
@@ -112,8 +127,10 @@ Three modes, chosen by what the user provides:
    a. **Topic Narrative**: Open with a 2–3 sentence narrative explaining what this topic achieves, why it was implemented, and the overarching design decision.
    b. **Verbatim Cross-File Hunks**:
       - Quote every relevant text hunk verbatim in fenced `diff` blocks, preceded by an explicit file header tag (e.g., `[src/auth/middleware.py:L45-L68]`).
-      - **Binary Files**: Summarized with metadata tags (e.g., `[binary file: assets/logo.png (+12 KB / -0 KB)]`) without corrupting text hunks.
+      - **Binary Files**: Summarized with metadata tags (e.g., `[binary file: assets/logo.png (old: 0 bytes -> new: 12288 bytes)]`) without corrupting text hunks.
+      - **Binary Deletions**: Explicitly tagged with `[binary deletion: assets/old_logo.png (old: 8192 bytes)]`.
       - **Deleted Files**: Explicitly tagged with `[deleted file: legacy/old_auth.py (-85 lines)]`.
+      - **Mode Changes**: Explicitly tagged with `[mode change: scripts/run.sh (mode 100644 -> 100755, 0 lines)]`.
    c. **Cross-File Interaction Commentary**: Directly explain how the changes across the different files connect and operate together (e.g. how the new model column feeds the API serializer).
    d. **Targeted Prose/Text Highlights**: For text/markup formats (`.tex`, `.md`, `.txt`, `.rst`) or long modified lines, highlight the precise inline edits (`word_A` -> `word_B`).
    e. **Topic Progression & Transition**:

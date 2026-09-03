@@ -17,6 +17,7 @@ This guide details best practices and compatibility standards for safely extract
 - `temp_commit_stat.txt`: Stores per-commit changed-file statistics (`git show --stat --format="" ...`).
 - `temp_commit_diff.txt`: Stores per-commit per-file diff hunks (`git show <sha> -- <file>`).
 - `temp_diff_stat.txt`: Stores cumulative changed-file statistics, used for topic-by-topic clustering and high-level changeset partitioning.
+- `temp_diff_numstat.txt`: Stores machine-readable line insertion/deletion totals (`git diff ... --numstat`), used for precise text line reconciliation.
 - `temp_diff_all.txt`: Stores complete cumulative diff hunks and context.
 - `temp_diff.txt`: Stores the per-file cumulative walkthrough diff. Dynamically extract each file's diff to a single stable location, overwriting it for each selected file.
 - `temp_diff_paths.txt`: Stores null-delimited name-status list, used for path/status enumeration and large diff topic clustering.
@@ -25,8 +26,8 @@ This guide details best practices and compatibility standards for safely extract
 
 ## 4. Special Git Cases
 - **Renames & Modes**: Explicitly check diff headers for renames (`rename from ...`), mode changes (`old mode ... new mode`), and binary files (`Binary files ... differ`).
-- **Binary Files**: Report binary changes in the summary (e.g., `[binary file: path (+X/-Y)]`), but omit detailed text diffs to prevent corrupted rendering.
-- **Topic Clustering**: For topic-by-topic walkthroughs, cluster hunks semantically across files into cohesive functional themes. When changesets are exceptionally large, inspect `temp_diff_stat.txt` and `temp_diff_paths.txt` first to partition files before reading full diff chunks.
+- **Binary Files**: Report binary changes in the summary using explicit old/new byte sizes (e.g., `[binary file: <path> (old: X bytes -> new: Y bytes)]`), keeping byte sizes separate from text line math, and omit detailed text diffs to prevent corrupted rendering.
+- **Topic Clustering**: For topic-by-topic walkthroughs, cluster hunks semantically across files into cohesive functional themes. When changesets are exceptionally large, inspect `temp_diff_stat.txt`, `temp_diff_numstat.txt`, and `temp_diff_paths.txt` first to partition files before reading full diff chunks.
 
 ## 5. Pagination & EOF Detection
 - To prevent terminal truncation, read files in successive, chunked lines.

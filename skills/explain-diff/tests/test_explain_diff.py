@@ -63,6 +63,17 @@ def test_root_commit_diff_command_safety(skill_content):
         "SKILL.md must provide two-argument git diff command for root commit empty tree"
     )
     assert "never use three-dot" in skill_content.lower() or "avoid three-dot" in skill_content.lower()
+    # Verify root two-argument variants exist across all command types:
+    # 1. stats
+    assert 'git diff "<reference_commit_hash>" "<commit_hash>" --stat' in skill_content
+    # 2. numstat line totals
+    assert 'git diff "<reference_commit_hash>" "<commit_hash>" --numstat' in skill_content
+    # 3. complete diff
+    assert 'git diff "<reference_commit_hash>" "<commit_hash>" >' in skill_content
+    # 4. path enumeration
+    assert 'git diff "<reference_commit_hash>" "<commit_hash>" --name-status -z' in skill_content
+    # 5. per-file diff
+    assert 'git diff "<reference_commit_hash>" "<commit_hash>" -- "<file>"' in skill_content
 
 
 def test_katex_rendering(skill_content):
@@ -91,19 +102,34 @@ def test_topic_clustering_rules(skill_content):
     assert "No differences detected" in skill_content, "Missing empty diff early exit message"
     assert "status 0" in skill_content or "exit status" in skill_content.lower()
     assert "error" in skill_content.lower()
-    # Topic clustering size rules: 2-5 topics for multi-file, collapse for small changesets
+    # Topic clustering size rules: 2-5 functional topics, optional Miscellaneous/Tooling (up to 6)
     assert "2–5" in skill_content or "2-5" in skill_content, "Missing 2-5 topics guideline"
-    assert "3 hunks" in skill_content or "3 total hunks" in skill_content or "<= 3" in skill_content or r"\le 3" in skill_content, "Missing small changeset collapse rule"
-    # Deterministic dependency ordering
-    assert "dependency" in skill_content.lower() or "data-flow" in skill_content.lower()
-    # Coverage & reconciliation invariant
-    assert "exactly one topic" in skill_content.lower(), "Missing requirement assigning each hunk to exactly one topic"
-    assert "reconcile" in skill_content.lower(), "Missing stat reconciliation requirement"
-    # Miscellaneous / Tooling topic for orphan changes
     assert "Miscellaneous" in skill_content or "Tooling" in skill_content, "Missing Miscellaneous/Tooling topic handling"
-    # Large diff scaling via stat-first ingestion
+    assert "maximum of 6" in skill_content or "max 6" in skill_content or "6 topics total" in skill_content
+    # Small changeset or single cohesive concern collapse
+    assert "3 hunks" in skill_content or "3 total hunks" in skill_content or "<= 3" in skill_content or r"\le 3" in skill_content
+    assert "cohesive concern" in skill_content.lower() or "single cohesive concern" in skill_content.lower()
+    # Deterministic dependency ordering and stable tie-breaker
+    assert "dependency" in skill_content.lower() or "data-flow" in skill_content.lower()
+    assert "tie-breaker" in skill_content.lower()
+    assert "alphabetical" in skill_content.lower()
+    assert "lexical order" in skill_content.lower() or "posix" in skill_content.lower()
+    # Coverage & reconciliation invariant distinguishing unique files vs membership, hunks, lines
+    content_lower = skill_content.lower()
+    assert "exactly one topic" in content_lower, "Missing requirement assigning each hunk to exactly one topic"
+    assert "reconcile" in content_lower, "Missing stat reconciliation requirement"
+    assert "unique changed-file count" in content_lower or "distinct file paths" in content_lower
+    assert "file-topic membership count" in content_lower
+    assert "may belong to multiple topics" in content_lower or "span distinct" in content_lower
+    assert "temp_diff_numstat.txt" in skill_content
+    assert "temp_diff_all.txt" in skill_content
     assert "temp_diff_stat.txt" in skill_content
     assert "temp_diff_paths.txt" in skill_content
+    # Binary, deletion, rename & mode handling
+    assert "binary file:" in content_lower
+    assert "binary deletion" in content_lower
+    assert "mode change" in content_lower
+    assert "rename" in content_lower
 
 
 def test_cross_file_synthesis_protocol(skill_content):
@@ -164,6 +190,7 @@ def test_robustness_guide_topic_and_commit_safety(robustness_guide_content):
     assert "temp_commit_msg.txt" in robustness_guide_content, "Missing temp_commit_msg.txt in robustness guide"
     assert "temp_commits.txt" in robustness_guide_content, "Missing temp_commits.txt in robustness guide"
     assert "temp_diff_stat.txt" in robustness_guide_content, "Missing temp_diff_stat.txt in robustness guide"
+    assert "temp_diff_numstat.txt" in robustness_guide_content, "Missing temp_diff_numstat.txt in robustness guide"
     assert "temp_diff_paths.txt" in robustness_guide_content, "Missing temp_diff_paths.txt in robustness guide"
     content_lower = robustness_guide_content.lower()
     assert "commit" in content_lower
@@ -190,3 +217,5 @@ def test_readme_sync(readme_content):
     assert "`[t]`" in readme_content or "[t]" in readme_content
     assert "`[c]`" in readme_content or "[c]" in readme_content
     assert "`[f]`" in readme_content or "[f]" in readme_content
+    # Single-commit [c] caveat
+    assert "multi-commit" in readme_content and "single-commit" in readme_content, "Missing README single-commit [c] caveat"
