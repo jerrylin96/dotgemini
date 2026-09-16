@@ -1,4 +1,4 @@
-# Adversarial Review Prompt: Feature Spec (explain-diff-anti-hallucination) - Revision 1
+# Adversarial Review Prompt: Feature Plan (explain-diff-anti-hallucination)
 
 ### 🪪 Reviewer Identification Proof (Mandatory Top Banner)
 External reviewers MUST output this exact header at the top of their chat text (before any other text):
@@ -15,22 +15,17 @@ External reviewers MUST output this exact header at the top of their chat text (
 
 ### Review Context
 - **Target Branch**: `gemini/explain-diff-anti-hallucination-765133`
-- **Milestone**: Phase 1a (Feature Specification - Revision 1)
-- **Target File**: `explain-diff-anti-hallucination-765133/spec.md`
+- **Milestone**: Phase 1b (Implementation Plan)
+- **Target File**: `explain-diff-anti-hallucination-765133/plan.md`
 
 ### Task Description
-Perform an adversarial audit of the updated `explain-diff-anti-hallucination-765133/spec.md`.
-Specific updates made based on `reviewer-01a0ab8d` feedback:
-1. Expanded truncation signal set (`<truncated`, `observation too long`, `stdout_truncated: true`, unviewed pagination).
-2. Mandated individual path quoting (`"<file1>" "<file2>"`) and rename/copy source handling.
-3. Updated `test_root_commit_cross_reference_corrected` test contract to accommodate Step 4b.
-4. Added fail-closed exit code 0 verification for `temp_topic_diff.txt`.
-5. Defined active topic iteration inspection window and EOF pagination requirement.
-6. Specified binary metadata handling (`-\t-\t` -> metadata tags, no text fenced diffs).
-7. Removed "bulk multi-file" qualifier to forbid terminal dumping on ANY diff hunks.
-8. Added `temp_topic_diff.txt` to `robustness_guide.md` §1 Tooling Contract.
-
-Please verify whether all findings are resolved and update your review verdict.
+Perform an adversarial audit of `explain-diff-anti-hallucination-765133/plan.md`.
+Focus on:
+1. **TDD Rigor**: Does Task 1 write failing RED tests proving the failure of missing directives before implementing GREEN code?
+2. **Task Atomicity & Dependencies**: Are the tasks cleanly ordered without circular dependencies?
+3. **Parity with Approved Spec**: Does the plan implement all requirements and edge case fixes agreed upon in `spec.md` (Revision 1)?
+4. **Worktree & Env Safety**: Are all commands targeted to the isolated worktree using `run_in_env.py`?
+5. **YAGNI**: Is the plan free of bloated or unnecessary scaffolding?
 
 ### Delivery Modes
 - **Mode A (Dedicated Branch)**: Branch `review/explain-diff-anti-hallucination-765133/<REVIEWER_ID>`, commit findings to `review.md`, and push.
@@ -43,9 +38,7 @@ VERDICT: [APPROVE | NEEDS_REVISION | REJECT]
 AUDITED_SHA: <sha>
 
 ## Audit Findings
-- [x] **[Severity: P1] [Section: Spec §3.1] Truncation Signal Set Incomplete & view_file Pagination Gap**
-  - *(Resolved in commit <sha>)*
-- [ ] **[Severity: ...] Title**
+- [ ] **[Severity: P0|P1|P2|Nit] [Section: Plan Task Y] Title**
   - **Defect / Gap**: Concrete failure mode or counterexample.
   - **Actionable Fix**: Minimal concrete fix complying with Ponytail.
 ```
