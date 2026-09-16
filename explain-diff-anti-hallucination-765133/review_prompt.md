@@ -1,4 +1,4 @@
-# Adversarial Review Prompt: Feature Plan (explain-diff-anti-hallucination)
+# Adversarial Review Prompt: RED Test Suite (explain-diff-anti-hallucination)
 
 ### 🪪 Reviewer Identification Proof (Mandatory Top Banner)
 External reviewers MUST output this exact header at the top of their chat text (before any other text):
@@ -15,17 +15,15 @@ External reviewers MUST output this exact header at the top of their chat text (
 
 ### Review Context
 - **Target Branch**: `gemini/explain-diff-anti-hallucination-765133`
-- **Milestone**: Phase 1b (Implementation Plan)
-- **Target File**: `explain-diff-anti-hallucination-765133/plan.md`
+- **Milestone**: Phase 2 (RED Test Suite - Failing)
+- **Target File**: `skills/explain-diff/tests/test_explain_diff.py`
 
 ### Task Description
-Perform an adversarial audit of `explain-diff-anti-hallucination-765133/plan.md`.
-Focus on:
-1. **TDD Rigor**: Does Task 1 write failing RED tests proving the failure of missing directives before implementing GREEN code?
-2. **Task Atomicity & Dependencies**: Are the tasks cleanly ordered without circular dependencies?
-3. **Parity with Approved Spec**: Does the plan implement all requirements and edge case fixes agreed upon in `spec.md` (Revision 1)?
-4. **Worktree & Env Safety**: Are all commands targeted to the isolated worktree using `run_in_env.py`?
-5. **YAGNI**: Is the plan free of bloated or unnecessary scaffolding?
+Perform an adversarial audit of the RED test suite in `skills/explain-diff/tests/test_explain_diff.py`.
+Verify:
+1. **Cryptographic Proof of Failure**: Do the new/updated tests cleanly fail on the un-implemented codebase (22 passed, 5 failed)?
+2. **Assertion Tightness**: Are assertions rigorous enough to prevent false positives (no overly broad regexes, permissive fallbacks, or un-bounded section splits)?
+3. **Spec Parity**: Do the test assertions strictly enforce all invariants specified in `spec.md` (Revision 1)?
 
 ### Delivery Modes
 - **Mode A (Dedicated Branch)**: Branch `review/explain-diff-anti-hallucination-765133/<REVIEWER_ID>`, commit findings to `review.md`, and push.
@@ -38,7 +36,7 @@ VERDICT: [APPROVE | NEEDS_REVISION | REJECT]
 AUDITED_SHA: <sha>
 
 ## Audit Findings
-- [ ] **[Severity: P0|P1|P2|Nit] [Section: Plan Task Y] Title**
+- [ ] **[Severity: P0|P1|P2|Nit] [Section: Test Name] Title**
   - **Defect / Gap**: Concrete failure mode or counterexample.
   - **Actionable Fix**: Minimal concrete fix complying with Ponytail.
 ```
