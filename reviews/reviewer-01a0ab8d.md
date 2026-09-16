@@ -1,67 +1,50 @@
 # Review: reviewer-01a0ab8d
 VERDICT: APPROVE
-AUDITED_SHA: 5b0726efc289a55ece390ba040e76dd175b6f47c
+AUDITED_SHA: 3ad369a339181f426ab3483e6cd18e8e6762d9cd
 
 ## Audit Findings
-- [x] **[Severity: P1] [Section: Spec §3.1] Truncation Signal Set Incomplete & view_file Pagination Gap - RESOLVED**
-  - **Defect / Gap**: Previously only `<truncated N lines>` / `<truncated N bytes>` covered. view_file pagination (800 lines) allowed hallucination of remaining hunks.
-  - **Actionable Fix**: Fixed in 5b0726e. Spec now includes `<truncated N lines>`, `<truncated N bytes>`, `... output truncated ...`, `observation too long`, `stdout_truncated: true`, and unviewed view_file pagination. Mandates reading through EOF (calculate total line count, iterate view_file until StartLine > total). Verified in §3.1, §3.2 Verification and Pagination, §3.3, §3.4 test_truncation_circuit_breaker.
-  - **Verification**: Goals list now explicitly forbids reciting/paraphrasing/guessing from any truncated output including listed signals. §3.1 breaker says "If any tool output indicates truncation (including ... or unviewed view_file pagination where lines remain...) MUST either call view_file reading through EOF". §3.2 requires verify exit status 0, calculate total line count, iterate view_file until EOF in active topic iteration.
+- [x] **[Severity: P2] [Section: Plan Task 1] TDD Rigor - Root-Commit Regex Update Not RED**
+  - **Defect / Gap**: Task 1 updates `test_root_commit_cross_reference_corrected` regex from `steps 1c–1f, 6b` to `steps?\\s+1c[–-]1f,\\s*(?:4b,\\s*)?6b`. This relaxes the assertion, so it will PASS on current SKILL.md before GREEN code adds Step 4b, contrary to strict RED-fail expectation. The other 4 items in Task 1 (fail_closed extension + 3 new tests) correctly produce RED failures.
+  - **Actionable Fix**: Document in Task 1 that root-commit regex update is a regression-accommodation, not a RED proof, and that RED proof is provided by the 3 new tests plus fail_closed extension. Alternatively, keep regex strict in RED phase, then update after GREEN implementation of Step 4b, ensuring test fails until Step 4b is added. Minimal fix: add note "This update prevents false failure when 4b is introduced; RED rigor is demonstrated by other 4 assertions."
 
-- [x] **[Severity: P1] [Section: Spec §3.2 & §3.3] Topic Diff Pathspec Quoting & Rename/Copy Source Loss - RESOLVED**
-  - **Defect / Gap**: Unquoted `<files...>` placeholder broke on spaces/special chars and risked injection. Path-limited diff suppressed rename source when only target in pathspec, causing false "new file" diff vs `[rename: ...]` tag.
-  - **Actionable Fix**: Fixed in 5b0726e. Template now `-- "<file1>" "<file2>"` with individually quoted paths. Added note: "Each file argument must be quoted individually" and "If topic contains renamed/copied file whose source outside pathspec, pass both source and target paths to pathspec, or use global metadata from temp_diff_paths.txt / temp_diff_numstat.txt to emit [rename: ...] / [copy: ...] metadata tags per §2." Preserves --find-renames --find-copies.
-  - **Verification**: §3.2 shows quoted per-file pattern for both normal and root commit variants, plus rename/copy note.
+- [x] **[Severity: Nit] [Section: Plan Tasks 1-5] Hardcoded Worktree Path Violates Portability**
+  - **Defect / Gap**: All verify commands use absolute path `/Users/jlin404/.gemini/tmp/worktrees/gemini_explain-diff-anti-hallucination-765133` from author's machine. Spec verification strategy uses placeholder `<worktree_path>`. Hardcoded user home breaks isolated worktree safety on other machines and contradicts Ponytail reuse of `WORKTREE_PATH` variable.
+  - **Actionable Fix**: Replace hardcoded path with `<worktree_path>` placeholder or `$WORKTREE_PATH` variable per spec: `python3 ~/.gemini/scripts/run_in_env.py <worktree_path> pytest ...`. Keep Execution Strategy generic: `WORKTREE_PATH=<worktree_path>`. No functional impact, but improves portability and aligns with worktree safety.
 
-- [x] **[Severity: P1] [Section: Spec §3.2 & §3.4] Root-Commit Cross-Reference Breaks Existing Test Contract - RESOLVED**
-  - **Defect / Gap**: Adding Step 4b root-commit command required updating existing test `test_root_commit_cross_reference_corrected` which enforced regex `steps 1c–1f, 6b`.
-  - **Actionable Fix**: Fixed. Spec §3.2 now says update cross-reference to `(steps 1c–1f, 4b, 6b)` and §3.4 specifies updating test regex to `r"steps?\s+1c[–-]1f,\s*(?:4b,\s*)?6b"`. Ensures 100% pass rate.
-  - **Verification**: §3.4 item 1 explicitly documents regex update.
+- [x] **[Severity: Nit] [Section: Plan Task 4] Robustness Guide Section Numbering**
+  - **Defect / Gap**: Plan says "Add dedicated section 8. Truncation Handling & Grounded Quotation Invariants" while current guide has 7 sections. Spec says "Add a new dedicated section" without number. If guide already has 7, adding 8 is logical, but if future changes add sections, numbering may shift.
+  - **Actionable Fix**: Clarify as "Add new dedicated section (e.g., §8) Truncation Handling & Grounded Quotation Invariants after §7 Cleanup or as new §3a, preserving existing numbering." Minimal – no code impact.
 
-- [x] **[Severity: P1] [Section: Spec §3.2 & §3.3] Missing Fail-Closed for temp_topic_diff.txt - RESOLVED**
-  - **Defect / Gap**: Fail-closed verification covered stat/numstat/all/paths but not new artifact temp_topic_diff.txt, allowing stale file read on failure.
-  - **Actionable Fix**: Fixed. §3.2 §1h extends exit status 0 verification to temp_topic_diff.txt with STOP, report Git error, do not read partial files, do not emit fenced diff. §3.3 documents checking exit status 0 in Truncation Handling section. §3.4 item 2 adds assertion for temp_topic_diff.txt in fail-closed test.
-  - **Verification**: Goals include "Extend fail-closed exit status 0 verification to temp_topic_diff.txt". §3.2 §1h and §4b Verification and Pagination both mandate exit status check.
-
-- [x] **[Severity: P2] [Section: Spec §3.2] Vague Immediate Turn History Window - RESOLVED**
-  - **Defect / Gap**: "immediate turn history" undefined, allowed stale views.
-  - **Actionable Fix**: Fixed. Now says "active context" and "active topic iteration" with precise definition: "MUST verify command exit status 0, calculate total line count, and iterate view_file until StartLine > total lines (EOF) in the active topic iteration before quoting". Prohibition: "Emitting any fenced diff block without prior view_file inspection in the active context is strictly forbidden." Clear that views from prior topics do not satisfy.
-  - **Verification**: §3.2 Verification and Pagination + Strict prohibition use "active context" and "active topic iteration".
-
-- [x] **[Severity: P2] [Section: Spec §3.2 & §3.3] Binary/Metadata Handling Gap - RESOLVED**
-  - **Defect / Gap**: No distinction for binary files reporting -\\t-\\t in numstat.
-  - **Actionable Fix**: Fixed. §3.2 adds "Binary & Metadata Handling: For files where temp_diff_numstat.txt reports -\\t-\\t (binary, submodule, symlink, mode change), use metadata tags per §2; do not attempt to render binary diffs in text fenced blocks." §3.3 Truncation Handling section details binary and metadata tag handling.
-  - **Verification**: Present in both §3.2 and §3.3.
-
-- [x] **[Severity: P2] [Section: Spec §3.2] Single-File Hunk Loophole - RESOLVED**
-  - **Defect / Gap**: Previous wording "bulk multi-file hunks" allowed single-file dump to stdout.
-  - **Actionable Fix**: Fixed. Now says "that dump any diff hunks (single-file or multi-file) directly to stdout" and "Any diff output (single-file or multi-file) must always be redirected". Goals updated accordingly.
-  - **Verification**: §3.2 prohibition now covers any diff output.
-
-- [x] **[Severity: Nit] [Section: Spec §3.3] Tooling Contract Omission - RESOLVED**
-  - **Defect / Gap**: temp_topic_diff.txt missing from robustness_guide §1 Tooling Contract.
-  - **Actionable Fix**: Fixed. §3.3 now includes "In §1 (Tooling Contract): Add temp_topic_diff.txt to enumerated list of primary human-readable text artifacts intended for view_file." Goals also mention updating §1, §3, §7. Test §3.4 item 5 verifies documentation in §1, §3, §7.
+- [x] **[Severity: Nit] [Section: Plan Task 5] Missing Symlink Verification Command**
+  - **Defect / Gap**: Task 5 says "Symlink GEMINI.md -> AGENTS.md intact" but verify commands only run pytest and ruff check. Spec verification strategy includes static verification of symlink continuity.
+  - **Actionable Fix**: Add to Task 5 verify: `ls -l GEMINI.md && readlink GEMINI.md` or `test -L GEMINI.md && test $(readlink GEMINI.md) = AGENTS.md`. Keeps E2E completeness.
 
 ## Summary
-Re-audit of 5b0726e confirms all P1/P2 findings from 443e9f6 review are addressed. Spec now:
-- Closes truncation circuit breaker for all known signals plus view_file pagination with EOF loop requirement
-- Mandates individually quoted pathspecs and handles rename/copy source outside pathspec via global metadata fallback
-- Extends fail-closed exit status 0 verification to temp_topic_diff.txt
-- Defines active context / active topic iteration precisely
-- Handles binary/metadata tags correctly
-- Updates test contract for root-commit cross-reference (steps 1c–1f, 4b, 6b) and fail-closed list
-- Covers Tooling Contract, Roles, Cleanup for temp_topic_diff.txt
+Plan at 3ad369a correctly implements approved spec revision 5b0726e (which addressed all prior P1/P2 findings). 
 
-No new backward compatibility breaks detected. Existing tests for --find-renames --find-copies, NUL parsing, KaTeX, topic count T, etc. remain intact. YAGNI satisfied – changes minimal, reuse existing flags, no speculative abstractions.
+**TDD Rigor**: Task 1 writes RED tests first – 3 new tests (truncation breaker, skill anti-hallucination, robustness guide) plus fail_closed extension will fail on current codebase, providing cryptographic RED proof. Root-commit regex update is correctly identified as regression accommodation. Verify commands use `run_in_env.py` for isolated env.
 
-Verdict: APPROVE. Ready for implementation phase.
+**Task Atomicity & Dependencies**: Clean sequential order: 1) Test prep (RED) -> 2) AGENTS.md -> 3) SKILL.md -> 4) robustness_guide -> 5) E2E regression & linter. No circular dependencies. Each task targets single file except Task 1 (test file) and Task 5 (all). Dependencies explicit via RED test spec references. Atomicity acceptable.
+
+**Parity with Approved Spec**: Full parity:
+- Spec §3.1 breaker (signals <truncated, observation too long, stdout_truncated true, pagination, byte-for-byte) -> Task 2
+- Spec §3.2 prohibition (any diff hunks), managed scratch files, fail-closed extension, root-commit ref (steps 1c–1f, 4b, 6b), topic diff with quoted "-- \"<file1>\" \"<file2>\"" and rename/copy fallback, EOF pagination, active context, binary tags -> Task 3
+- Spec §3.3 Tooling Contract §1, Roles §3, new section Truncation Handling, Cleanup §7 -> Task 4
+- Spec §3.4 test updates (root regex, fail_closed, 3 new tests, 100% pass) -> Task 1 + Task 5
+- Non-Goals respected (tri-lens tokens, KaTeX, --find-renames --find-copies)
+
+**Worktree & Env Safety**: All commands use `python3 ~/.gemini/scripts/run_in_env.py <worktree_path>` pattern (with hardcoded example path – Nit). Isolated worktree mandated, no primary workspace mutations, no rm -rf, scratch files under conversation scratch dir. Safe.
+
+**YAGNI**: Minimal scaffolding, no speculative abstractions, reuses existing flags and patterns, tasks limited to 5.
+
+Verdict: APPROVE – plan ready for build phase. Minor Nits do not block.
 
 ## Backwards Compatibility Check
-- Pass: No tri-lens token changes, KaTeX preserved, --find-renames --find-copies unchanged
-- Pass: temp_topic_diff.txt additive, not conflicting with existing scratch file list
-- Pass: test updates documented to prevent regression (root-commit regex, fail-closed list)
-- Pass: AGENTS.md breaker additive, aligns with existing Empirical Grounding
+- Pass: Test updates preserve existing assertions, only extend (fail_closed adds temp_topic_diff.txt, root regex allows optional 4b)
+- Pass: No changes to tri-lens tokens or KaTeX
+- Pass: AGENTS.md addition additive
 
 ## YAGNI & Minimal Diff Assessment
-- Minimal diff, directly addresses incident, no new dependencies, no speculative hooks
-- Reuses existing patterns (scratch files, view_file, exit status checks)
+- Tasks minimal, focused on 3 files + test file
+- No new dependencies or scripts
+- Reuses run_in_env.py and existing test fixtures
