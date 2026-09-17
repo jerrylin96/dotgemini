@@ -18,7 +18,7 @@ Resolve context, generate the diff, and interactively explain it: overall summar
 Three modes, chosen by what the user provides:
 
 * **Commit mode**: The user names a specific commit SHA or range. Skip the resolver and diff directly in the active workspace:
-  - Single commit: `<commit_hash>` is `<sha>`, `<reference_commit_hash>` is `<sha>^`. For root/parentless commits (no parent), set `<reference_commit_hash>` to the Git empty tree `4b825dc642cb6eb9a060e54bf8d69288fbee4904` for the two-dot commit list step (1b), and use two-argument `git diff <empty-tree> <sha>` or `git show <sha>` directly for stats/diffs (steps 1c–1f, 6b); never use three-dot `...` with the empty tree as tree objects do not support merge-base resolution.
+  - Single commit: `<commit_hash>` is `<sha>`, `<reference_commit_hash>` is `<sha>^`. For root/parentless commits (no parent), set `<reference_commit_hash>` to the Git empty tree `4b825dc642cb6eb9a060e54bf8d69288fbee4904` for the two-dot commit list step (1b), and use two-argument `git diff <empty-tree> <sha>` or `git show <sha>` directly for stats/diffs (steps 1c–1f, 4b, 6b); never use three-dot `...` with the empty tree as tree objects do not support merge-base resolution.
   - Range: `git diff <a>...<b>` where `<reference_commit_hash>` is `<a>` and `<commit_hash>` is `<b>`.
 * **PR mode**: The user names a pull/merge request (number or web URL). Use the same resolver with the PR target — `--pr <N>`, or pass `#N`/the URL positionally. It fetches the PR head ref from the remote, so fork PRs work without a local branch; see [adversarial-review/SKILL.md](../adversarial-review/SKILL.md) for details, the extra `pr_number` JSON field, and the PR-baseline note (`--reference` override, optional best-effort `gh pr view` for the PR title/description — the description makes the "why" in the summary much better, but `gh` is never required).
 * **Branch mode (default)**: The user names a branch or gives no target. Reuse the adversarial-review branch resolver — same script, same worktree cache, same protocol:
@@ -34,7 +34,7 @@ Three modes, chosen by what the user provides:
 > [!TIP]
 > **Subagent Delegation**: If the changeset is exceptionally large (many files or large diffs), the main agent should delegate the task. Invoke the built-in `research` subagent (optimized for read-only exploration) to analyze the diff chunks in the background and draft the overall summary and topic/file clusters; wait for its report before presenting the summary/menu.
 
-1. **Get the Diff Safely & Extract Commits**: To prevent terminal command output truncation (which silently trims long diff outputs or lines), do NOT read raw git outputs directly from the terminal. Instead:
+1. **Get the Diff Safely & Extract Commits**: To prevent terminal command output truncation (which silently trims long diff outputs or lines), do NOT read raw git outputs directly from the terminal. Never run ad-hoc terminal scripts (`python3 -c`, raw `git diff`, etc.) that dump diff hunks directly to stdout where terminal truncation occurs. Any diff output (single-file or multi-file) must always be redirected to scratch files and read with `view_file`. Instead:
    a. **Create Scratch Directory**: Run `mkdir -p "<appDataDir>/brain/<conversation-id>/scratch"` to ensure the path exists.
    b. **Extract Commit List**: Write chronological commit history to scratch file:
       `git log --no-merges --reverse --format="%h %s (%an)" "<reference_commit_hash>..<commit_hash>" > "<appDataDir>/brain/<conversation-id>/scratch/temp_commits.txt"`
@@ -65,7 +65,7 @@ Three modes, chosen by what the user provides:
       - Note that `temp_diff_paths.txt` is optional (only generated in step 1f for large changesets) and must only be read when generated.
       - Determine total commit count ($K$, where $K$ is the number of commits in `temp_commits.txt`), unique changed-file entity count ($U$), exact text addition/deletion line counts from `temp_diff_numstat.txt`, and derive total hunk count ($H$) directly from `temp_diff_all.txt` (by counting `@@ ... @@` hunk headers).
    h. **Fail-Closed Artifact & Exit Status Verification**:
-      - Verify the exit status (code 0) for **every** generated Git artifact: `temp_diff_stat.txt` (1c), `temp_diff_numstat.txt` (1d), `temp_diff_all.txt` (1e), and `temp_diff_paths.txt` (1f, when generated).
+      - Verify the exit status (code 0) for **every** generated Git artifact: `temp_diff_stat.txt` (1c), `temp_diff_numstat.txt` (1d), `temp_diff_all.txt` (1e), `temp_diff_paths.txt` (1f, when generated), and `temp_topic_diff.txt` (4b).
       - If ANY command fails with a non-zero exit status (e.g. invalid SHA, bad revision, permission error, or unknown ref), STOP execution immediately and report the Git command error output. Do NOT attempt to read partial scratch files, reconcile statistics, or evaluate empty diffs if any artifact generation failed.
       - Only if ALL required diff commands exited with status 0 AND `temp_diff_all.txt` contains 0 lines/bytes of diff, output:
         `No differences detected between <reference> and <target>.`
@@ -74,7 +74,7 @@ Three modes, chosen by what the user provides:
    *Execution & Robustness Directives:*
    - **Use `view_file`**: Read files in chunks of 800 lines max. *Reason: Prevents terminal truncation.*
    - **Create and Quote Paths**: Run `mkdir -p` first; quote all paths in commands. *Reason: Handles directories with special characters/spaces safely.*
-   - **Manage Scratch Files**: Keep naming distinct (`temp_commits.txt`, `temp_commit_msg.txt`, `temp_commit_stat.txt`, `temp_commit_diff.txt`, `temp_diff_stat.txt`, `temp_diff_numstat.txt`, `temp_diff_all.txt`, `temp_diff.txt`, `temp_diff_paths.txt`). *Reason: Avoids concurrency name collisions.*
+   - **Manage Scratch Files**: Keep naming distinct (`temp_commits.txt`, `temp_commit_msg.txt`, `temp_commit_stat.txt`, `temp_commit_diff.txt`, `temp_diff_stat.txt`, `temp_diff_numstat.txt`, `temp_diff_all.txt`, `temp_diff.txt`, `temp_diff_paths.txt`, `temp_topic_diff.txt`). *Reason: Avoids concurrency name collisions.*
    - **Consistent Rename and Copy Detection Flags**: Always use explicit `--find-renames --find-copies` across all diff artifact commands (`--stat`, `--numstat -z`, `--name-status -z`, full diff, and commit inspection) so rename and copy detection is uniform and independent of repository-local Git configuration (`diff.renames`). The `--find-copies-harder` flag is intentionally excluded because it checks all unmodified files across the repository as potential copy sources, which incurs an $O(N \times M)$ CPU cost and severe performance latency on large repositories.
    - **Parse Large Diff Stats**: Run `git diff ... --name-status -z --find-renames --find-copies` strictly for path and status enumeration. *Reason: Handles renames, copies, and non-standard characters safely.*
    - **Sequential Reading & EOF**: Read until file viewer lines exceed calculated count. *Reason: Avoids terminal cutoff.*
@@ -137,17 +137,25 @@ Three modes, chosen by what the user provides:
 4. **Topic-by-Topic Walkthrough Flow (`[t]`)**:
    For each topic (or user-selected `[t1..tT]`):
    a. **Topic Narrative**: Open with a 2–3 sentence narrative explaining what this topic achieves, why it was implemented, and the overarching design decision.
-   b. **Verbatim Cross-File Hunks**:
-      - Quote every relevant text hunk verbatim in fenced `diff` blocks, preceded by an explicit file header tag (e.g., `[src/auth/middleware.py:L45-L68]`).
+   b. **Extract & Inspect Topic Diff Safely**:
+      - Mechanically extract path-limited diff for the topic's files with explicit rename and copy detection (`--find-renames --find-copies`):
+        - Normal commit/branch range:
+          `git diff "<reference_commit_hash>...<commit_hash>" --find-renames --find-copies -- "<file1>" "<file2>" > "<appDataDir>/brain/<conversation-id>/scratch/temp_topic_diff.txt"`
+        - Root commit (where `<reference_commit_hash>` is the empty tree `4b825dc642cb6eb9a060e54bf8d69288fbee4904`):
+          `git diff "<reference_commit_hash>" "<commit_hash>" --find-renames --find-copies -- "<file1>" "<file2>" > "<appDataDir>/brain/<conversation-id>/scratch/temp_topic_diff.txt"`
+      - **Pathspec Quoting & Renames**: Each file path in the pathspec MUST be individually quoted (`"<file1>" "<file2>"`). If a topic includes a rename/copy target without its source path in the topic pathspec, pass both source and target paths to the pathspec, or use global metadata from `temp_diff_paths.txt` / `temp_diff_numstat.txt` to emit `[rename: <old_path> -> <new_path>]` / `[copy: <source_path> -> <target_path>]` metadata tags per §2.
+      - **Verification & Paged Inspection**: Verify command exit status 0 (fail closed on non-zero). Calculate the total line count of `temp_topic_diff.txt` and iterate `view_file` until `StartLine` exceeds the total line count (EOF) in the active topic iteration. Emitting any fenced `diff` block without prior `view_file` inspection in active context is strictly forbidden.
+   c. **Verbatim Cross-File Hunks**:
+      - Quote every relevant text hunk verbatim in fenced `diff` blocks, preceded by an explicit file header tag (e.g., `[src/auth/middleware.py:L45-L68]`). For entries where `temp_diff_numstat.txt` reports `-\t-\t` (binary files, submodules, symlinks, mode changes), use metadata tags per §2; do not attempt to render binary diffs in text fenced `diff` blocks.
       - **Binary Files**: Summarized with metadata tags (e.g., `[binary file: assets/logo.png (old: 0 bytes -> new: 12288 bytes)]`) without corrupting text hunks.
       - **Binary Deletions**: Explicitly tagged with `[binary deletion: assets/old_logo.png (old: 8192 bytes)]`.
       - **Deleted Files**: Explicitly tagged with `[deleted file: legacy/old_auth.py (-85 lines)]`.
       - **Mode Changes**: Explicitly tagged with `[mode change: scripts/run.sh (mode 100644 -> 100755, 0 lines)]`.
       - **Renames & Copies**: Explicitly tagged with `[rename: old_file.py -> new_file.py]` or `[copy: template.py -> instance.py]`.
       - **Submodules & Symlinks**: Explicitly tagged with `[submodule: vendor/lib (old_sha -> new_sha)]` or `[symlink: link_path -> target]`.
-   c. **Cross-File Interaction Commentary**: Directly explain how the changes across the different files connect and operate together (e.g. how the new model column feeds the API serializer).
-   d. **Targeted Prose/Text Highlights**: For text/markup formats (`.tex`, `.md`, `.txt`, `.rst`) or long modified lines, highlight the precise inline edits (`word_A` -> `word_B`).
-   e. **Topic Progression & Transition**:
+   d. **Cross-File Interaction Commentary**: Directly explain how the changes across the different files connect and operate together (e.g. how the new model column feeds the API serializer).
+   e. **Targeted Prose/Text Highlights**: For text/markup formats (`.tex`, `.md`, `.txt`, `.rst`) or long modified lines, highlight the precise inline edits (`word_A` -> `word_B`).
+   f. **Topic Progression & Transition**:
       - `[n]` Next topic in sequence
       - `[p]` Previous topic in sequence
       - `[m]` Re-display top-level navigation menu (with completed topics marked `[✓]`)

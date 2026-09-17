@@ -1,4 +1,4 @@
-# Adversarial Review Prompt: RED Test Suite (explain-diff-anti-hallucination)
+# Adversarial Review Prompt: GREEN Code Implementation (explain-diff-anti-hallucination)
 
 ### 🪪 Reviewer Identification Proof (Mandatory Top Banner)
 External reviewers MUST output this exact header at the top of their chat text (before any other text):
@@ -15,15 +15,20 @@ External reviewers MUST output this exact header at the top of their chat text (
 
 ### Review Context
 - **Target Branch**: `gemini/explain-diff-anti-hallucination-765133`
-- **Milestone**: Phase 2 (RED Test Suite - Failing)
-- **Target File**: `skills/explain-diff/tests/test_explain_diff.py`
+- **Milestone**: Phase 3 (GREEN Code Implementation)
+- **Target Diffs**:
+  - `AGENTS.md` (§3 Core Operating Behaviors -> Empirical Grounding)
+  - `skills/explain-diff/SKILL.md` (Context Resolution, §1, §4)
+  - `skills/explain-diff/resources/robustness_guide.md` (§1, §3, §7, §8)
+  - `skills/explain-diff/tests/test_explain_diff.py` (27 passed tests)
 
 ### Task Description
-Perform an adversarial audit of the RED test suite in `skills/explain-diff/tests/test_explain_diff.py`.
-Verify:
-1. **Cryptographic Proof of Failure**: Do the new/updated tests cleanly fail on the un-implemented codebase (22 passed, 5 failed)?
-2. **Assertion Tightness**: Are assertions rigorous enough to prevent false positives (no overly broad regexes, permissive fallbacks, or un-bounded section splits)?
-3. **Spec Parity**: Do the test assertions strictly enforce all invariants specified in `spec.md` (Revision 1)?
+Perform an adversarial code review of the GREEN implementation.
+Audit for:
+1. **Circuit Breaker Coverage**: Does the addition in `AGENTS.md` comprehensively enforce the verbatim quotation & truncation circuit breaker across all agent workflows?
+2. **Mechanical Topic Diff Robustness**: Does `SKILL.md` properly mandate individual path quoting (`"<file1>" "<file2>"`), rename/copy source handling, fail-closed verification, and EOF `view_file` reading before quoting?
+3. **Robustness Guide Parity**: Does `robustness_guide.md` accurately capture the tooling contract, temporary file roles, allowed cleanup, and section 8 invariants?
+4. **Code Quality & Ponytail**: Is the diff minimal, precise, free of speculative abstractions, and backward-compatible with all existing tests?
 
 ### Delivery Modes
 - **Mode A (Dedicated Branch)**: Branch `review/explain-diff-anti-hallucination-765133/<REVIEWER_ID>`, commit findings to `review.md`, and push.
@@ -36,7 +41,7 @@ VERDICT: [APPROVE | NEEDS_REVISION | REJECT]
 AUDITED_SHA: <sha>
 
 ## Audit Findings
-- [ ] **[Severity: P0|P1|P2|Nit] [Section: Test Name] Title**
+- [ ] **[Severity: P0|P1|P2|Nit] [Section: File & Line] Title**
   - **Defect / Gap**: Concrete failure mode or counterexample.
   - **Actionable Fix**: Minimal concrete fix complying with Ponytail.
 ```
