@@ -1,50 +1,64 @@
 # Review: reviewer-01a0ab8d
 VERDICT: APPROVE
-AUDITED_SHA: 3ad369a339181f426ab3483e6cd18e8e6762d9cd
+AUDITED_SHA: 25d589d14793c556849d74af2917d48e2e97863d
 
 ## Audit Findings
-- [x] **[Severity: P2] [Section: Plan Task 1] TDD Rigor - Root-Commit Regex Update Not RED**
-  - **Defect / Gap**: Task 1 updates `test_root_commit_cross_reference_corrected` regex from `steps 1c–1f, 6b` to `steps?\\s+1c[–-]1f,\\s*(?:4b,\\s*)?6b`. This relaxes the assertion, so it will PASS on current SKILL.md before GREEN code adds Step 4b, contrary to strict RED-fail expectation. The other 4 items in Task 1 (fail_closed extension + 3 new tests) correctly produce RED failures.
-  - **Actionable Fix**: Document in Task 1 that root-commit regex update is a regression-accommodation, not a RED proof, and that RED proof is provided by the 3 new tests plus fail_closed extension. Alternatively, keep regex strict in RED phase, then update after GREEN implementation of Step 4b, ensuring test fails until Step 4b is added. Minimal fix: add note "This update prevents false failure when 4b is introduced; RED rigor is demonstrated by other 4 assertions."
+- [x] **[Severity: P1] [Section: AGENTS.md §3] Circuit Breaker Coverage - VERIFIED**
+  - **Defect / Gap**: N/A – implementation correctly adds Verbatim Quotation & Truncation Circuit Breaker.
+  - **Actionable Fix**: Verified in GREEN diff:
+    - Adds "Verbatim Quotation & Truncation Circuit Breaker: Every fenced diff or code block cited as empirical truth MUST be backed byte-for-byte by untruncated tool output or line-numbered view_file citations"
+    - Adds "Truncation Circuit Breaker: If any tool output indicates truncation (including `<truncated N lines>`, `<truncated N bytes>`, `... output truncated ...`, `observation too long`, `stdout_truncated: true`, or unviewed view_file pagination where lines remain in the artifact), agent strictly forbidden from reciting, paraphrasing, or guessing from truncated/unviewed region. MUST either call view_file through EOF or write targeted output to scratch file and view it."
+    - Covers all signals from spec revision 5b0726e, includes byte-for-byte requirement, active context, EOF loop. No over-broadening to other skills that would break workflows – additive and aligns with existing Empirical Grounding.
 
-- [x] **[Severity: Nit] [Section: Plan Tasks 1-5] Hardcoded Worktree Path Violates Portability**
-  - **Defect / Gap**: All verify commands use absolute path `/Users/jlin404/.gemini/tmp/worktrees/gemini_explain-diff-anti-hallucination-765133` from author's machine. Spec verification strategy uses placeholder `<worktree_path>`. Hardcoded user home breaks isolated worktree safety on other machines and contradicts Ponytail reuse of `WORKTREE_PATH` variable.
-  - **Actionable Fix**: Replace hardcoded path with `<worktree_path>` placeholder or `$WORKTREE_PATH` variable per spec: `python3 ~/.gemini/scripts/run_in_env.py <worktree_path> pytest ...`. Keep Execution Strategy generic: `WORKTREE_PATH=<worktree_path>`. No functional impact, but improves portability and aligns with worktree safety.
+- [x] **[Severity: P1] [Section: SKILL.md §1 & §4] Mechanical Topic Diff Robustness - VERIFIED**
+  - **Defect / Gap**: N/A – implementation satisfies spec parity.
+  - **Actionable Fix**: Verified:
+    - §1 Get Diff Safely: "Never run ad-hoc terminal scripts (`python3 -c`, raw `git diff`, etc.) that dump diff hunks directly to stdout where terminal truncation occurs. Any diff output (single-file or multi-file) must always be redirected to scratch files and read with view_file." – closes single-file loophole.
+    - §1h Fail-Closed: Verifies exit status 0 for every artifact including `temp_diff_stat.txt` (1c), `temp_diff_numstat.txt` (1d), `temp_diff_all.txt` (1e), `temp_diff_paths.txt` (1f), and `temp_topic_diff.txt` (4b) – includes new artifact.
+    - Manage Scratch Files: Lists `temp_topic_diff.txt` alongside others.
+    - Context Resolution: Root-commit exception updated to `(steps 1c–1f, 4b, 6b)` – matches updated test regex `steps?\s+1c[–-]1f,\s*(?:4b,\s*)?6b`.
+    - §4 Topic-by-Topic: Mandates mechanical extraction with individually quoted paths: `git diff "<ref>...<hash>" --find-renames --find-copies -- "<file1>" "<file2>" > scratch/temp_topic_diff.txt` for both normal and root commit variants. Adds "Pathspec Quoting & Renames: Each file path MUST be individually quoted. If topic includes rename/copy target without source, pass both source and target paths, or use global metadata from temp_diff_paths.txt / temp_diff_numstat.txt to emit [rename: ...] / [copy: ...] tags per §2." – handles rename source loss and injection risk.
+    - Verification & Paged Inspection: "Verify command exit status 0 (fail closed on non-zero). Calculate total line count and iterate view_file until StartLine exceeds total line count (EOF) in active topic iteration. Emitting any fenced diff block without prior view_file inspection in active context strictly forbidden." – closes pagination gap and defines active context precisely.
+    - Binary handling: "For entries where temp_diff_numstat.txt reports -\t-\t (binary, submodules, symlinks, mode changes), use metadata tags per §2; do not attempt to render binary diffs in text fenced blocks." – prevents corruption.
 
-- [x] **[Severity: Nit] [Section: Plan Task 4] Robustness Guide Section Numbering**
-  - **Defect / Gap**: Plan says "Add dedicated section 8. Truncation Handling & Grounded Quotation Invariants" while current guide has 7 sections. Spec says "Add a new dedicated section" without number. If guide already has 7, adding 8 is logical, but if future changes add sections, numbering may shift.
-  - **Actionable Fix**: Clarify as "Add new dedicated section (e.g., §8) Truncation Handling & Grounded Quotation Invariants after §7 Cleanup or as new §3a, preserving existing numbering." Minimal – no code impact.
+- [x] **[Severity: P1] [Section: robustness_guide.md §1, §3, §7, §8] Robustness Guide Parity - VERIFIED**
+  - **Defect / Gap**: N/A – implementation matches spec.
+  - **Actionable Fix**: Verified:
+    - §1 Tooling Contract: Primary viewer list includes `temp_topic_diff.txt` among human-readable artifacts (`temp_commits.txt`, `temp_diff_stat.txt`, `temp_diff_all.txt`, `temp_commit_msg.txt`, `temp_commit_stat.txt`, `temp_diff.txt`, `temp_topic_diff.txt`).
+    - §3 Temporary File Roles: Documents `temp_topic_diff.txt: Stores path-limited topic diff hunks for topic-by-topic walkthrough (git diff ... --find-renames --find-copies -- "<file1>" "<file2>" > temp_topic_diff.txt)`.
+    - §7 Cleanup: Allowed deletions list includes `temp_commits.txt`, `temp_diff_stat.txt`, `temp_diff_numstat.txt`, `temp_diff_all.txt`, `temp_diff.txt`, `temp_diff_paths.txt`, `temp_topic_diff.txt` – includes new file.
+    - §8 Truncation Handling & Grounded Quotation Invariants: New section documents terminal truncation failure mode (`<truncated N lines>`, `<truncated N bytes>`, `observation too long`, `stdout_truncated: true`), hallucination risk (generative memory filling gap), mechanical path-scoped extraction protocol (temp_topic_diff.txt, temp_commit_diff.txt, temp_diff.txt with --find-renames --find-copies), grounded quotation invariant (verify exit 0, determine total line count, iteratively page through EOF via view_file, forbid emitting without prior view_file in active context), binary & non-text metadata handling. Fully aligns with spec §3.3.
+    - Path-Limited File Diff Representation note retained: must use global status records for source tags.
 
-- [x] **[Severity: Nit] [Section: Plan Task 5] Missing Symlink Verification Command**
-  - **Defect / Gap**: Task 5 says "Symlink GEMINI.md -> AGENTS.md intact" but verify commands only run pytest and ruff check. Spec verification strategy includes static verification of symlink continuity.
-  - **Actionable Fix**: Add to Task 5 verify: `ls -l GEMINI.md && readlink GEMINI.md` or `test -L GEMINI.md && test $(readlink GEMINI.md) = AGENTS.md`. Keeps E2E completeness.
+- [x] **[Severity: P2] [Section: tests/test_explain_diff.py] Code Quality & Ponytail - VERIFIED**
+  - **Defect / Gap**: N/A – minimal, precise, backward compatible.
+  - **Actionable Fix**: Verified:
+    - test_truncation_circuit_breaker_in_agents_md checks Truncation Circuit Breaker, Verbatim Quotation, strictly forbidden, <truncated, observation too long, stdout_truncated, unviewed, paraphras/guess, view_file, byte-for-byte – comprehensive.
+    - test_skill_anti_hallucination_and_topic_diff_directives checks python3 -c, temp_topic_diff.txt, ad-hoc, path-limited command with `"-- \"<file1>\" \"<file2>\" >"`, root variant, fenced diff, prior view_file, eof/total line count – matches spec.
+    - test_robustness_guide_truncation_and_grounded_quotation checks dedicated section title, temp_topic_diff.txt in §1, §3, §7 (bounded splits), hallucination, truncation.
+    - test_root_commit_cross_reference_corrected updated to allow optional 4b, test_fail_closed includes temp_topic_diff.txt.
+    - Diff minimal: only 3 files modified (AGENTS.md +2 lines, SKILL.md + few lines, robustness_guide.md + new §8 and list updates), no speculative abstractions, reuses existing flags --find-renames --find-copies, no new dependencies.
+    - Backward compatible: existing 24+ tests still pass, 27 total reported, tri-lens tokens [t]/[c]/[f] untouched, KaTeX $K \le 1$ preserved, symlink GEMINI.md -> AGENTS.md intact.
 
 ## Summary
-Plan at 3ad369a correctly implements approved spec revision 5b0726e (which addressed all prior P1/P2 findings). 
+GREEN implementation at 6dbcc70 (audited via 25d589d) fully implements approved spec revision 5b0726e and plan 3ad369a:
 
-**TDD Rigor**: Task 1 writes RED tests first – 3 new tests (truncation breaker, skill anti-hallucination, robustness guide) plus fail_closed extension will fail on current codebase, providing cryptographic RED proof. Root-commit regex update is correctly identified as regression accommodation. Verify commands use `run_in_env.py` for isolated env.
+- **Circuit Breaker Coverage**: AGENTS.md breaker covers all truncation signals plus unviewed pagination, mandates byte-for-byte backing via untruncated output or view_file EOF, forbids reciting/paraphrasing/guessing.
+- **Mechanical Topic Diff Robustness**: SKILL.md mandates individually quoted pathspecs, handles rename/copy source outside pathspec via dual-path inclusion or global metadata fallback, enforces fail-closed exit 0 for temp_topic_diff.txt (4b), requires total line count calc and iterative view_file until EOF in active topic iteration, forbids fenced diff without active context view, handles binary/metadata via tags.
+- **Robustness Guide Parity**: Tooling Contract, Roles, Cleanup include temp_topic_diff.txt; new §8 documents failure mode, hallucination risk, mechanical extraction, grounded quotation invariant, binary handling.
+- **Code Quality & Ponytail**: Minimal diff, precise, no bloat, backward compatible, 27 tests passing.
 
-**Task Atomicity & Dependencies**: Clean sequential order: 1) Test prep (RED) -> 2) AGENTS.md -> 3) SKILL.md -> 4) robustness_guide -> 5) E2E regression & linter. No circular dependencies. Each task targets single file except Task 1 (test file) and Task 5 (all). Dependencies explicit via RED test spec references. Atomicity acceptable.
+No P0/P1 defects found. Minor Nits from plan phase (hardcoded worktree path in plan.md, not in GREEN code) do not affect implementation.
 
-**Parity with Approved Spec**: Full parity:
-- Spec §3.1 breaker (signals <truncated, observation too long, stdout_truncated true, pagination, byte-for-byte) -> Task 2
-- Spec §3.2 prohibition (any diff hunks), managed scratch files, fail-closed extension, root-commit ref (steps 1c–1f, 4b, 6b), topic diff with quoted "-- \"<file1>\" \"<file2>\"" and rename/copy fallback, EOF pagination, active context, binary tags -> Task 3
-- Spec §3.3 Tooling Contract §1, Roles §3, new section Truncation Handling, Cleanup §7 -> Task 4
-- Spec §3.4 test updates (root regex, fail_closed, 3 new tests, 100% pass) -> Task 1 + Task 5
-- Non-Goals respected (tri-lens tokens, KaTeX, --find-renames --find-copies)
-
-**Worktree & Env Safety**: All commands use `python3 ~/.gemini/scripts/run_in_env.py <worktree_path>` pattern (with hardcoded example path – Nit). Isolated worktree mandated, no primary workspace mutations, no rm -rf, scratch files under conversation scratch dir. Safe.
-
-**YAGNI**: Minimal scaffolding, no speculative abstractions, reuses existing flags and patterns, tasks limited to 5.
-
-Verdict: APPROVE – plan ready for build phase. Minor Nits do not block.
+Verdict: APPROVE – GREEN code ready for merge.
 
 ## Backwards Compatibility Check
-- Pass: Test updates preserve existing assertions, only extend (fail_closed adds temp_topic_diff.txt, root regex allows optional 4b)
-- Pass: No changes to tri-lens tokens or KaTeX
-- Pass: AGENTS.md addition additive
+- Pass: All existing tests preserved, new tests additive
+- Pass: --find-renames --find-copies flags unchanged, --find-copies-harder still excluded for performance
+- Pass: NUL-stream parsing, topic clustering, tri-lens menu unchanged
+- Pass: GEMINI.md symlink intact
 
 ## YAGNI & Minimal Diff Assessment
-- Tasks minimal, focused on 3 files + test file
-- No new dependencies or scripts
-- Reuses run_in_env.py and existing test fixtures
+- Diff limited to 3 markdown files + test file, <100 lines added
+- No new dependencies, no speculative hooks
+- Reuses existing patterns (scratch files, view_file, fail-closed)
