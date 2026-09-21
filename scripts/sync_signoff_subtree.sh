@@ -42,7 +42,7 @@ for prefix in skills/git-signoff conformance; do
         merge_output=""
         if ! merge_output=$(git subtree merge --prefix="$prefix" --squash "$split" \
             -m "Sync $prefix from git-signoff@${FETCHED:0:7}" 2>&1); then
-            if echo "$merge_output" | grep -E -q "(refusing to merge unrelated histories|no common ancestor|cannot merge)"; then
+            if echo "$merge_output" | grep -E -q "(refusing to merge unrelated histories|no common ancestor)"; then
                 echo "Notice: squash merge failed with unrelated histories; re-adopting $prefix"
                 git rm -r --ignore-unmatch "$prefix" >/dev/null 2>&1 || true
                 if ! git diff --cached --quiet -- "$prefix"; then
