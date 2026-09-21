@@ -33,6 +33,6 @@ All codebase modifications (features, bug fixes, refactors, config edits, and sk
 | **RED Test Review** | `Adversarial Test Reviewer` | [adversarial-review](../../adversarial-review/SKILL.md) | Verified test suite with rigorous assertions |
 | **Code Review** | `Adversarial Code Reviewer` | [adversarial-review](../../adversarial-review/SKILL.md) | Subagent review loop on pushed branch |
 | **Explain Diff** | `/explain-diff` | [explain-diff](../../explain-diff/SKILL.md) | Interactive, neutral changeset walkthrough |
-| **Signoff** | `/signoff` | [signoff](../../signoff/SKILL.md) | Socratic reverse-interview before merge |
+| **Signoff** | `/git-signoff` | [git-signoff](../../git-signoff/SKILL.md) | Socratic reverse-interview before merge |
 | **Debug** | — | [debugging-and-error-recovery](../../debugging-and-error-recovery/SKILL.md) | Root-cause fix (invoke when tests fail) |
 | **Simplify** | `/code-simplify` | [ponytail](../../ponytail/SKILL.md) | Reduced complexity (Ponytail philosophy) |

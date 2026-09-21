@@ -251,7 +251,7 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
          [ -n "$lb" ] && [ "$lb" != "$curr_b" ] && git branch -D "$lb" || true
        done
        ```
-     - This guarantees that upon merge or rebase to `<base_branch>`, zero ephemeral files pollute the primary tree. Note: After cleanup, the spec and plan exist only in the feature-branch commit history. In Step 8 / Phase 4, the agent presents the commit SHAs and links of the spec and plan commits to the human engineer so they can be consulted during `/explain-diff` and `/signoff` after in-tree copies are removed.
+     - This guarantees that upon merge or rebase to `<base_branch>`, zero ephemeral files pollute the primary tree. Note: After cleanup, the spec and plan exist only in the feature-branch commit history. In Step 8 / Phase 4, the agent presents the commit SHAs and links of the spec and plan commits to the human engineer so they can be consulted during `/explain-diff` and `/git-signoff` after in-tree copies are removed.
    - **Step 7c (Ephemeral Post-Review Audit Report Artifact & Scratchpad Update)**:
      - Update `<appDataDir>/brain/<conversation-id>/scratch/scratchpad.md` with post-review findings and subagent verdict.
      - Generate formal `review_report_<feature>.md` artifact strictly within the ephemeral conversation directory (`<appDataDir>/brain/<conversation-id>/`).
@@ -270,7 +270,7 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
      > [!CAUTION]
      > - **Human PR & Merge Ownership**: Creating Pull Requests (PRs), reviewing PR diffs, and merging code *into* the target integration branch (`<base_branch>`, e.g., `main`, `develop`, `staging`, `release/*`, etc.) is **ALWAYS performed manually by the human engineer**. The AI agent is strictly forbidden from creating PRs or merging directly into the primary integration branch.
      > - **Agent Permitted Feature Sync**: Inside its isolated feature worktree (`${WORKTREE_PATH}`), the AI agent IS permitted to rebase or pull upstream changes from its designated base branch (`git fetch origin && git rebase origin/<base_branch>`) to resolve drift and keep its feature branch clean for human review and merge.
-   - Recommended tools for user: [/explain-diff](../explain-diff/SKILL.md) and [/signoff](../signoff/SKILL.md).
+   - Recommended tools for user: [/explain-diff](../explain-diff/SKILL.md) and [/git-signoff](../git-signoff/SKILL.md).
     - Once merged manually by the user, clean up scratchpad and remove worktree:
       ```bash
       cd "${PRIMARY_REPO}"
