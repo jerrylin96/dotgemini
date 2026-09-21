@@ -1,4 +1,4 @@
-### Emit External Review Prompt (Spec Gate)
+### Emit External Review Prompt (Plan Gate)
 
 ```text
 ### Reviewer Identity & Session Continuity Directive
@@ -23,9 +23,10 @@
 git fetch origin main && BASE_SHA=$(git rev-parse FETCH_HEAD)
 git fetch origin gemini/integrate-git-signoff-48d1c2 && git diff "${BASE_SHA}" FETCH_HEAD
 
-### Review Focus (Spec Gate)
-Audit the feature specification in `integrate-git-signoff-48d1c2/spec.md`:
-1. Completeness: Does the spec accurately cover all affected paths (deleting `signoff_mcp/`, updating `pyproject.toml`, `pytest.ini`, `scripts/sync_signoff_subtree.sh`, `AGENTS.md`, and test suites)?
-2. Invariants: Are GSA v1.0 protocol guarantees and worktree circuit breakers preserved?
-3. Ponytail Ladder: Are we avoiding unnecessary abstractions while ensuring clean migration?
+### Review Focus (Plan Gate)
+Audit the implementation plan in `integrate-git-signoff-48d1c2/plan.md`:
+1. Task Slicing & Dependency Order: Are tasks atomic, touching ≤5 files each? Is the sequence correct (Subtree adoption -> Config/CI -> Documentation -> Tests)?
+2. TDD Rigor: Does every slice define a failing RED test spec, GREEN implementation target, and exact verify command?
+3. Execution Strategy: Is the strategy explicitly declared with single checkbox selection?
+4. Full Test-Port Inventory: Are all required test files, helpers, fixtures, and contract checks accounted for?
 ```
