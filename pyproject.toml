@@ -12,14 +12,8 @@ dependencies = [
     "google-auth",
 ]
 
-[project.optional-dependencies]
-mcp = ["mcp"]
-
-[project.scripts]
-signoff-mcp = "signoff_mcp.server:main"
-
 [tool.setuptools.packages.find]
-include = ["antigravity*", "scripts*", "skills*", "signoff_mcp*"]
+include = ["antigravity*", "scripts*", "skills*"]
 
 [tool.ruff]
 line-length = 120

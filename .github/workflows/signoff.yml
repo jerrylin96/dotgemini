@@ -5,6 +5,10 @@ on:
   push:
     branches: [ main ]
 
+permissions:
+  contents: read
+  pull-requests: read   # scan-refs: allows discovering PR attestation evidence for squash/rebase merges
+
 jobs:
   verify-signoff:
     runs-on: ubuntu-latest
@@ -12,4 +16,4 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: jerrylin96/signoff/verify@verify-v1.1
+      - uses: jerrylin96/git-signoff/verify@verify-v1.7
