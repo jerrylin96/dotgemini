@@ -1,4 +1,4 @@
-### Emit External Review Prompt (RED Test Gate)
+### Emit External Review Prompt (Code Review Gate)
 
 ```text
 ### Reviewer Identity & Session Continuity Directive
@@ -23,10 +23,10 @@
 git fetch origin main && BASE_SHA=$(git rev-parse FETCH_HEAD)
 git fetch origin gemini/integrate-git-signoff-48d1c2 && git diff "${BASE_SHA}" FETCH_HEAD
 
-### Review Focus (RED Test Gate)
-Audit the initial RED test suite in:
-- `scripts/tests/test_sync_subtree.py`
-- `scripts/tests/test_repo_configuration.py`
-- `scripts/tests/test_primary_docs.py`
-Verify that assertions are behavioral, collected by pytest, fail for genuine reasons against the baseline, and rigorously define the acceptance contract before implementation.
+### Review Focus (Code Review Gate)
+Audit the complete implementation of the git-signoff v0.5.0 upgrade:
+1. Subtree Sync & Adoption: `scripts/sync_signoff_subtree.sh` points to https://github.com/jerrylin96/git-signoff, synchronizes `skills/git-signoff/` and `conformance/`, and includes divergence fallback. Symlink `.claude/skills/git-signoff` points to `skills/git-signoff`. Legacy `skills/signoff` and `signoff_mcp/` are completely removed.
+2. Configuration & Packaging: `pyproject.toml` dependencies purged of `signoff_mcp` and `mcp`. `pytest.ini` testpaths configured. `.github/workflows/signoff.yml` updated to `verify@verify-v1.7` with `contents: read` and `pull-requests: read`.
+3. Documentation & Guides: `AGENTS.md`, `README.md`, `skills/make-feature/SKILL.md`, `lifecycle-guide.md`, `skills/catchmeup/SKILL.md`, and `skills/math-proof-audit/SKILL.md` reference `/git-signoff` and `@skill:git-signoff`. Zero broken references or dead links.
+4. Ported Test Suites & Contracts: `scripts/tests/` contains `_attest_loader.py`, `conftest.py`, `helpers.py`, `fixtures/production_attestation.txt`, `test_production_vector.py`, `test_attest.py`, `test_attest_adapters.py`, `test_learning_modes.py`, `test_attest_notes_merge.py`, `test_attest_profile.py`, and modernized contracts in `test_skill_references.py`. All 428 tests pass (1 skipped for leaf repo initializer).
 ```
