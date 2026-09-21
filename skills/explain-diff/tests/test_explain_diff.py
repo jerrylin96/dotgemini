@@ -58,9 +58,9 @@ def test_commit_mode_reference_hash(skill_content):
 
 
 def test_root_commit_cross_reference_corrected(skill_content):
-    # Root-commit guidance must reference steps 1c-1f and 6b to include path enumeration
-    assert re.search(r"steps?\s+1c[–-]1f,\s*6b", skill_content), (
-        "SKILL.md must reference 'steps 1c–1f, 6b' for root-commit empty-tree direct diff commands"
+    # Root-commit guidance must reference steps 1c-1f, 4b, and 6b to include topic diff extraction
+    assert re.search(r"steps?\s+1c[–-]1f,\s*4b,\s*6b", skill_content), (
+        "SKILL.md must reference 'steps 1c–1f, 4b, 6b' for root-commit empty-tree direct diff commands"
     )
 
 
@@ -175,6 +175,7 @@ def test_fail_closed_artifact_exit_status_checks(skill_content):
     assert "temp_diff_numstat.txt" in skill_content
     assert "temp_diff_all.txt" in skill_content
     assert "temp_diff_paths.txt" in skill_content
+    assert "temp_topic_diff.txt" in skill_content
     content_lower = skill_content.lower()
     assert "exit status" in content_lower or "status 0" in content_lower
     assert "fail-closed" in content_lower or "fail closed" in content_lower or "never treat command errors as empty diffs" in content_lower
@@ -317,3 +318,51 @@ def test_readme_sync(readme_content):
     assert "`[f]`" in readme_content or "[f]" in readme_content
     # Single-commit [c] caveat
     assert "multi-commit" in readme_content and "single-commit" in readme_content, "Missing README single-commit [c] caveat"
+
+
+def test_truncation_circuit_breaker_in_agents_md(agents_content):
+    # AGENTS.md must mandate a Verbatim Quotation & Truncation Circuit Breaker
+    assert "Truncation Circuit Breaker" in agents_content
+    assert "Verbatim Quotation" in agents_content or "verbatim" in agents_content.lower()
+    content_lower = agents_content.lower()
+    assert "strictly forbidden" in content_lower or "forbidden" in content_lower
+    # Must catch truncation markers and unviewed view_file pagination
+    assert "<truncated" in agents_content
+    assert "observation too long" in agents_content
+    assert "stdout_truncated" in agents_content
+    assert "unviewed" in content_lower
+    assert "paraphras" in content_lower or "guess" in content_lower
+    assert "view_file" in agents_content
+    assert "byte-for-byte" in agents_content or "empirical truth" in content_lower
+
+
+def test_skill_anti_hallucination_and_topic_diff_directives(skill_content):
+    # Must prohibit ad-hoc scripts dumping hunks directly to terminal stdout
+    assert "python3 -c" in skill_content
+    assert "temp_topic_diff.txt" in skill_content
+    content_lower = skill_content.lower()
+    assert "ad-hoc" in content_lower or "ad hoc" in content_lower
+    # Must specify path-limited diff command with individual multi-file quoting and rename/copy flags
+    assert '--find-renames --find-copies -- "<file1>" "<file2>" >' in skill_content
+    assert 'git diff "<reference_commit_hash>...<commit_hash>" --find-renames --find-copies -- "<file1>" "<file2>" >' in skill_content
+    # Must provide root commit two-argument variant for topic diff
+    assert 'git diff "<reference_commit_hash>" "<commit_hash>" --find-renames --find-copies -- "<file1>" "<file2>" >' in skill_content
+    # Must mandate prior view_file inspection through EOF before emitting fenced diff
+    assert "fenced `diff`" in skill_content or "fenced diff" in content_lower
+    assert "prior `view_file`" in skill_content or "prior view_file" in content_lower
+    assert "eof" in content_lower or "total line count" in content_lower
+
+
+def test_robustness_guide_truncation_and_grounded_quotation(robustness_guide_content):
+    # Must have dedicated section on Truncation Handling & Grounded Quotation Invariants
+    assert "Truncation Handling & Grounded Quotation Invariants" in robustness_guide_content
+    # Must document temp_topic_diff.txt in tooling contract, file roles, and cleanup (strictly bounded)
+    assert "temp_topic_diff.txt" in robustness_guide_content
+    assert "temp_topic_diff.txt" in robustness_guide_content.split("## 1. Tooling Contract")[1].split("## 2.")[0]
+    assert "temp_topic_diff.txt" in robustness_guide_content.split("## 3. Temporary File Roles")[1].split("## 4.")[0]
+    assert "temp_topic_diff.txt" in robustness_guide_content.split("## 7. Cleanup")[1].split("## 8")[0]
+    # Must document terminal truncation failure mode and generative hallucination
+    guide_lower = robustness_guide_content.lower()
+    assert "hallucinat" in guide_lower
+    assert "truncat" in guide_lower
+
