@@ -1,4 +1,4 @@
-### Emit External Review Prompt (Code Review Gate)
+### Emit External Review Prompt (Code Review Gate - Round 2)
 
 ```text
 ### Reviewer Identity & Session Continuity Directive
@@ -23,10 +23,13 @@
 git fetch origin main && BASE_SHA=$(git rev-parse FETCH_HEAD)
 git fetch origin gemini/integrate-git-signoff-48d1c2 && git diff "${BASE_SHA}" FETCH_HEAD
 
-### Review Focus (Code Review Gate)
-Audit the complete implementation of the git-signoff v0.5.0 upgrade:
-1. Subtree Sync & Adoption: `scripts/sync_signoff_subtree.sh` points to https://github.com/jerrylin96/git-signoff, synchronizes `skills/git-signoff/` and `conformance/`, and includes divergence fallback. Symlink `.claude/skills/git-signoff` points to `skills/git-signoff`. Legacy `skills/signoff` and `signoff_mcp/` are completely removed.
-2. Configuration & Packaging: `pyproject.toml` dependencies purged of `signoff_mcp` and `mcp`. `pytest.ini` testpaths configured. `.github/workflows/signoff.yml` updated to `verify@verify-v1.7` with `contents: read` and `pull-requests: read`.
-3. Documentation & Guides: `AGENTS.md`, `README.md`, `skills/make-feature/SKILL.md`, `lifecycle-guide.md`, `skills/catchmeup/SKILL.md`, and `skills/math-proof-audit/SKILL.md` reference `/git-signoff` and `@skill:git-signoff`. Zero broken references or dead links.
-4. Ported Test Suites & Contracts: `scripts/tests/` contains `_attest_loader.py`, `conftest.py`, `helpers.py`, `fixtures/production_attestation.txt`, `test_production_vector.py`, `test_attest.py`, `test_attest_adapters.py`, `test_learning_modes.py`, `test_attest_notes_merge.py`, `test_attest_profile.py`, and modernized contracts in `test_skill_references.py`. All 428 tests pass (1 skipped for leaf repo initializer).
+### Review Focus (Code Review Gate - Round 2 Re-Audit)
+Audit the remediation of Round 1 findings:
+1. Fallback error classification: `scripts/sync_signoff_subtree.sh` line 45 has removed the generic `cannot merge` alternative and strictly checks `(refusing to merge unrelated histories|no common ancestor)`. Non-lineage merge failures (such as rejecting policy hooks) preserve original diagnostics to stderr without triggering re-adoption.
+2. Behavioral recovery test coverage: `scripts/tests/test_sync_subtree.py` now includes behavioral test cases for:
+   - Repeat sync (`test_sync_subtree_repeat_sync`)
+   - Unrelated-history recovery (`test_sync_subtree_unrelated_history_recovery`)
+   - Non-lineage merge failure with rejecting commit-msg hook preserving diagnostics (`test_sync_subtree_non_lineage_merge_failure`)
+   - Tree-equality / post-sync drift enforcement (`test_sync_subtree_drift_enforcement`)
+All 432 tests pass (1 skipped for leaf repo initializer) and ruff passes.
 ```
