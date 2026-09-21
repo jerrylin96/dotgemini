@@ -1,4 +1,4 @@
-### Emit External Review Prompt (Plan Gate)
+### Emit External Review Prompt (RED Test Gate)
 
 ```text
 ### Reviewer Identity & Session Continuity Directive
@@ -23,10 +23,10 @@
 git fetch origin main && BASE_SHA=$(git rev-parse FETCH_HEAD)
 git fetch origin gemini/integrate-git-signoff-48d1c2 && git diff "${BASE_SHA}" FETCH_HEAD
 
-### Review Focus (Plan Gate)
-Audit the implementation plan in `integrate-git-signoff-48d1c2/plan.md`:
-1. Task Slicing & Dependency Order: Are tasks atomic, touching ≤5 files each? Is the sequence correct (Subtree adoption -> Config/CI -> Documentation -> Tests)?
-2. TDD Rigor: Does every slice define a failing RED test spec, GREEN implementation target, and exact verify command?
-3. Execution Strategy: Is the strategy explicitly declared with single checkbox selection?
-4. Full Test-Port Inventory: Are all required test files, helpers, fixtures, and contract checks accounted for?
+### Review Focus (RED Test Gate)
+Audit the initial RED test suite in:
+- `scripts/tests/test_sync_subtree.py`
+- `scripts/tests/test_repo_configuration.py`
+- `scripts/tests/test_primary_docs.py`
+Verify that assertions are behavioral, collected by pytest, fail for genuine reasons against the baseline, and rigorously define the acceptance contract before implementation.
 ```
