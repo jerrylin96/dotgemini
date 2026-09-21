@@ -783,6 +783,43 @@ def test_external_review_prompts_and_living_branches_contract():
         assert not any(re.match(r"^\d{2,4}:\s", line) for line in spec_c.splitlines()), "Corrupted line-number prefixes in spec.md"
 
 
+def test_dependent_skills_and_links():
+    """Verify dependent skills link to git-signoff and no active skills have broken references."""
+    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+    catchmeup_md = os.path.join(root_dir, "skills/catchmeup/SKILL.md")
+    math_proof_md = os.path.join(root_dir, "skills/math-proof-audit/SKILL.md")
+
+    with open(catchmeup_md, "r", encoding="utf-8") as f:
+        catchmeup_content = f.read()
+    assert "../git-signoff/SKILL.md" in catchmeup_content, "Missing link to ../git-signoff/SKILL.md in catchmeup"
+
+    with open(math_proof_md, "r", encoding="utf-8") as f:
+        math_content = f.read()
+    assert "@skill:git-signoff" in math_content, "Missing @skill:git-signoff in math-proof-audit"
+    assert "/git-signoff" in math_content, "Missing /git-signoff in math-proof-audit"
+
+    # Recursively scan all active markdown files in skills/ excluding ephemeral migration directories
+    skills_dir = os.path.join(root_dir, "skills")
+    skill_ref_pattern = re.compile(r"@skill:signoff\b")
+    link_ref_pattern = re.compile(r"skills/signoff/")
+
+    errors = []
+    for filepath in glob.glob(os.path.join(skills_dir, "**/*.md"), recursive=True):
+        rel_path = os.path.relpath(filepath, root_dir)
+        # Exclude ephemeral migration artifacts
+        if "integrate-git-signoff-48d1c2" in rel_path:
+            continue
+        with open(filepath, "r", encoding="utf-8") as f:
+            content = f.read()
+        if skill_ref_pattern.search(content):
+            errors.append(f"In {rel_path}: deprecated '@skill:signoff' found")
+        if link_ref_pattern.search(content):
+            errors.append(f"In {rel_path}: deprecated 'skills/signoff/' link found")
+
+    assert not errors, "\n".join(errors)
+
+
+
 
 
 
