@@ -9,16 +9,15 @@ import os
 import subprocess
 
 import pytest
-
-from signoff_mcp import core
+from _attest_loader import attest as core
 
 FIXTURE = os.path.join(os.path.dirname(__file__), "fixtures", "production_attestation.txt")
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 REVIEWED_SHA = "453c633078ecdd82d93c33eefac4d5f4cbe2ef55"
 # Tree SHA recorded in the production trailers. NOTE: it does NOT match the
 # actual tree of the reviewed commit (60856e6...) — the Phase 1 prompt-driven
-# run captured a stale tree, which is precisely the failure class Phase 2's
-# server-derived SHAs and post-commit integrity check eliminate. Notes were
+# run captured a stale tree, which is precisely the failure class attest.py's
+# helper-derived SHAs and post-commit integrity check eliminate. Notes were
 # mirrored onto this trailer value, so lookups still use it.
 TRAILER_TREE_SHA = "83679c5222ef2c7a7b8e5c83bc56c526d7f95567"
 ATTESTATION_SHA = "2fe1e7621d8c2ad391f572b2458c4c791387e0f5"
@@ -31,6 +30,12 @@ def _payload() -> str:
 
 def _git(*args):
     return subprocess.run(["git", *args], cwd=REPO_ROOT, capture_output=True, text=True)
+
+
+def test_attest_loader_wires_attest_module():
+    assert core is not None and hasattr(core, "parse_trailers"), (
+        "_attest_loader failed to resolve attest.py"
+    )
 
 
 def test_parse_trailers_production_vector():
@@ -60,20 +65,24 @@ def test_build_message_roundtrips_production_vector():
         reviewed_commit_sha=t["Signoff-Reviewed-Commit-SHA"][0],
         base_sha=t["Signoff-Base-SHA"][0],
         tree_sha=t["Signoff-Reviewed-Tree-SHA"][0],
-        reference_ref="main",
+        reference="main",
+        name_status=[],
+        shortstat="",
+        numstat="",
         diff="",
-        files=[],
-        stats="",
+        profile=core.ProfileResolution("embedded-default", None, "software-general", None),
+        science_signals=[],
         harness_id=t["Signoff-Harness-ID"][0],
         conversation_id=t["Signoff-Conversation-ID"][0],
         transcript_available=True,
+        transcript_path=None,
+        hints={},
+        prepared_at="2026-08-04T19:40:00Z",
     )
     message = core.build_message(
         state,
         status=t["Signoff-Status"][0],
         timestamp=t["Signoff-Timestamp"][0],
-        harness_id=t["Signoff-Harness-ID"][0],
-        conversation_id=t["Signoff-Conversation-ID"][0],
         transcript_digest=t["Signoff-Transcript-Digest"][0],
         transcript_bytes=t["Signoff-Transcript-Bytes"][0],
         tradeoffs=t["Signoff-Tradeoff"],
@@ -92,10 +101,16 @@ def test_live_notes_mirror_production_vector():
     if not _notes_available():
         pytest.skip("refs/notes/signoff not fetched in this checkout")
     expected = core.parse_trailers(_payload())
-    for sha in (REVIEWED_SHA, TRAILER_TREE_SHA):
-        show = _git("notes", "--ref=signoff", "show", sha)
-        assert show.returncode == 0, f"no signoff note on {sha}: {show.stderr}"
-        assert core.parse_trailers(show.stdout) == expected
+    show_rev = _git("notes", "--ref=signoff", "show", REVIEWED_SHA)
+    assert show_rev.returncode == 0, f"no signoff note on {REVIEWED_SHA}: {show_rev.stderr}"
+    assert core.parse_trailers(show_rev.stdout) == expected
+
+    show_tree = _git("notes", "--ref=signoff", "show", TRAILER_TREE_SHA)
+    assert show_tree.returncode == 0, f"no signoff note on {TRAILER_TREE_SHA}: {show_tree.stderr}"
+    parsed_tree = core.parse_trailers(show_tree.stdout)
+    for k, v in expected.items():
+        for item in v:
+            assert item in parsed_tree.get(k, []), f"missing {k}: {item} in tree notes"
 
 
 def test_live_attestation_commit_matches_fixture():

@@ -433,22 +433,22 @@ def test_heavy_mode_documented_consistently():
 
 
 def test_signoff_socratic_remediation_rule():
-    """Verify that skills/signoff/SKILL.md and skills/math-proof-audit/SKILL.md define hardened Socratic remediation rules for uncertainty and vague answers."""
+    """Verify that skills/git-signoff/SKILL.md and skills/math-proof-audit/SKILL.md define hardened Socratic remediation rules for uncertainty and vague answers."""
     root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-    signoff_md = os.path.join(root_dir, "skills/signoff/SKILL.md")
+    signoff_md = os.path.join(root_dir, "skills/git-signoff/SKILL.md")
     math_proof_md = os.path.join(root_dir, "skills/math-proof-audit/SKILL.md")
 
-    assert os.path.exists(signoff_md), "skills/signoff/SKILL.md does not exist"
+    assert os.path.exists(signoff_md), "skills/git-signoff/SKILL.md does not exist"
     assert os.path.exists(math_proof_md), "skills/math-proof-audit/SKILL.md does not exist"
 
     with open(signoff_md, "r", encoding="utf-8") as f:
         signoff_content = f.read()
 
-    assert "Evaluation & Remediation" in signoff_content, "Missing Evaluation & Remediation in skills/signoff/SKILL.md"
+    assert "Evaluation & Remediation" in signoff_content, "Missing Evaluation & Remediation in skills/git-signoff/SKILL.md"
 
-    # Extract Evaluation & Remediation section from signoff SKILL.md
+    # Extract Evaluation & Remediation section from git-signoff SKILL.md
     section_match = re.search(r"Evaluation & Remediation:\s*(.*?)(?=\n### |\n## |\Z)", signoff_content, re.DOTALL)
-    assert section_match, "Could not extract Evaluation & Remediation section from skills/signoff/SKILL.md"
+    assert section_match, "Could not extract Evaluation & Remediation section from skills/git-signoff/SKILL.md"
     remediation_text = section_match.group(1)
 
     assert any(term in remediation_text for term in ["not sure", "uncertainty"]), "Missing uncertainty trigger in remediation rule"
@@ -461,21 +461,21 @@ def test_signoff_socratic_remediation_rule():
         math_content = f.read()
 
     assert "Phase 3: Socratic Signoff" in math_content, "Missing Phase 3 in skills/math-proof-audit/SKILL.md"
-    assert "@skill:signoff" in math_content, "Missing @skill:signoff reference in math-proof-audit SKILL.md"
+    assert "@skill:git-signoff" in math_content, "Missing @skill:git-signoff reference in math-proof-audit SKILL.md"
     assert "@skill:explain-diff" in math_content, "Missing @skill:explain-diff reference in math-proof-audit SKILL.md"
 
-    # Assert Section 4 Worktree Target Mandate
-    assert "Worktree Target Mandate" in signoff_content, "Missing Worktree Target Mandate in skills/signoff/SKILL.md"
-    assert "worktree_path" in signoff_content, "Missing 'worktree_path' in skills/signoff/SKILL.md Section 4"
+    # Assert Worktree Target Mandate
+    assert "Worktree Target Mandate" in signoff_content, "Missing Worktree Target Mandate in skills/git-signoff/SKILL.md"
+    assert "worktree_path" in signoff_content, "Missing 'worktree_path' in skills/git-signoff/SKILL.md"
 
 
 def test_signoff_gsa_protocol_spec_and_trailers():
-    """Verify the GSA Protocol core spec exists and skills/signoff/SKILL.md implements its portable trailer schema, harness adapters, and Git Notes persistence."""
+    """Verify the GSA Protocol core spec exists and skills/git-signoff/SKILL.md implements its portable trailer schema, harness adapters, and Git Notes persistence."""
     root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-    spec_md = os.path.join(root_dir, "skills/signoff/specs/gsa-core.md")
-    signoff_md = os.path.join(root_dir, "skills/signoff/SKILL.md")
+    spec_md = os.path.join(root_dir, "skills/git-signoff/specs/gsa-core.md")
+    signoff_md = os.path.join(root_dir, "skills/git-signoff/SKILL.md")
 
-    assert os.path.exists(spec_md), "skills/signoff/specs/gsa-core.md does not exist"
+    assert os.path.exists(spec_md), "skills/git-signoff/specs/gsa-core.md does not exist"
 
     with open(spec_md, "r", encoding="utf-8") as f:
         spec_content = f.read()
@@ -486,7 +486,7 @@ def test_signoff_gsa_protocol_spec_and_trailers():
         "cat_sort_uniq",
         "ack_no_transcript",
     ]:
-        assert anchor in spec_content, f"Missing '{anchor}' in skills/signoff/specs/gsa-core.md"
+        assert anchor in spec_content, f"Missing '{anchor}' in skills/git-signoff/specs/gsa-core.md"
 
     with open(signoff_md, "r", encoding="utf-8") as f:
         signoff_content = f.read()
@@ -497,30 +497,30 @@ def test_signoff_gsa_protocol_spec_and_trailers():
         "Signoff-Harness-ID",
         "Signoff-Transcript-Bytes",
     ]:
-        assert trailer in signoff_content, f"Missing '{trailer}' trailer in skills/signoff/SKILL.md"
+        assert trailer in signoff_content, f"Missing '{trailer}' trailer in skills/git-signoff/SKILL.md"
 
     # Portable harness adapter resolution (the core portability goal)
     for adapter_env in [
-        "SIGNOFF_TRANSCRIPT_FILE",
+        "GIT_SIGNOFF_TRANSCRIPT_FILE",
         "ANTIGRAVITY_CONVERSATION_ID",
         "CLAUDE_CODE_SESSION_ID",
     ]:
-        assert adapter_env in signoff_content, f"Missing '{adapter_env}' adapter resolution in skills/signoff/SKILL.md"
+        assert adapter_env in signoff_content, f"Missing '{adapter_env}' adapter resolution in skills/git-signoff/SKILL.md"
 
     # Worktree fallback: cwd slug misses inside linked worktrees, so the adapter
     # must resolve the primary repository root via git-common-dir
-    assert "--git-common-dir" in signoff_content, "Missing worktree git-common-dir fallback in skills/signoff/SKILL.md"
+    assert "git-common-dir" in signoff_content, "Missing worktree git-common-dir fallback in skills/git-signoff/SKILL.md"
 
     # Git Notes dual persistence with tracking-ref concurrency merge
-    assert "refs/notes/signoff" in signoff_content, "Missing 'refs/notes/signoff' persistence in skills/signoff/SKILL.md"
-    assert "cat_sort_uniq" in signoff_content, "Missing 'cat_sort_uniq' notes merge strategy in skills/signoff/SKILL.md"
-    assert "refs/notes/signoff-remote" in signoff_content, "Missing tracking-ref fetch for notes merge in skills/signoff/SKILL.md"
+    assert "refs/notes/signoff" in signoff_content, "Missing 'refs/notes/signoff' persistence in skills/git-signoff/SKILL.md"
+    assert "cat_sort_uniq" in signoff_content, "Missing 'cat_sort_uniq' notes merge strategy in skills/git-signoff/SKILL.md"
+    assert "refs/notes/signoff-remote" in spec_content, "Missing tracking-ref fetch for notes merge in skills/git-signoff/specs/gsa-core.md"
 
     # Signed attestation commits (GSA spec section 2.4)
-    assert "user.signingkey" in signoff_content, "Missing signed-commit support (user.signingkey) in skills/signoff/SKILL.md"
+    assert "user.signingkey" in signoff_content, "Missing signed-commit support (user.signingkey) in skills/git-signoff/SKILL.md"
 
     # Spec cross-reference resolves relative to the skill directory
-    assert "specs/gsa-core.md" in signoff_content, "Missing specs/gsa-core.md reference in skills/signoff/SKILL.md"
+    assert "specs/gsa-core.md" in signoff_content, "Missing specs/gsa-core.md reference in skills/git-signoff/SKILL.md"
 
 
 PROFILE_BLOCK_RE = re.compile(
@@ -538,11 +538,11 @@ def _extract_profile_block(content, source):
 def test_signoff_phase3c_interview_contract():
     """Verify Phase 3c: Signoff-Agent provenance grammar, named intensity levels, and the single swappable INTERVIEW PROFILE block."""
     root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-    signoff_md = os.path.join(root_dir, "skills/signoff/SKILL.md")
-    spec_md = os.path.join(root_dir, "skills/signoff/specs/gsa-core.md")
-    harnesses_md = os.path.join(root_dir, "skills/signoff/HARNESSES.md")
-    default_profile_md = os.path.join(root_dir, "skills/signoff/profiles/software-general.md")
-    science_profile_md = os.path.join(root_dir, "skills/signoff/profiles/domain-science.md")
+    signoff_md = os.path.join(root_dir, "skills/git-signoff/SKILL.md")
+    spec_md = os.path.join(root_dir, "skills/git-signoff/specs/gsa-core.md")
+    harnesses_md = os.path.join(root_dir, "skills/git-signoff/HARNESSES.md")
+    default_profile_md = os.path.join(root_dir, "skills/git-signoff/profiles/software-general.md")
+    science_profile_md = os.path.join(root_dir, "skills/git-signoff/profiles/domain-science.md")
 
     for path in [signoff_md, spec_md, harnesses_md, default_profile_md, science_profile_md]:
         assert os.path.exists(path), f"{os.path.relpath(path, root_dir)} does not exist"
@@ -560,31 +560,31 @@ def test_signoff_phase3c_interview_contract():
 
     # (1) Signoff-Agent provenance grammar defined in the spec and used by the skill
     for token in ["harness=", "model=", "reasoning=", "interview="]:
-        assert token in signoff_content, f"Signoff-Agent grammar token '{token}' missing from skills/signoff/SKILL.md"
-        assert token in spec_content, f"Signoff-Agent grammar token '{token}' missing from skills/signoff/specs/gsa-core.md"
+        assert token in signoff_content, f"Signoff-Agent grammar token '{token}' missing from skills/git-signoff/SKILL.md"
+        assert token in spec_content, f"Signoff-Agent grammar token '{token}' missing from skills/git-signoff/specs/gsa-core.md"
     assert "N/A" in spec_content, "Missing N/A convention for unexposed provenance fields in gsa-core.md"
     # Deterministic sources for the priority harness
     for env_var in ["CLAUDE_CODE_VERSION", "CLAUDE_EFFORT", "ANTHROPIC_MODEL"]:
-        assert env_var in signoff_content, f"Deterministic provenance source '{env_var}' missing from skills/signoff/SKILL.md"
+        assert env_var in signoff_content, f"Deterministic provenance source '{env_var}' missing from skills/git-signoff/SKILL.md"
 
     # (2) Named intensity levels formalizing --quick/--deep
     for level in ["cursory", "standard", "skeptical"]:
-        assert level in signoff_content, f"Intensity level '{level}' missing from skills/signoff/SKILL.md"
-    assert "--quick" in signoff_content and "--deep" in signoff_content, "Missing --quick/--deep modifier mapping in skills/signoff/SKILL.md"
-    assert "Interview Intensity Levels" in signoff_content, "Missing Interview Intensity Levels section in skills/signoff/SKILL.md"
-    assert "prediction challenge" in signoff_content, "Missing skeptical-level prediction challenges in skills/signoff/SKILL.md"
+        assert level in signoff_content, f"Intensity level '{level}' missing from skills/git-signoff/SKILL.md"
+    assert "--quick" in signoff_content and "--deep" in signoff_content, "Missing --quick/--deep modifier mapping in skills/git-signoff/SKILL.md"
+    assert "Interview Intensity Levels" in signoff_content, "Missing Interview Intensity Levels section in skills/git-signoff/SKILL.md"
+    assert "prediction challenge" in signoff_content, "Missing skeptical-level prediction challenges in skills/git-signoff/SKILL.md"
 
     # (3) Exactly one delimited INTERVIEW PROFILE block, byte-identical to the shipped default
-    embedded_block = _extract_profile_block(signoff_content, "skills/signoff/SKILL.md")
-    default_block = _extract_profile_block(default_profile_content, "skills/signoff/profiles/software-general.md")
+    embedded_block = _extract_profile_block(signoff_content, "skills/git-signoff/SKILL.md")
+    default_block = _extract_profile_block(default_profile_content, "skills/git-signoff/profiles/software-general.md")
     assert embedded_block == default_block, (
         "Embedded INTERVIEW PROFILE block in SKILL.md diverged from profiles/software-general.md"
     )
 
     # Every profile block declares a Profile-ID matching the trailer token grammar
     for block, source in [
-        (embedded_block, "skills/signoff/SKILL.md"),
-        (science_profile_content, "skills/signoff/profiles/domain-science.md"),
+        (embedded_block, "skills/git-signoff/SKILL.md"),
+        (science_profile_content, "skills/git-signoff/profiles/domain-science.md"),
     ]:
         pid = re.search(r"^Profile-ID:\s*([a-z0-9-]+)\s*$", block, re.MULTILINE)
         assert pid, f"Missing or malformed Profile-ID in {source}"
@@ -592,8 +592,8 @@ def test_signoff_phase3c_interview_contract():
     assert "Profile-ID: domain-science" in science_profile_content, "domain-science profile must declare its Profile-ID"
 
     # External-user documentation: the block is the sole customization point
-    assert "sole customization point" in signoff_content, "Missing 'sole customization point' marker in skills/signoff/SKILL.md"
-    assert "sole customization point" in harnesses_content, "Missing 'sole customization point' documentation in skills/signoff/HARNESSES.md"
+    assert "sole customization point" in signoff_content, "Missing 'sole customization point' marker in skills/git-signoff/SKILL.md"
+    assert "sole customization point" in harnesses_content, "Missing 'sole customization point' documentation in skills/git-signoff/HARNESSES.md"
     assert "profiles/software-general.md" in harnesses_content, "Missing software-general profile reference in HARNESSES.md"
     assert "profiles/domain-science.md" in harnesses_content, "Missing domain-science profile reference in HARNESSES.md"
 
@@ -781,6 +781,43 @@ def test_external_review_prompts_and_living_branches_contract():
         assert "External Review Convergence Gate" in spec_c, "Missing Convergence Gate in spec.md"
         assert "Content-Conflict Precedence Hierarchy" in spec_c, "Missing Content-Conflict Precedence Hierarchy in spec.md"
         assert not any(re.match(r"^\d{2,4}:\s", line) for line in spec_c.splitlines()), "Corrupted line-number prefixes in spec.md"
+
+
+def test_dependent_skills_and_links():
+    """Verify dependent skills link to git-signoff and no active skills have broken references."""
+    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+    catchmeup_md = os.path.join(root_dir, "skills/catchmeup/SKILL.md")
+    math_proof_md = os.path.join(root_dir, "skills/math-proof-audit/SKILL.md")
+
+    with open(catchmeup_md, "r", encoding="utf-8") as f:
+        catchmeup_content = f.read()
+    assert "../git-signoff/SKILL.md" in catchmeup_content, "Missing link to ../git-signoff/SKILL.md in catchmeup"
+
+    with open(math_proof_md, "r", encoding="utf-8") as f:
+        math_content = f.read()
+    assert "@skill:git-signoff" in math_content, "Missing @skill:git-signoff in math-proof-audit"
+    assert "/git-signoff" in math_content, "Missing /git-signoff in math-proof-audit"
+
+    # Recursively scan all active markdown files in skills/ excluding ephemeral migration directories
+    skills_dir = os.path.join(root_dir, "skills")
+    skill_ref_pattern = re.compile(r"@skill:signoff\b")
+    link_ref_pattern = re.compile(r"skills/signoff/")
+
+    errors = []
+    for filepath in glob.glob(os.path.join(skills_dir, "**/*.md"), recursive=True):
+        rel_path = os.path.relpath(filepath, root_dir)
+        # Exclude ephemeral migration artifacts
+        if "integrate-git-signoff-48d1c2" in rel_path:
+            continue
+        with open(filepath, "r", encoding="utf-8") as f:
+            content = f.read()
+        if skill_ref_pattern.search(content):
+            errors.append(f"In {rel_path}: deprecated '@skill:signoff' found")
+        if link_ref_pattern.search(content):
+            errors.append(f"In {rel_path}: deprecated 'skills/signoff/' link found")
+
+    assert not errors, "\n".join(errors)
+
 
 
 

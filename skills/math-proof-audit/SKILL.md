@@ -19,7 +19,7 @@ Systematically verify mathematical and statistical implementations in code again
 ```mermaid
 graph TD
     A["Phase 1: Drafting (Parent Agent)"] --> B["Phase 2: Red Teaming (Subagent /adversarial-review)"]
-    B --> C["Phase 3: Socratic Signoff (Parent Agent /signoff)"]
+    B --> C["Phase 3: Socratic Signoff (Parent Agent /git-signoff)"]
     C --> D["Phase 4: Publishing (Obsidian Vault Export)"]
 ```
 
@@ -89,14 +89,14 @@ The parent agent synthesizes Red Team findings and presents the draft proof alon
 
 1. **Synthesize Findings**:
    - Present draft proof, LaTeX derivation, symbol mapping, and Red Team 5-point checklist results.
-2. **Execute Interactive `/signoff` Interview**:
+2. **Execute Interactive `/git-signoff` Interview**:
    - Conduct 1-2 targeted Socratic probes per turn across 4 core axes:
      - **Mechanics & Intent:** Explain how code mechanics fulfill LaTeX derivations.
      - **Trade-offs & Approximations:** Highlight any relaxed constraints, truncated series, or numerical approximations.
      - **Boundary Guards:** Verify loud assertions/guards exist for invalid inputs (e.g. NaNs, singular matrices).
      - **Accountability:** Confirm explicit human understanding and approval of mathematical trade-offs.
 3. **Evaluation & Remediation**:
-   - Apply the hardened Socratic remediation rule from **@skill:signoff**: If the user expresses mathematical uncertainty ("not sure", "don't know") OR gives vague/hand-waving answers, the agent MUST pause signoff, explain the mathematical mechanics and boundaries via **@skill:explain-diff**, and re-probe with a scenario before requesting approval.
+   - Apply the hardened Socratic remediation rule from **@skill:git-signoff**: If the user expresses mathematical uncertainty ("not sure", "don't know") OR gives vague/hand-waving answers, the agent MUST pause signoff, explain the mathematical mechanics and boundaries via **@skill:explain-diff**, and re-probe with a scenario before requesting approval.
 
 ---
 

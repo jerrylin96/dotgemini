@@ -1,12 +1,11 @@
-"""Profile resolution + science-signal detection (Phase 3e mirror of SKILL.md §1 step 5)."""
+"""Profile resolution + science-signal detection in attest.py (SKILL.md Section 1)."""
 
 import shutil
 import subprocess
 
 import pytest
-
-from signoff_mcp import core, profile
-from signoff_mcp.tests.helpers import git
+from _attest_loader import attest as profile
+from helpers import git
 
 VALID_PROFILE = """# Repo-local profile
 <!-- INTERVIEW-PROFILE:BEGIN (sole customization point — replace only this block) -->
@@ -20,7 +19,7 @@ Domain emphases — weight probes within the universal axes:
 
 
 def _write_repo_profile(scratch_repo, content=VALID_PROFILE):
-    d = scratch_repo / ".signoff"
+    d = scratch_repo / ".git-signoff"
     d.mkdir()
     (d / "profile.md").write_text(content, encoding="utf-8")
     return d / "profile.md"
@@ -53,7 +52,7 @@ def test_env_override_takes_precedence(scratch_repo, tmp_path):
     _write_repo_profile(scratch_repo)
     override = tmp_path / "override.md"
     override.write_text(VALID_PROFILE.replace("atmos-column-test", "override-id"), encoding="utf-8")
-    res = profile.resolve_profile(str(scratch_repo), env={"SIGNOFF_PROFILE_FILE": str(override)})
+    res = profile.resolve_profile(str(scratch_repo), env={"GIT_SIGNOFF_PROFILE_FILE": str(override)})
     assert res.source == profile.SOURCE_ENV_OVERRIDE
     assert res.path == str(override)
     assert res.profile_id == "override-id"
@@ -61,10 +60,11 @@ def test_env_override_takes_precedence(scratch_repo, tmp_path):
 
 def test_unreadable_env_override_aborts_not_falls_back(scratch_repo, tmp_path):
     _write_repo_profile(scratch_repo)  # a valid fallback exists — must still abort
-    with pytest.raises(profile.ProfileOverrideError, match="Aborting signoff"):
+    with pytest.raises(profile.AttestError, match="Aborting signoff") as exc:
         profile.resolve_profile(
-            str(scratch_repo), env={"SIGNOFF_PROFILE_FILE": str(tmp_path / "missing.md")}
+            str(scratch_repo), env={"GIT_SIGNOFF_PROFILE_FILE": str(tmp_path / "missing.md")}
         )
+    assert exc.value.code == profile.EXIT_PROFILE
 
 
 # --- malformed profiles fall back, announced --------------------------------
@@ -89,7 +89,7 @@ def test_malformed_repo_profile_falls_back_to_embedded(scratch_repo, mangle, rea
     assert res.fallback_reason and reason_match in res.fallback_reason
 
 
-# --- digest parity with the SKILL.md sed pipeline ---------------------------
+# --- digest parity with the historical sed | sha256sum | cut pipeline -----------
 
 
 @pytest.mark.skipif(
@@ -162,23 +162,25 @@ def test_prepare_reports_profile_and_science_signals(scratch_repo):
     git(scratch_repo, "add", ".")
     git(scratch_repo, "commit", "-q", "-m", "science change")
 
-    state = core.prepare(core.GitRepo(str(scratch_repo)), "HEAD", reference_ref="main")
-    assert state.profile_source == profile.SOURCE_REPO_LOCAL
-    assert state.profile_id == "atmos-column-test"
-    assert state.profile_digest and len(state.profile_digest) == 12
-    assert state.profile_fallback_reason is None
+    state = profile.prepare(str(scratch_repo), reference="main", env={})
+    assert state.profile.source == profile.SOURCE_REPO_LOCAL
+    assert state.profile.profile_id == "atmos-column-test"
+    assert state.profile.digest and len(state.profile.digest) == 12
+    assert state.profile.fallback_reason is None
     assert set(state.science_signals) >= {"scientific-imports", "rng-seeding", "units-or-constants"}
+    assert "scientific-computation" in state.hints["tier2_triggers"]
 
 
 def test_prepare_defaults_to_embedded_profile(scratch_repo):
-    state = core.prepare(core.GitRepo(str(scratch_repo)), "HEAD", reference_ref="main")
-    assert state.profile_source == profile.SOURCE_EMBEDDED
-    assert state.profile_id == "software-general"
-    assert state.profile_digest is None
+    state = profile.prepare(str(scratch_repo), reference="main", env={})
+    assert state.profile.source == profile.SOURCE_EMBEDDED
+    assert state.profile.profile_id == "software-general"
+    assert state.profile.digest is None
     assert state.science_signals == []
 
 
 def test_prepare_aborts_on_unreadable_override(scratch_repo, tmp_path, monkeypatch):
-    monkeypatch.setenv("SIGNOFF_PROFILE_FILE", str(tmp_path / "missing.md"))
-    with pytest.raises(core.SignoffError, match="Aborting signoff"):
-        core.prepare(core.GitRepo(str(scratch_repo)), "HEAD", reference_ref="main")
+    monkeypatch.setenv("GIT_SIGNOFF_PROFILE_FILE", str(tmp_path / "missing.md"))
+    with pytest.raises(profile.AttestError, match="Aborting signoff") as exc:
+        profile.prepare(str(scratch_repo), reference="main")
+    assert exc.value.code == 5

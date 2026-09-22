@@ -2,9 +2,15 @@
 
 Ready-to-paste INTERVIEW PROFILE block for research and scientific-computing
 reviews, where the primary risk is producing plausible-but-invalid results
-rather than crashing. To install, replace everything from
-`<!-- INTERVIEW-PROFILE:BEGIN` through `<!-- INTERVIEW-PROFILE:END -->` in
-[../SKILL.md](../SKILL.md) with the block below.
+rather than crashing.
+
+### How to use in your repository:
+1. **Zero-touch:** Run initializer with `--profile domain-science`:
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/jerrylin96/git-signoff/init-v10/init.py -o /tmp/signoff-init.py && python3 /tmp/signoff-init.py --profile domain-science
+   ```
+2. **Manual:** Create `.git-signoff/profile.md` at your repo root and paste the block below.
+For full authoring guidelines and discipline-specific templates (physics, genomics, ML emulators), see [README.md](README.md).
 
 <!-- INTERVIEW-PROFILE:BEGIN (sole customization point — replace only this block) -->
 ### Interview Profile: domain-science

@@ -1,4 +1,4 @@
-"""Scratch-repo helpers shared across signoff-mcp tests."""
+"""Scratch-repo helpers shared across git-signoff tests."""
 
 import subprocess
 

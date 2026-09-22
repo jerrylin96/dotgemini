@@ -1,13 +1,15 @@
+"""TranscriptProvider adapters in skills/git-signoff/attest.py (gsa-core §3)."""
+
 import os
 
-from signoff_mcp.adapters import (
-    AntigravityAdapter,
-    ClaudeCodeAdapter,
-    CodexAdapter,
-    GenericFileAdapter,
-    resolve_adapter,
-)
-from signoff_mcp.tests.helpers import git, init_repo
+from _attest_loader import attest
+from helpers import git, init_repo
+
+AntigravityAdapter = attest.AntigravityAdapter
+ClaudeCodeAdapter = attest.ClaudeCodeAdapter
+CodexAdapter = attest.CodexAdapter
+GenericFileAdapter = attest.GenericFileAdapter
+resolve_adapter = attest.resolve_adapter
 
 
 def _slug(p):
@@ -25,7 +27,7 @@ def test_resolution_order_override_wins(tmp_path):
     f = tmp_path / "t.log"
     f.write_bytes(b"hello")
     env = {
-        "SIGNOFF_TRANSCRIPT_FILE": str(f),
+        "GIT_SIGNOFF_TRANSCRIPT_FILE": str(f),
         "ANTIGRAVITY_CONVERSATION_ID": "ag-1",
         "CLAUDE_CODE_SESSION_ID": "cc-1",
     }
@@ -48,7 +50,7 @@ def test_resolution_claude_then_none(tmp_path):
     assert isinstance(a, ClaudeCodeAdapter)
     assert a.harness_id == "claude-code"
     assert resolve_adapter({}) is None
-    assert resolve_adapter({"SIGNOFF_TRANSCRIPT_FILE": "  "}) is None  # whitespace stripped
+    assert resolve_adapter({"GIT_SIGNOFF_TRANSCRIPT_FILE": "  "}) is None  # whitespace stripped
 
 
 def test_generic_missing_file_degrades_to_none(tmp_path):
@@ -141,4 +143,51 @@ def test_claude_outside_git_repo_degrades_to_none(tmp_path):
     cwd = tmp_path / "plain"
     cwd.mkdir()
     a = ClaudeCodeAdapter("sid-4", cwd=str(cwd), home=str(tmp_path / "home"))
+    assert a.fetch_transcript_bytes() is None
+
+
+def test_codex_adapter_rollout_pattern_matching(tmp_path):
+    home = tmp_path / "home"
+    _plant_codex_rollout(home / ".codex", "05", "2026-08-05T10-00-00", "my-session", b"matched")
+    a = CodexAdapter("my-session", home=str(home))
+    assert a.fetch_transcript_bytes() == b"matched"
+
+
+def test_codex_adapter_rejects_similar_suffix(tmp_path):
+    home = tmp_path / "home"
+    codex_home = home / ".codex"
+    d = codex_home / "sessions" / "2026" / "08" / "05"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "rollout-2026-08-05T10-00-00-my-session-extra.jsonl").write_bytes(b"extra-suffix")
+    (d / "2026-08-05T10-00-00-my-session.jsonl").write_bytes(b"no-prefix")
+    a = CodexAdapter("my-session", home=str(home))
+    assert a.fetch_transcript_bytes() is None
+
+
+def test_codex_adapter_escaped_metacharacters(tmp_path):
+    home = tmp_path / "home"
+    codex_home = home / ".codex"
+    d = codex_home / "sessions" / "2026" / "08" / "05"
+    d.mkdir(parents=True, exist_ok=True)
+    sid = "sess[123]"
+    (d / f"rollout-2026-08-05T10-00-00-{sid}.jsonl").write_bytes(b"literal-brackets")
+    (d / "rollout-2026-08-05T10-00-00-sess1.jsonl").write_bytes(b"globbed-match")
+    a = CodexAdapter(sid, home=str(home))
+    assert a.fetch_transcript_bytes() == b"literal-brackets"
+
+
+def test_codex_adapter_equal_mtime_tie_breaking(tmp_path):
+    home = tmp_path / "home"
+    codex_home = home / ".codex"
+    f_a = _plant_codex_rollout(codex_home, "05", "2026-08-05T10-00-00-a", "sid-tie", b"alpha")
+    f_b = _plant_codex_rollout(codex_home, "05", "2026-08-05T10-00-00-b", "sid-tie", b"beta")
+    os.utime(f_a, (100, 100))
+    os.utime(f_b, (100, 100))
+    a = CodexAdapter("sid-tie", home=str(home))
+    assert a.fetch_transcript_bytes() == b"beta"
+
+
+def test_codex_adapter_missing_rollout(tmp_path):
+    home = tmp_path / "home"
+    a = CodexAdapter("nonexistent", home=str(home))
     assert a.fetch_transcript_bytes() is None

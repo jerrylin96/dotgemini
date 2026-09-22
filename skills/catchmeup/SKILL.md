@@ -31,7 +31,7 @@ When invoked (e.g. `/catchmeup` or `/catchmeup 2 weeks origin/main`), select or 
 > [!IMPORTANT]
 > - **Read-Only**: This skill is strictly read-only. It never modifies workspace or worktree files, creates commits, or alters repository state. Creating temporary, ephemeral scratch files under the conversation's scratch directory for log/diff reading does not violate this rule, provided cleanup only removes these generated scratch files.
 > - **High-Level First**: Always open with an **Executive Summary** (themes, metrics, signoff attestations) before showing raw commits or line-by-line diffs.
-> - **Real Attestation Parsing**: Parse exact `Signoff-Reviewed-Commit-SHA` and `Signoff-Status` trailers from attestation commits created by [/signoff](../signoff/SKILL.md) to audit feature commit coverage. Never use globbing in format strings.
+> - **Real Attestation Parsing**: Parse exact `Signoff-Reviewed-Commit-SHA` and `Signoff-Status` trailers from attestation commits created by [/git-signoff](../git-signoff/SKILL.md) to audit feature commit coverage. Never use globbing in format strings.
 
 ## Execution Steps
 

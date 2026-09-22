@@ -1,9 +1,9 @@
 # Draft: GSA as an in-toto Attestation Predicate Type
 
-**Document Version:** 0.1.0  
+**Document Version:** 0.1.1 (license only: relicensed from the Community Specification License 1.0 to the Apache License 2.0; no normative change. Previous: 0.1.0.)  
 **Status:** Draft / Informative (open-standard milestone 4, ecosystem interop) — not yet submitted to the in-toto attestation registry.  
-**Canonical Location:** `skills/signoff/specs/gsa-in-toto-predicate.md`  
-**License:** [Community Specification License 1.0](https://github.com/jerrylin96/signoff/blob/main/LICENSE-SPEC)  
+**Canonical Location:** `skills/git-signoff/specs/gsa-in-toto-predicate.md`  
+**License:** Copyright 2026 Jerry Lin. [Apache License, Version 2.0](LICENSE) (SPDX: `Apache-2.0`)  
 
 ## Purpose
 
@@ -25,7 +25,7 @@ a substitute for it.
 ## Predicate type
 
 ```
-https://jerrylin96.github.io/signoff/predicates/gsa/v1
+https://jerrylin96.github.io/git-signoff/predicates/gsa/v1
 ```
 
 *Provisional identifier.* It moves to a project-owned domain or a neutral
@@ -45,7 +45,7 @@ rebases (gsa-core §5) — the reviewed tree.
     { "name": "git:commit", "digest": { "gitCommit": "453c633078ecdd82d93c33eefac4d5f4cbe2ef55" } },
     { "name": "git:tree",   "digest": { "gitTree":   "83679c5222ef2c7a7b8e5c83bc56c526d7f95567" } }
   ],
-  "predicateType": "https://jerrylin96.github.io/signoff/predicates/gsa/v1",
+  "predicateType": "https://jerrylin96.github.io/git-signoff/predicates/gsa/v1",
   "predicate": {
     "specVersion": "1.0",
     "status": "VERIFIED_BY_HUMAN",
@@ -61,7 +61,7 @@ rebases (gsa-core §5) — the reviewed tree.
     ],
     "risks": [],
     "verifiedBy": "jerrylin247365@gmail.com",
-    "agent": "Antigravity /signoff v1.0",
+    "agent": "Antigravity /git-signoff v1.0",
     "attestationCommitSha": "<sha-of-the-empty-attestation-commit, when known>"
   }
 }

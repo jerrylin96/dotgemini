@@ -1,0 +1,15 @@
+[SIGNOFF 1a2b3c4]: human comprehension and risk attestation
+
+Signoff-Spec-Version: 1.0
+Signoff-Status: VERIFIED_BY_HUMAN
+Signoff-Timestamp: 2026-08-06T00:00:00Z
+Signoff-Base-SHA: 9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e
+Signoff-Reviewed-Commit-SHA: 1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b
+Signoff-Reviewed-Tree-SHA: 0b1a2f9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a
+Signoff-Harness-ID: claude-code
+Signoff-Conversation-ID: 00000000-0000-0000-0000-000000000000
+Signoff-Transcript-Digest: sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+Signoff-Transcript-Bytes: 0
+Signoff-Tradeoff: none
+Signoff-Risk: none
+Signoff-Agent: harness=claude-code/2.0 model=example reasoning=N/A interview=standard/software-general

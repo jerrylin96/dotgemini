@@ -1,0 +1,14 @@
+[SIGNOFF 453c633]: human comprehension and risk attestation
+
+Signoff-Spec-Version: 1.0
+Signoff-Status: VERIFIED_BY_HUMAN
+Signoff-Timestamp: 2026-08-04T19:40:30Z
+Signoff-Base-SHA: f31907acf1bca6e6f9decf5c7c7b07601b96f060
+Signoff-Reviewed-Commit-SHA: 453c633078ecdd82d93c33eefac4d5f4cbe2ef55
+Signoff-Reviewed-Tree-SHA: 83679c5222ef2c7a7b8e5c83bc56c526d7f95567
+Signoff-Harness-ID: antigravity-cli
+Signoff-Conversation-ID: d079fa80-516d-41d5-8e76-8b6d79dbd3c9
+Signoff-Tradeoff: none
+Signoff-Risk: none
+Signoff-Verified-By: dev@example.com
+Signoff-Agent: harness=antigravity-cli/N/A model=N/A reasoning=N/A interview=standard/software-general
