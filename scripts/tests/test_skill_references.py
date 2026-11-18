@@ -103,6 +103,27 @@ def test_all_skills_have_correct_frontmatter_name():
             err = validate_skill_resolution(skills_dir, skill_name)
             assert err is None, f"Skill '{skill_name}' failed validation: {err}"
 
+
+def test_no_skill_disables_model_invocation():
+    """Permanent structural guard: no skill may set disable-model-invocation: true."""
+    skills_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../skills"))
+    violations = []
+    for skill_name in sorted(os.listdir(skills_dir)):
+        skill_md = os.path.join(skills_dir, skill_name, "SKILL.md")
+        if not os.path.isfile(skill_md) or skill_name.startswith("."):
+            continue
+        with open(skill_md, "r", encoding="utf-8") as f:
+            lines = f.read().splitlines()
+        if not lines or lines[0] != "---":
+            continue
+        for line in lines[1:]:
+            if line == "---":
+                break
+            if re.match(r"^disable-model-invocation:\s*true\s*(#.*)?$", line.strip(), re.IGNORECASE):
+                violations.append(f"skills/{skill_name}/SKILL.md")
+                break
+    assert not violations, f"Skills disabling model invocation: {violations}"
+
 def test_no_non_portable_file_links():
     """Verify that no markdown file contains file:// URLs (all file:// links are prohibited to ensure portability)."""
     skills_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../skills"))

@@ -1,10 +1,10 @@
-### External Review Prompt (Plan Gate — Round 2)
+### External Review Prompt (RED Test Gate)
 
-Re-review updated `harvest-pstack-skills-a4ef1c/plan.md` against `harvest-pstack-skills-a4ef1c/spec.md` (`218c002`) on branch `gemini/harvest-pstack-skills-a4ef1c`.
+Review the RED test commit (`test: add RED test suite (failing)`) on branch `gemini/harvest-pstack-skills-a4ef1c` (`scripts/tests/test_pstack_harvest.py` and `scripts/tests/test_skill_references.py`) against `harvest-pstack-skills-a4ef1c/spec.md` (`218c002`) and `harvest-pstack-skills-a4ef1c/plan.md` (`7e4dda5`).
 
 Focus on:
-1. `P1(a)` & `P1(b)` vocabulary contract: `benchmark` keyword present in `benchmark-checklist` frontmatter `description`, and canonical `--unslop` tokens (`AI vocabulary`, `Em dash`, `Abstract metaphor nouns`, `Over-compression`) aligned between Task 1 and Task 4.
-2. `P2`–`P6`: explicit `filtered-green by design` statement, text anchors replacing shifting line numbers, YAML quote handling, no duplicate `disable-model-invocation` check in Test 1, and `${WORKTREE_PATH}` portability.
+1. Spec parity & assertion rigor: verify all 7 tests in `scripts/tests/test_pstack_harvest.py` fail cleanly on missing implementation without trivial-pass loopholes, and `test_no_skill_disables_model_invocation` in `scripts/tests/test_skill_references.py` stays GREEN as a permanent structural guard.
+2. Zero duplication & slice decoupling (`P4`, `P5`, `P7`, `P8`, `N2`, `N3`).
 
 ### Reviewer Identity & Session Continuity Directive
 - If you already established your `REVIEWER_ID` in an earlier turn of this session, REUSE it.
