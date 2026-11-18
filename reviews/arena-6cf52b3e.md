@@ -2,19 +2,108 @@
 
 ```text
 REVIEWER_ID: arena-6cf52b3e
-AUDITED_SHA: 218c0020b595ec07561f629d78a661d16d6f3226
+AUDITED_SHA: e2a5660960e28f6176cea2e5031024e778437dbc
 BASE: origin/main @ 1451ee9
-REVIEW_ROUND: 2 (spec gate — revision re-audit)
+REVIEW_ROUND: 3 (plan gate — `plan.md` vs approved spec `218c002`)
 REVIEW_FILE: reviews/arena-6cf52b3e.md
 FINGERPRINT: pstack-spec-gate-6cf5
-SESSION: persistent — same REVIEWER_ID as Round 1 (376a978)
+SESSION: persistent — same REVIEWER_ID across Rounds 1–3
 ```
 
-**VERDICT: APPROVE** — Round 1 blockers `B1`–`B4` are closed with verifiable anchors, all `Y*`/`C*`/`I5` items are addressed, and no new blocker was introduced. Two implementation conditions (`S1`, `N1`) and two test-precision notes (`N2`, `N3`) belong in `plan.md`; none require another spec round.
+**VERDICT: NEEDS_REVISION** (one blocking class, mechanical)
 
-Round 1 content is preserved as an archive at the bottom for audit trail.
+The plan is materially good: slices are decoupled, verify commands are executable, `N1`/`N2`/`N3` are closed with the exact wording I asked for, and the **Guard 1 catch is correct — it also proves my Round 1 `B4` advice was wrong**. The blocker is a single class: **two RED assertions demand literal tokens that the plan's own GREEN text never produces**, so those tests stay red after implementation. Fix the vocabulary contract and this plan approves on the next revision.
+
+Round 2 and Round 1 bodies are preserved as archives below.
 
 ---
+
+## A. What I verified at `e2a5660`
+
+| Probe | Result |
+|---|---|
+| Code tree vs `218c002` | identical — the two new commits touch only `plan.md`, `review_prompt.md`, `reviewer_scorecard.md` (no skill/code file) |
+| `pytest -q` | **430 passed, 3 skipped**; `ruff check .` → clean (re-run at this SHA) |
+| Guard 1 location | `skills/prose-editor/resources/validator.py:301-307` (plan cites `294-306` — substance right, line numbers ~7 low) |
+| Guard 1 behaviour, numeric header **inside** a closed fence | `ValueError: 1 suggestion header(s) found but all are inside fenced code blocks` |
+| Non-numeric `### Suggestion #<ID>` **inside** a closed fence (repo's own template style) | **passes**, `cards=0` |
+| Numeric backticked header **outside** fence, no fields | `ValueError: Missing required field 'Anchor'` |
+| Unfenced non-backticked header | `ValueError: Malformed suggestion header` |
+| Slice filter oracle (`-k` → test names) | `benchmark` → exactly the 3 Slice-1 tests; `statechart or downstream` → exactly the 2 Slice-2 tests. **No cross-slice leakage.** |
+
+Anchors re-verified: `AGENTS.md:92` (`Empirical Grounding`), `AGENTS.md:109+` (§4 skills), `AGENTS.md:25` (`### Key Rules`), `spec-driven-development/SKILL.md:25`, `adversarial-review/SKILL.md:47,358,362`, `ponytail/SKILL.md:30`, `prose-editor/SKILL.md:10,22,26`, `make-feature/SKILL.md:255`.
+
+## B. Retraction of my Round 1 `B4` advice
+
+Round 1 said: *"Any example card header MUST live inside a closed fenced block."* That is **wrong for numeric headers** and would have caused the exact Guard 1 failure this round caught. Reproduced above: a fenced `### Suggestion #1 \`[Clarity]\` \`[Minor]\`` raises.
+
+Correct rule, now empirically pinned:
+
+* numeric `### Suggestion #<digits>` — fails **everywhere** (fenced → Guard 1; unfenced → Guard 3 or missing-field).
+* non-numeric `### Suggestion #<ID>` inside a **closed** fence — passes (this is why the repo's own `## Suggestion Card Schema` block at `prose-editor/SKILL.md:46` is safe today).
+* any unclosed fence — fails (Guard 2).
+
+Task 4's blanket ban is therefore **safe but over-broad**; it is a fine choice for a prose pass that does not need card examples. Keep it, and note the `<ID>`-in-fence alternative so a later editor does not "improve" the section by adding a numeric example. My `B4` feedback is superseded by the builder's Guard 1 finding.
+
+## C. `S1`/`N1`/`N2`/`N3` closure
+
+| Item | Status | Evidence |
+|---|---|---|
+| **N1** `@skill:prose-editor` → relative link | **CLOSED** | Task 4 uses `[prose-editor](../prose-editor/SKILL.md)` + "apply `--unslop` rules inline" in both `make-feature` Step 7c and `adversarial-review` Writing Quality; the relative path is correct from both directories. |
+| **N2** global guard labelled permanent | **CLOSED** | Task 0 titled "Permanent Structural Guard — GREEN Regression Guard", explicitly "not counted as a RED test". |
+| **N3** no placeholder lock | **CLOSED** | Test 4 asserts `State transitions:`, trigger vocabulary, tie-break, non-empty `N/A` reason — not the `<…|…>` template. |
+| **S1** per-slice green cadence | **PARTIAL → P2** | Slices are decoupled *by filter*, not by file: Task 1 writes all 7 tests, so Slice 1's `GREEN` commit still carries 4 failing tests in the tree. |
+
+## D. Findings
+
+### P1 — BLOCKING: two RED assertions can never go GREEN as written
+
+**(a) `benchmark` keyword.** Test 1 requires the frontmatter `description` to include `benchmark`. Task 2's planned description — *"CRITICAL RULE: You MUST read and follow this skill whenever reporting or comparing performance numbers, speedups, latency, throughput, profiling, or perf regressions for a changeset (does not fire on unrelated docs merely mentioning perf terms)."* — contains no `benchmark`. Only the skill **name** does. If the test inspects frontmatter (as Test 1 says), it stays red after GREEN, and the "fix" is to weaken the test — the failure mode structural tests exist to prevent.
+
+**(b) unslop token set.** Test 6 requires literal `AI vocabulary`, `Em dash`, `Abstract metaphor nouns`, `Over-compression`. Task 4's checklist text has `AI vocab`, `em-dash/…`, `abstract metaphor nouns`, `no over-compressed fragments`. Spec §2 has `AI vocabulary`, `em-dash`, `abstract metaphor nouns`, `no over-compressed fragments`. So the test matches the spec 2/4, the plan 1/4, and **neither** for `Em dash` / `Over-compression`.
+
+Fix (once, then it is mechanical): declare the canonical token list in the spec (§2 Slice 3 is the natural home), have the test assert exactly those strings — case-insensitive substring on a normalized copy of `SKILL.md` so `em-dash` matches — and paste the same strings into Task 4 and Task 2's description. Do not let the test paraphrase the implementation.
+
+### P2 — `S1` closure: say "filtered-green" out loud
+
+Writing all 7 RED tests at Step 4d and verifying per slice with `-k` is coherent with the plan's stated strategy, but Slice 1's post-implementation audit will run the full suite and see 4 red tests. That is a guaranteed false-positive review round. Choose and state one:
+
+* **split by slice** (`test_pstack_harvest_benchmark.py` / `_statechart.py` / `_unslop.py`) — each slice's commit is suite-green; or
+* **keep one file** and add one sentence to the plan + both slice commit messages: *"intermediate slices are filtered-green by design; the full suite is green only at Task 4."*
+
+### P3 — anchor by text, not line number
+
+Three tasks edit the same neighbourhood and cite `adversarial-review/SKILL.md` lines 361/362 (§5 starts at `:358`; the `Writing Quality` bullet is `:362`). After Slice 1 inserts lines, Slice 3's `:362` points at something else. Anchor to `5. **Perform Adversarial Review**` and `**Writing Quality** (Unconditional)` instead.
+
+### P4 — YAML quoting in Test 1
+
+Task 2 writes `description: "CRITICAL RULE: …"` (double-quoted). A `value.startswith("CRITICAL RULE:")` assertion fails on the leading quote unless the test strips `"`/`'` — the existing helper already does this for `name` (`test_skill_references.py:52-54`). Reuse that pattern, or use a `description: |` block scalar like `skills/ml-best-practices/SKILL.md:3`.
+
+### P5 — duplication nit
+
+Test 1 also asserts the new skill omits `disable-model-invocation: true`, which Task 0 now guards repo-wide. Spec §3 says "zero test duplication" — drop it or note it as deliberate defence-in-depth.
+
+### P6 — portability / label nit
+
+Pre-flight and every verify command hardcode `/Users/jlin404/.gemini/tmp/worktrees/…`; use `${WORKTREE_PATH}` per `make-feature` convention so the plan survives a different machine. Task 4 also lists `skills/prose-editor/tests/test_prose_editor.py` under "RED Test Target" — it is a regression gate (green before and after), same mislabel family as `N2`.
+
+## E. Convergence statement
+
+Only **P1** blocks; **P2** needs one sentence; **P3–P6** are authoring notes. With P1's canonical vocabulary list in place, expect `APPROVE` on the next plan revision with no further spec work. Persisting as `arena-6cf52b3e` for the RED-test gate.
+
+```text
+VERDICT: NEEDS_REVISION
+AUDITED_SHA: e2a5660960e28f6176cea2e5031024e778437dbc
+ROUND_2_ITEMS: S1 -> PARTIAL (P2); N1 N2 N3 -> [x] Resolved in e2a5660
+B4_ERRATUM: Round 1 "fence the example header" advice withdrawn — Guard 1 fails numeric fenced headers; builder's finding is correct
+OPEN_BLOCKING: P1
+```
+
+---
+
+---
+
+# Archive — Round 2 (audited `218c002`, spec gate, APPROVE)
 
 ## A. Round 2 disposition
 
