@@ -2,21 +2,70 @@
 
 ```text
 REVIEWER_ID: arena-6cf52b3e
-AUDITED_SHA: e2a5660960e28f6176cea2e5031024e778437dbc
+AUDITED_SHA: 7e4dda560715a982f80ba397bf3bbbc17ed02c62
 BASE: origin/main @ 1451ee9
-REVIEW_ROUND: 3 (plan gate — `plan.md` vs approved spec `218c002`)
+REVIEW_ROUND: 4 (plan gate — revision re-audit of `plan.md` vs spec `218c002`)
 REVIEW_FILE: reviews/arena-6cf52b3e.md
 FINGERPRINT: pstack-spec-gate-6cf5
-SESSION: persistent — same REVIEWER_ID across Rounds 1–3
+SESSION: persistent — same REVIEWER_ID across Rounds 1–4
 ```
 
-**VERDICT: NEEDS_REVISION** (one blocking class, mechanical)
+**VERDICT: APPROVE** — plan gate.
 
-The plan is materially good: slices are decoupled, verify commands are executable, `N1`/`N2`/`N3` are closed with the exact wording I asked for, and the **Guard 1 catch is correct — it also proves my Round 1 `B4` advice was wrong**. The blocker is a single class: **two RED assertions demand literal tokens that the plan's own GREEN text never produces**, so those tests stay red after implementation. Fix the vocabulary contract and this plan approves on the next revision.
-
-Round 2 and Round 1 bodies are preserved as archives below.
+`P1`–`P6` are closed with exactly the contract I asked for, verified by token-presence and parser probes rather than by reading intent. Nothing blocks Phase 2. Two notes below are build-time checks, not review rounds.
 
 ---
+
+## A. Round 4 disposition
+
+| Item | Status | Evidence at `7e4dda5` |
+|---|---|---|
+| **P1(a)** `benchmark` in frontmatter description | **CLOSED** | Planned description contains all six asserted tokens — probe: `benchmark ✓ latency ✓ throughput ✓ speedup ✓(⊂"speedups") profiling ✓ regression ✓(⊂"regressions")`; still starts `CRITICAL RULE:` and carries the changeset scope clause. |
+| **P1(b)** canonical `--unslop` tokens | **CLOSED** | Task 4 now writes literal `AI vocabulary`, `Em dash`, `Abstract metaphor nouns`, `Over-compression`; Test 6 asserts the same four case-insensitively. Probe: 4/4 present in the planned block. |
+| **P2** filtered-green declared | **CLOSED** | Execution Strategy states it; repeated in both slice verify headings; "full suite 100% GREEN at Task 4 before the Step 5 GREEN commit" — and **Step 5 exists** (`skills/make-feature/SKILL.md:178` "Step 5 (Stage & Commit GREEN Implementation)"). |
+| **P3** text anchors | **CLOSED** | Every edit target is anchored by text (`5. **Perform Adversarial Review**`, `**Writing Quality** (Unconditional)`, `Step 7c`, `### Key Rules`, `### 2. Draft the Spec`, `**Bug fix = root cause, not symptom.**`); no drifting line numbers remain. |
+| **P4** YAML quote handling | **CLOSED** | Test 1 explicitly strips quotes / folds block scalars per `test_skill_references.py` style. |
+| **P5** duplicate guard | **CLOSED** | Task 1 preamble forbids duplicating Task 0's check; Test 1 no longer asserts it. |
+| **P6** portability + label | **CLOSED** | `"${WORKTREE_PATH}"` quoted throughout; `test_prose_editor.py` relabelled "Regression Gate". |
+
+Guard citation also corrected: `validator.py:301-307` now matches the file exactly (Guard 1 comment at `:301`).
+
+## B. Empirical checks at `7e4dda5`
+
+| Probe | Result |
+|---|---|
+| Code tree vs `218c002` | unchanged — the round-3 commit touches only `plan.md`, `review_prompt.md`, `reviewer_scorecard.md` |
+| `pytest -q` / `ruff check .` | **430 passed, 3 skipped** / clean |
+| Token oracle on the plan's own RED↔GREEN strings | 6/6 benchmark tokens, 4/4 unslop tokens present (see A) |
+| **Parser dry-run**: planned `--unslop` bullet block inserted into a copy of `prose-editor/SKILL.md`, then `validator.parse_suggestion_cards()` | **PASS**, `cards = 0` — the 7-bullet block (30 terms, `"Not just X, but Y"`, `Fancy "is"`, parenthesised metaphor list) adds no card header and no fence, so `test_parse_real_skill_md_without_crash` stays green |
+| Slice-filter oracle (re-checked) | `benchmark` → exactly 3 Slice-1 tests; `statechart or downstream` → exactly 2 Slice-2 tests |
+
+## C. Build-time notes (no re-round needed)
+
+### P7 — one word: `indirect` is asserted but not planned
+
+Test 5 lists "indirect consumers" among the assertions for `adversarial-review` §5, but Task 3's adversarial-review bullet says only *"inspect beyond `grep` (library source/pinned versions, JSON/DB/wire formats, config/feature flags, teardown/microtask order, 3-hop callers)"* — probe: `"indirect" in bullet == False`. The word does appear in the `ponytail` addition. Two acceptable resolutions at authoring time: add the word to the adversarial-review bullet, or scope Test 5's tokens per file (`beyond grep`/`unproven` for adversarial-review; `indirect` for ponytail). Pick one when writing the test; the failure surfaces immediately in Task 4's verify.
+
+### P8 — the plan's unslop vocabulary is wider than the approved spec's list
+
+Spec §2 Slice 3 names ~13 tells; Task 4 enumerates ~30 (adds `Curly quotes`, `Boldface overuse`, `Title case headings`, `Decorative emojis`, `Excessive hedging`, `Generic conclusions`, `Mannered prose`, metaphor lexicon). This is faithful to upstream `pstack` `unslop` and inside the spirit of the approved clause, but it grows `prose-editor/SKILL.md` from 142 lines by ~10–12 and makes the spec the weaker contract. Either is fine — just do not let the two lists drift silently: if the implementation keeps the wider list, the test must assert the four canonical tokens only (as planned), not the extras.
+
+## D. Convergence statement
+
+Spec gate: `APPROVE` @ `218c002`. Plan gate: `APPROVE` @ `7e4dda5`. `P7`/`P8` are authoring decisions inside the approved envelope. I remain on the Retain List as `arena-6cf52b3e` for the RED-test gate (Step 4c) and the GREEN code gate (Phase 3).
+
+```text
+VERDICT: APPROVE
+AUDITED_SHA: 7e4dda560715a982f80ba397bf3bbbc17ed02c62
+ROUND_3_ITEMS: P1(a) P1(b) P2 P3 P4 P5 P6 -> [x] Resolved in 7e4dda5
+NOTES: P7 (one-word `indirect` alignment), P8 (plan vocabulary wider than spec; assert canonical 4 only)
+```
+
+---
+
+---
+
+# Archive — Round 3 (audited `e2a5660`, plan gate, NEEDS_REVISION)
 
 ## A. What I verified at `e2a5660`
 
@@ -100,7 +149,6 @@ OPEN_BLOCKING: P1
 ```
 
 ---
-
 ---
 
 # Archive — Round 2 (audited `218c002`, spec gate, APPROVE)
