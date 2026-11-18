@@ -1,10 +1,10 @@
-### External Review Prompt (Spec Gate — Revision Round 2)
+### External Review Prompt (Plan Gate)
 
-Re-review updated `harvest-pstack-skills-a4ef1c/spec.md` on branch `gemini/harvest-pstack-skills-a4ef1c` against `origin/main` (addressing `B1`–`B4`, `Y1`–`Y6`, `C1`–`C2`, `I5` from `reviews/arena-6cf52b3e.md`).
+Review `harvest-pstack-skills-a4ef1c/plan.md` against `harvest-pstack-skills-a4ef1c/spec.md` (`218c002`) on branch `gemini/harvest-pstack-skills-a4ef1c`.
 
 Focus on:
-1. `B1`–`B4` closure: auditable `State transitions:` declaration + tie-break, `--unslop` Step 7c / `adversarial-review` wiring, `benchmark-checklist` scope + user-supplied methodology path, and `prose-editor` `validator.py` fence constraint.
-2. `Y1`–`Y6` & `C1`–`C2`: non-duplicative RED assertions, 3-slice breakdown, single `AGENTS.md` placement in `## 1. Ponytail` (no `scratchpad.md` path drift), `Downstream Consumer Trace` naming, `@skill:benchmark-checklist` single source of truth, and `--unslop` vs `caveman` precedence.
+1. Closure of `S1`, `N1`, `N2`, `N3` from `reviews/arena-6cf52b3e.md`: clean Phase 2 RED→GREEN cadence, relative `[prose-editor](../prose-editor/SKILL.md)` link with inline `--unslop` application (`N1`), permanent guard vs. RED distinction (`N2`), and non-brittle `State transitions:` assertions (`N3`).
+2. Line anchor accuracy, atomic task sizing, and worktree/env safety (`setup_review_env.py`, `run_in_env.py`, `test_parse_real_skill_md_without_crash`).
 
 ### Reviewer Identity & Session Continuity Directive
 - If you already established your `REVIEWER_ID` in an earlier turn of this session, REUSE it.
