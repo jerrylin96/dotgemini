@@ -1,10 +1,10 @@
-### External Review Prompt (RED Test Gate)
+### External Review Prompt (GREEN Code Gate)
 
-Review the RED test commit (`test: add RED test suite (failing)`) on branch `gemini/harvest-pstack-skills-a4ef1c` (`scripts/tests/test_pstack_harvest.py` and `scripts/tests/test_skill_references.py`) against `harvest-pstack-skills-a4ef1c/spec.md` (`218c002`) and `harvest-pstack-skills-a4ef1c/plan.md` (`7e4dda5`).
+Review the complete feature implementation on branch `gemini/harvest-pstack-skills-a4ef1c` against `origin/main` (`harvest-pstack-skills-a4ef1c/spec.md` and `harvest-pstack-skills-a4ef1c/plan.md`).
 
 Focus on:
-1. Spec parity & assertion rigor: verify all 7 tests in `scripts/tests/test_pstack_harvest.py` fail cleanly on missing implementation without trivial-pass loopholes, and `test_no_skill_disables_model_invocation` in `scripts/tests/test_skill_references.py` stays GREEN as a permanent structural guard.
-2. Zero duplication & slice decoupling (`P4`, `P5`, `P7`, `P8`, `N2`, `N3`).
+1. Zero-dormancy wiring & trigger precision: `benchmark-checklist` 3-layer wiring + changeset scoping, auditable `State transitions:` gate in `spec-driven-development` + `adversarial-review`, `Downstream Consumer Trace` beyond `grep`, and inline `--unslop` wiring + `caveman` precedence.
+2. Repo invariants & parser safety: `GEMINI.md -> AGENTS.md` symlink intact, no `disable-model-invocation: true`, no `file://` links in `skills/`, `prose-editor` `validator.py` Guard 1/2/3 compliance, and full `pytest` / `ruff check .` verification.
 
 ### Reviewer Identity & Session Continuity Directive
 - If you already established your `REVIEWER_ID` in an earlier turn of this session, REUSE it.

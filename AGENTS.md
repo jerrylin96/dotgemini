@@ -27,6 +27,7 @@ Before writing any new code, climb the ladder and stop at the first rung that ho
 * **Bug Fix = Root Cause:** Grep all callers of the function you're about to modify. Fix the root cause in the shared component instead of patching symptoms at the caller level.
 * **Shortest working diff wins:** Keep diffs minimal and precise.
 * **Shortcut marking:** When taking a deliberate shortcut (e.g., locking a resource globally or using a simple heuristic), add a `# ponytail:` comment describing the shortcut's ceiling and upgrade path.
+* **Encode lessons in structure:** When the same correction recurs 2+ times, encode the constraint in a linter, type, runtime assertion, or test instead of adding more prompt text.
 
 ---
 
@@ -89,7 +90,7 @@ For any code modification, feature addition, refactor, or skill creation:
     - **Server-Truth Cleanup**: Prior to human merge, all remote review branches are completely purged via server enumeration (`git ls-remote`).
 
 ### Core Operating Behaviors
-* **Empirical Grounding (Zero Hallucinated Claims):** Prohibit declaring success, test passes, function existence, or schema validity without empirical execution output or line-numbered `view_file` citations present in the context window.
+* **Empirical Grounding (Zero Hallucinated Claims):** Prohibit declaring success, test passes, function existence, or schema validity without empirical execution output or line-numbered `view_file` citations present in the context window. Never report a speedup, latency/throughput claim, or benchmark comparison for a changeset without invoking `benchmark-checklist` (does not apply to general prose merely mentioning perf terms).
   - **Verbatim Quotation & Truncation Circuit Breaker**: Every fenced `diff` or code block cited as empirical truth MUST be backed byte-for-byte by untruncated tool output or line-numbered `view_file` citations in context.
   - **Truncation Circuit Breaker**: If any tool output indicates truncation (including `<truncated N lines>`, `<truncated N bytes>`, `... output truncated ...`, `observation too long`, `stdout_truncated: true`, or unviewed `view_file` pagination where lines remain in the artifact), the agent is strictly forbidden from reciting, paraphrasing, or guessing any content from the truncated or unviewed region. It MUST either call `view_file` on the source artifact (reading through EOF) or write targeted output to a scratch file and view it.
 * **Reasoning State Retention (Chain-of-Thought Persistence):** Preserve mental state and key architectural/diagnostic decisions across multi-step turns and subagent invocations by maintaining a lightweight scratchpad summary in the conversation scratch directory (`<appDataDir>/brain/<conversation-id>/scratch/scratchpad.md`). Prevent state degradation by updating this summary when completing lifecycle phases or switching tasks rather than re-deriving context from scratch. *The scratchpad is a memory aid and MUST NOT be cited as empirical evidence of test passes, function existence, or schema validity — those still require fresh execution output or line-numbered `view_file` citations.*
@@ -131,6 +132,7 @@ The global settings contain dedicated skills under `~/.gemini/skills/` which can
 * [git-signoff/SKILL.md](skills/git-signoff/SKILL.md) — Socratic reverse-interview verifying human comprehension and risk ownership before merge; maps to `/git-signoff`
 * [codebase-audit/SKILL.md](skills/codebase-audit/SKILL.md) — Multi-agent adversarial codebase review across functional clusters with cross-boundary contract validation and blast-radius scorecards; maps to `/codebase-audit`
 * [codebase-map/SKILL.md](skills/codebase-map/SKILL.md) — Multi-agent architectural discovery, polyglot entrypoint mapping, and intent-guided onboarding across functional clusters; maps to `/codebase-map`
+* [benchmark-checklist/SKILL.md](skills/benchmark-checklist/SKILL.md) — Mandatory verification checklist before running benchmarks or reporting changeset speedups, latency/throughput claims, or perf regressions
 
 ---
 

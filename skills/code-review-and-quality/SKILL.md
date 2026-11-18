@@ -50,6 +50,7 @@ Every change gets reviewed before merge — no exceptions. Review covers five ax
 - Unnecessary computation/fetching?
 - Memory leaks, blocking main thread?
 - Efficient data structures?
+- **Benchmark Verification Gate**: For any claimed optimization, speedup, or benchmark delta in the changeset, verify via `@skill:benchmark-checklist` (limiter named, tuned production settings, ≥5 alternating runs or explicit single-run ballpark disclosure); reject uncalibrated perf claims.
 
 ### Domain Checklist: LaTeX & TeX Documents (When `.tex`, `.cls`, `.sty`, `.bib` files change)
 - **Root Document Resolution**: Identify root document(s) containing `\documentclass` that include modified files directly or via `\input`/`\include`. If unresolvable, compile all root `.tex` files in the repository.
