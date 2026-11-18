@@ -4,8 +4,9 @@
 
 | Reviewer ID | Mode / Branch | Last Audited SHA | Signal Tier | Directive | Notes |
 |---|---|---|---|---|---|
-| `arena-6cf52b3e` | Mode B (`arena/6cf52b3e-dotgemini` / `reviews/arena-6cf52b3e.md`) | `218c0020b595ec07561f629d78a661d16d6f3226` | `HIGH SIGNAL` | **Retain List (`CONTINUE`)** | Round 2 `VERDICT: APPROVE`; all Round 1 items (`B1`–`B4`, `Y1`–`Y6`, `C1`–`C2`, `I5`) marked `[x] Resolved in 218c002`. Plan/test notes (`S1`, `N1`–`N3`) accepted for `plan.md`. |
+| `arena-6cf52b3e` | Mode B (`arena/6cf52b3e-dotgemini` / `reviews/arena-6cf52b3e.md`) | `e2a5660960e28f6176cea2e5031024e778437dbc` | `HIGH SIGNAL` | **Retain List (`CONTINUE`)** | Caught `P1` vocab mismatches (`benchmark` keyword missing in frontmatter description; `unslop` token parity) + `P2`–`P6` plan polish (`filtered-green`, text anchors, YAML quote stripping, `${WORKTREE_PATH}`). |
 
 ## Triage Summary
-- **Round 1 (`376a978`):** Accepted `B1`–`B4`, `Y1`–`Y6`, `C1`–`C2`, `I5` -> resolved in `218c002`.
-- **Round 2 (`218c002`):** `APPROVE`. Accepted `S1` (per-slice test appending), `N1` (relative link `[prose-editor](../prose-editor/SKILL.md)` + inline `--unslop` wording at Step 7c), `N2` (label `disable-model-invocation` check as permanent structural guard, not RED), `N3` (assert stable anchors instead of placeholder template).
+- **Round 1 (`376a978`, Spec Gate):** Accepted `B1`–`B4`, `Y1`–`Y6`, `C1`–`C2`, `I5` -> resolved in `218c002`.
+- **Round 2 (`218c002`, Spec Gate):** `APPROVE`. Accepted `S1`, `N1`–`N3` into `plan.md`.
+- **Round 3 (`e2a5660`, Plan Gate):** `NEEDS_REVISION` (`P1` blocking + `P2`–`P6`). Accepted all (`P1`–`P6`) in updated `plan.md` (note: `B4` erratum acknowledged; Guard 1 at `validator.py:301-307` documented with `#<ID>`-in-fence note).
