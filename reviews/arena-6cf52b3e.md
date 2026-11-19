@@ -2,19 +2,105 @@
 
 ```text
 REVIEWER_ID: arena-6cf52b3e
-AUDITED_SHA: 7e4dda560715a982f80ba397bf3bbbc17ed02c62
+AUDITED_SHA: 10e094563d8fff1ca3c483d2db61dbd614f37da7
 BASE: origin/main @ 1451ee9
-REVIEW_ROUND: 4 (plan gate — revision re-audit of `plan.md` vs spec `218c002`)
+REVIEW_ROUND: 5 (GREEN code gate — Phase 3)
 REVIEW_FILE: reviews/arena-6cf52b3e.md
 FINGERPRINT: pstack-spec-gate-6cf5
-SESSION: persistent — same REVIEWER_ID across Rounds 1–4
+SESSION: persistent — same REVIEWER_ID across Rounds 1–5
 ```
 
-**VERDICT: APPROVE** — plan gate.
+**VERDICT: APPROVE**
 
-`P1`–`P6` are closed with exactly the contract I asked for, verified by token-presence and parser probes rather than by reading intent. Nothing blocks Phase 2. Two notes below are build-time checks, not review rounds.
+Implementation matches the approved spec (`218c002`) and plan (`7e4dda5`). I re-ran both commits rather than trusting the report: the pushed RED suite genuinely fails (7 failed, 0 errors) and the GREEN tree is 438 passed / ruff clean. Scope is honest — documentation and tests only, no runtime code. Five notes below are polish, not gates.
 
 ---
+
+## A. Verification matrix (executed in throwaway worktrees)
+
+| Check | Result |
+|---|---|
+| RED commit `538a477` — `pytest scripts/tests/test_pstack_harvest.py -q` | **7 failed in 0.07s, 0 errors** — clean RED, no collection failures |
+| RED commit — full suite | **7 failed, 431 passed, 3 skipped** (431 = 430 baseline + Task 0's permanent guard, green by design) |
+| RED commit contents | only `test_pstack_harvest.py` (+201), `test_skill_references.py` (+21), ephemeral files — no implementation smuggled in |
+| GREEN commit `10e0945` — full suite | **438 passed, 3 skipped** |
+| GREEN — `ruff check .` | **All checks passed** |
+| Feature scope vs `origin/main` | 479 insertions; the only non-markdown files are the two test files |
+| `GEMINI.md` | `git ls-tree` mode **120000** → `AGENTS.md`; symlink intact |
+| `file://` links in `skills/` | none |
+| `disable-model-invocation` | absent from all 43 skills; guard scans frontmatter only (verified in source) |
+| Guard 1/2/3 dry-run on delivered `prose-editor/SKILL.md` | `parse_suggestion_cards()` → **0 cards, no exception**; no numeric `### Suggestion #<digits>` anywhere; fences closed |
+| Section-boundary probe on all 8 `_section_between` calls in the new test file | all resolve to real end markers (one loose boundary, W3) |
+
+## B. Focus 1 — zero-dormancy wiring & trigger precision
+
+Every layer is present at a reachable anchor, and each gate is conditional in wording rather than blanket:
+
+| Layer | Location at `10e0945` | Assessment |
+|---|---|---|
+| Imperative skill trigger | `skills/benchmark-checklist/SKILL.md:3` | `CRITICAL RULE:` + 6 trigger keywords + changeset scope + explicit non-trigger clause. Fires on *running* a benchmark, not only on reporting one. |
+| Always-on tripwire | `AGENTS.md:93` (inside `Empirical Grounding`) | "Never report a speedup, latency/throughput claim, or benchmark comparison for a changeset without invoking `benchmark-checklist`" — imperative, scoped, correctly nested under the anti-hallucination rule it enforces. |
+| Discovery registration | `AGENTS.md:135` | Registered in §4 with description; makes the skill loadable. |
+| Code-review gate | `skills/code-review-and-quality/SKILL.md:53` | `@skill:benchmark-checklist` + limiter / tuned settings / ≥5 runs. |
+| Review gate | `skills/adversarial-review/SKILL.md:363` | `Performance Claims Check (Conditional on perf/benchmark claims)`, `inconclusive` verdict vocabulary matches the skill. |
+| State gate (author) | `skills/spec-driven-development/SKILL.md:27-29` | Declaration + 7 concrete triggers + tie-break ("ambiguity resolves toward inclusion"). |
+| State gate (auditor) | `skills/adversarial-review/SKILL.md:47` | Audits presence, plausibility, non-empty `N/A` reason, and illegal/timeout/error coverage. Author and auditor halves both exist — the gap that made Round 1 `B1` blocking is genuinely closed. |
+| Downstream Consumer Trace | `adversarial-review:362` + `skills/ponytail/SKILL.md:30` | Both carry "beyond `grep`", indirect consumers, execution proof / `unproven`; adversarial side is marked "Unconditional for code diffs". |
+| Unslop wiring | `prose-editor:13,24,40-43`; `make-feature:257`; `adversarial-review:364` | Flag + tier + precedence in the skill; inline rule-application (not skill invocation) at both external-prose surfaces; `@skill:prose-editor` correctly absent. |
+
+Dormancy spot-checks that could have failed and did not: the state gate is worded for ambiguity resolution rather than "if you feel like it"; the perf gate says `Conditional on perf/benchmark claims for the changeset` (so unrelated docs do not trip it); the tripwire names the skill and §4 provides the load path.
+
+## C. Focus 2 — invariants, parser safety, quality
+
+* `benchmark-checklist/SKILL.md` is 33 lines, not the planned 55–65 (W5) — but nothing is missing: changeset scope, ballpark rule, supplied-evidence path, pre-run hygiene (claim sentence, script audit, `uptime`/core count), all 7 questions with required checks, and a verdict rubric with `inconclusive`. Q3's Amdahl arithmetic (10% removed → ~11% ceiling) is correct. Compression is the right call.
+* `prose-editor` edits are additive: one trigger line, one precedence principle, one tier block. All required headings and `Category`/`Impact` enums untouched, so `test_enum_source_of_truth_sync` and `test_parse_real_skill_md_without_crash` stay green (verified by execution, not inference).
+* New tests are slice-decoupled exactly as claimed: `-k "benchmark"` selects the 3 Slice-1 tests, `-k "statechart or downstream"` the 2 Slice-2 tests, no leakage; `test_agents_md_encode_lessons_rule` is independent.
+* The permanent guard is real: it fails closed on any `disable-model-invocation: true` in frontmatter and does not scan bodies (so a skill may quote the string in prose without false positives).
+
+## D. Findings (non-blocking)
+
+### W1 — ballpark policy disagrees across the three surfaces
+
+`benchmark-checklist/SKILL.md:10` allows a single-run ballpark **only** "if user explicitly asks for a ballpark". Both review gates accept it unconditionally: `adversarial-review:363` "(or explicit single-run ballpark …)" and `code-review-and-quality:53` "(… or explicit single-run ballpark disclosure)". Net effect: a reviewer can approve a claim the skill forbids. One-word fix — say "user-requested single-run ballpark" in both gates, or drop the user-request condition from the skill. Pick one; do not leave the mismatch.
+
+### W2 — tripwire names the skill but does not link it
+
+`AGENTS.md:93` says ``invoking `benchmark-checklist` ``; every other skill mention in §3 resolves through a link or is registered in §4 (which it is, `:135`). Adding `[benchmark-checklist](skills/benchmark-checklist/SKILL.md)` at `:93` costs nothing and removes one hop for the agent.
+
+### W3 — one test boundary is looser than it looks
+
+`test_unslop_tier_precedence_and_wiring` slices `make-feature` from `Step 7c` to `5. **Phase 4` — which spans Step 7c *and* Step 8. The assertion would still pass if the prose-editor link drifted into Step 8. Anchor the end at `Step 8`. (All other seven boundaries resolve tightly; I probed each.) Same family, lower value: `"n/a" in draft_lower` in `test_statechart_gate_is_auditable` can match unrelated `/n/a/` text.
+
+### W4 — the skill bans a mark it uses
+
+`benchmark-checklist/SKILL.md:10` and `:22-28` use em dashes while `prose-editor --unslop` (the same feature) tells writers to avoid them in external prose. Harmless inside an internal skill, but a self-contradicting exemplar invites exactly the "rules are advisory" reading this feature fights. Reword to commas when convenient.
+
+### W5 — line-count deviation (recorded, not contested)
+
+Plan expected 55–65 lines for the skill; 33 delivered. Content-complete and denser, so this is Ponytail working as intended. Recorded only so the plan/implementation delta is explicit in the audit trail.
+
+### W6 — README not updated (optional)
+
+`README.md` §3 lists a curated subset (21 of 43 skills); `benchmark-checklist` is not added. Optional by design — the test-visible registration is `AGENTS.md:135`, which is present.
+
+## E. Convergence statement
+
+Spec `APPROVE` @ `218c002` · Plan `APPROVE` @ `7e4dda5` · Code `APPROVE` @ `10e0945`. No blocking findings; `W1` is the only one worth a commit, and it does not require re-review — if the builder lands it, I will confirm against `AUDITED_SHA` in one round.
+
+Pre-merge checklist for the builder: purge `${FEATURE_SLUG}/` at Step 7b (spec, plan, review prompt, scorecard are still in-tree), re-run `run_in_env.py … pytest && ruff check .` inside the real environment runner (I used a host venv; `~/.gemini/scripts/` is absent in this sandbox), and hand off to `/git-signoff` — the merge itself stays human-owned.
+
+```text
+VERDICT: APPROVE
+AUDITED_SHA: 10e094563d8fff1ca3c483d2db61dbd614f37da7
+ROUND_4_ITEMS: P7 (indirect token -> ponytail-only assertion, accepted), P8 (canonical 4 tokens only, accepted)
+NOTES: W1 ballpark policy mismatch (one-word fix), W2 tripwire link, W3 loose Step 7c boundary, W4 style self-contradiction, W5 line-count delta, W6 README optional
+```
+
+---
+
+---
+
+# Archive — Round 4 (audited `7e4dda5`, plan gate, APPROVE)
 
 ## A. Round 4 disposition
 
@@ -62,7 +148,6 @@ NOTES: P7 (one-word `indirect` alignment), P8 (plan vocabulary wider than spec; 
 ```
 
 ---
-
 ---
 
 # Archive — Round 3 (audited `e2a5660`, plan gate, NEEDS_REVISION)
