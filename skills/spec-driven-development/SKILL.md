@@ -24,7 +24,9 @@ Define what to build. Identify ambiguities, missing requirements, assumptions.
 
 ### 2. Draft the Spec
 
-Cover: **Objectives**, **Scope**, **Project Structure**, **Code Style**, **Testing Strategy**, **Boundaries** (non-goals, constraints).
+Cover: **Objectives**, **Scope**, **Project Structure**, **Code Style**, **Testing Strategy**, **Boundaries** (non-goals, constraints), and an explicit **`State transitions:`** declaration (`Mermaid stateDiagram-v2`, state-transition table, or `N/A — <non-empty reason>`).
+- **Mandatory State-Transition Triggers:** Include a diagram or transition table whenever the change touches background tasks, retry/backoff loops, connection pools, caches, job/stream lifecycles, cancellation/teardown ordering, or any `await`/thread ordering that outlives a single call (covering illegal, timeout, and error transitions).
+- **Tie-Break Rule:** Ambiguity resolves toward inclusion—if a reviewer could ask "what happens if it times out or cancels mid-way?", a state diagram or transition table is required.
 
 > [!IMPORTANT]
 > When executing under [make-feature](../make-feature/SKILL.md) Phase 1a, the spec is written directly to `${FEATURE_SLUG}/spec.md` (e.g. `<feature-name>-<hash>/spec.md`) in the isolated worktree and committed/pushed to `origin`. This in-tree location strictly supersedes `/artifact` and Obsidian vault storage for feature development. For standalone spec usage outside git feature branches, store as an artifact with `RequestFeedback: true`.

@@ -254,7 +254,7 @@ Use this skill for **all codebase changes** — features, bug fixes, config edit
      - This guarantees that upon merge or rebase to `<base_branch>`, zero ephemeral files pollute the primary tree. Note: After cleanup, the spec and plan exist only in the feature-branch commit history. In Step 8 / Phase 4, the agent presents the commit SHAs and links of the spec and plan commits to the human engineer so they can be consulted during `/explain-diff` and `/git-signoff` after in-tree copies are removed.
    - **Step 7c (Ephemeral Post-Review Audit Report Artifact & Scratchpad Update)**:
      - Update `<appDataDir>/brain/<conversation-id>/scratch/scratchpad.md` with post-review findings and subagent verdict.
-     - Generate formal `review_report_<feature>.md` artifact strictly within the ephemeral conversation directory (`<appDataDir>/brain/<conversation-id>/`).
+     - Generate formal `review_report_<feature>.md` artifact strictly within the ephemeral conversation directory (`<appDataDir>/brain/<conversation-id>/`). When drafting external-facing `review_report_<feature>.md` summaries or GitHub PR descriptions/comments, apply `--unslop` rules inline from [prose-editor](../prose-editor/SKILL.md) (keeping chat responses terse per `caveman`).
      - **Prohibition on Obsidian Dumping**: Do NOT write `review_report_<feature>.md` to Obsidian vaults or the git workspace tree. Its content is ephemeral audit evidence for chat review and GitHub PR description/comments only.
      - Report details:
        - *What was checked* (empirical test runner logs, linter results, static diff analysis)

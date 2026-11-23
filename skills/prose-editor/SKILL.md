@@ -10,6 +10,7 @@ The `prose-editor` skill provides structured, granular editing feedback on prose
 ## Command Triggers
 * `/edit-prose [file_path]` — Run structured review on the specified file.
 * `/edit-prose --diff` — Run structured review on modified prose files in the active git changeset.
+* `/edit-prose --unslop [file_path]` — Strip AI writing tells from external docs, papers, or PR prose (composable with `--line-edit`).
 * `/prose [text_snippet]` — Review provided text snippet directly.
 
 ---
@@ -20,6 +21,7 @@ The `prose-editor` skill provides structured, granular editing feedback on prose
 2. **Strict Verbatim Fidelity**: The `Original` field must match the source text byte-for-byte. Paraphrasing or hallucinating original quotes is strictly forbidden.
 3. **Advisory-Only Workflow**: The editor operates in pure advisory mode. Source files are never modified automatically during a review pass.
 4. **Token Efficiency (Caveman & Ponytail)**: Rationales are concise, direct, and free of conversational fluff. Avoid unrequested structural rewrites when simple line edits suffice.
+5. **Surface Precedence (`--unslop` vs. `caveman`)**: `--unslop` governs the edited external document or PR text; `caveman` governs the agent's chat responses and suggestion rationales; neither applies to the other's surface.
 
 ---
 
@@ -35,6 +37,10 @@ Select an editing tier based on user goals or flags:
   - Preserves core meaning, paragraph structure, and authorial voice.
 * **Developmental / Structural (`--developmental`)**:
   - Macro-level structure: argument flow, paragraph order, section transitions, redundant content identification, missing foundational context.
+* **Unslop (`--unslop`, standalone or composable with `--line-edit`)**:
+  - **Content & Language**: Cut superficial `-ing` phrases ("highlighting...", "ensuring..."), vague attributions, **AI vocabulary** (*delve, crucial, interplay, landscape, pivotal, showcase, tapestry, testament, underscore, vibrant, foster, garner*), fancy "is" (*serves as, stands as, boasts*), "Not just X, but Y", forced rule of three, synonym cycling, and false ranges ("from X to Y").
+  - **Style & Artifacts**: Avoid **Em dash** punctuation (use periods or commas), mid-sentence colon overuse, boldface overuse, inline-header list tells (`**Performance:** Performance improved...`), title-case headings, decorative emojis, curly quotes, chatbot/sycophantic phrases, filler phrases ("In order to" -> "To"), excessive hedging, and generic conclusions.
+  - **Jargon & Plain Speech**: Replace **Abstract metaphor nouns** (*substrate, wedge, vector, locus, nexus, primitive, harness-as-metaphor, surface, bedrock, scaffolding, paradigm, flywheel*) with concrete terms; state mechanism or number instead of how it feels; prefer active voice, strong verbs over adverbs, plain words (`use` over `utilize`/`leverage`), literal phrasing over mannered prose, and avoid **Over-compression** (write complete sentences with articles and verbs in external docs/PRs).
 
 ---
 
