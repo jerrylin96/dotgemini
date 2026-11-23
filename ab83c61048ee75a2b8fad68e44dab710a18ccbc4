@@ -1,0 +1,17 @@
+[SIGNOFF ab83c61]: human comprehension and risk attestation
+
+Signoff-Spec-Version: 1.0
+Signoff-Status: VERIFIED_BY_HUMAN
+Signoff-Timestamp: 2026-09-21T16:51:05Z
+Signoff-Base-SHA: 4da5fd0f95ef3a6c8650dd2d22b1bcd93288b265
+Signoff-Reviewed-Commit-SHA: ab83c61048ee75a2b8fad68e44dab710a18ccbc4
+Signoff-Reviewed-Tree-SHA: 777eb8e3571acfbedfe1e0d05e707ce94a8c3679
+Signoff-Harness-ID: antigravity-cli
+Signoff-Conversation-ID: ba54ce89-b29f-4c24-a1c0-096dc23e87a0
+Signoff-Transcript-Digest: sha256:2b7d083c8d61c7502975dd4f70341a20a50754bc9ca64f55ec28e3c9a829c60f
+Signoff-Transcript-Bytes: 132788
+Signoff-Tradeoff: Path-limited topic diff extraction requires passing both source and target paths to the pathspec to enable Git rename and copy heuristics
+Signoff-Tradeoff: Bulk diffs are extracted to scratch files and paged through EOF via view_file in chunks of 800 lines rather than printed directly to stdout
+Signoff-Risk: Extraction command failures halt the walkthrough loudly and fail closed without falling back to partial hunks or empty diff assumptions
+Signoff-Verified-By: jerrylin247365@gmail.com
+Signoff-Agent: harness=antigravity-cli/N/A model=gemini-3.8-flash reasoning=N/A interview=standard/software-general

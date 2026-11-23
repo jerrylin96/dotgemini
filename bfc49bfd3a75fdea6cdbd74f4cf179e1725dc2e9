@@ -1,0 +1,20 @@
+[SIGNOFF d569382]: human comprehension and risk attestation
+
+Upgrade vendored git-signoff skill to v0.5.0, modernize CI workflow to verify-v1.7, and port behavioral subtree and attestation test suites.
+
+Signoff-Spec-Version: 1.0
+Signoff-Status: VERIFIED_BY_HUMAN
+Signoff-Timestamp: 2026-09-22T00:31:40Z
+Signoff-Base-SHA: c60f914e8dcf9a4e06802cd46267003b1c99432e
+Signoff-Reviewed-Commit-SHA: d569382a1fec6193eca09af9d5d4c20bce5e6efd
+Signoff-Reviewed-Tree-SHA: bfc49bfd3a75fdea6cdbd74f4cf179e1725dc2e9
+Signoff-Harness-ID: antigravity-cli
+Signoff-Conversation-ID: 6efe67cf-b156-4248-80fa-cf01960b6918
+Signoff-Transcript-Digest: sha256:381c14cbae322f143dab062c1a25b8b1127c05e9af44e6ae656a73b936c4cf92
+Signoff-Transcript-Bytes: 1073946
+Signoff-Tradeoff: drop legacy /signoff alias and signoff_mcp server
+Signoff-Tradeoff: require Python 3.10+ interpreter for attest.py
+Signoff-Tradeoff: require pull-requests: read in CI workflow
+Signoff-Risk: unmerged worktree branches require explicit plain-text interview invocation before PR merge
+Signoff-Verified-By: jerrylin247365@gmail.com
+Signoff-Agent: harness=antigravity-cli/N/A model=unavailable reasoning=N/A interview=skeptical/software-general
