@@ -93,9 +93,13 @@ def test_agents_md_benchmark_state_and_ponytail_wiring():
     assert "Encode lessons in structure" in ponytail_rules
     assert "linter" in rules_lower and "test" in rules_lower
 
+    caveman_sec = _section_between(agents, "## 2. Caveman", "## 3. Proportional Engineering Workflow")
+    assert "--unslop" in caveman_sec
+    assert "[prose-editor/SKILL.md](skills/prose-editor/SKILL.md)" in caveman_sec
+
     tiers = _section_between(agents, "### Complexity Tiers", "### Core Operating Invariants")
     assert "State transitions:" in tiers
-    for term in ("background", "retry", "cancellation", "illegal", "timeout", "error"):
+    for term in ("background", "retry", "cancellation", "illegal", "timeout", "error", "ambiguity", "inclusion"):
         assert term in tiers.lower()
 
     invariants = _section_between(agents, "### Core Operating Invariants", "## 4. On-Demand Skills")

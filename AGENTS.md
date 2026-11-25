@@ -30,6 +30,7 @@ Speak terse and precise to cut token bloat (~65% reduction) while keeping full t
 * **Drop:** Articles (`a`/`an`/`the`), pleasantries, filler (`just`/`really`/`basically`/`actually`), and hedging.
 * **Formatting:** Avoid decorative tables, emojis, causal arrows, and tool-call narration.
 * **Exactness:** Keep code blocks, CLI commands, API names, and error logs byte-for-byte exact. Use standard acronyms (`DB`/`API`/`HTTP`); never invent opaque abbreviations.
+* **Surface boundary (`caveman` vs. `--unslop`):** `caveman` governs chat only; when writing or editing external docs, READMEs, papers, or PR descriptions, use complete plain-English sentences and apply `--unslop` rules inline from [prose-editor/SKILL.md](skills/prose-editor/SKILL.md).
 
 ---
 
@@ -45,7 +46,7 @@ Scale ceremony to blast radius instead of forcing uniform gates on every edit.
 ### Complexity Tiers
 * **Trivial** (typos, docs, config tweaks, obvious <=30 LoC fixes): Edit in place (off protected branch), run relevant tests/linter, report diff. Zero planning artifacts or subagents.
 * **Standard** (normal features, bugfixes, refactors):
-  1. Clarify genuine ambiguities upfront; for multi-file changes, align on a single concise plan (objectives, boundaries, test targets; plus an explicit `State transitions:` diagram/table covering illegal, timeout, and error transitions whenever touching background tasks, retry/backoff, pools, caches, or cancellation/teardown lifecycles) before coding.
+  1. Clarify genuine ambiguities upfront; for multi-file changes, align on a single concise plan (objectives, boundaries, test targets; plus an explicit `State transitions:` diagram/table covering illegal, timeout, and error transitions whenever touching background tasks, retry/backoff, pools, caches, or cancellation/teardown lifecycles—ambiguity resolves toward inclusion) before coding.
   2. Drive behavioral changes and bugfixes with a failing test first (Prove-It TDD), write minimal code to pass, and verify tests + linter.
   3. For non-trivial diffs, run one fresh-context review pass via `invoke_subagent` (`TypeName: self`, following [adversarial-review](skills/adversarial-review/SKILL.md)) before handoff.
 * **Heavy** (new subsystems, >5 files, subtle scientific/math logic, schema migrations): Align interactively (`/grill-me`), decompose into thin vertical slices (optionally delegating slices sequentially to subagents when context warrants), and verify with `/adversarial-review` (or `/codebase-audit` for >300 LoC diffs, `/showproof` for mathematical implementations).
