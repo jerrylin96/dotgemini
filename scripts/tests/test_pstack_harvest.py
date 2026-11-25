@@ -1,4 +1,4 @@
-"""Novel wiring tests for harvested pstack practices (zero-dormancy gates)."""
+"""Wiring tests for harvested pstack practices across streamlined AGENTS.md and skills."""
 
 from pathlib import Path
 import re
@@ -55,15 +55,13 @@ def _section_between(text: str, start_marker: str, end_marker: str | None = None
 
 
 def test_benchmark_checklist_frontmatter_and_rules():
-    """Slice 1: benchmark-checklist skill has imperative scoped trigger and 7 questions."""
+    """benchmark-checklist skill has imperative scoped trigger and 7 questions."""
     content = _read("skills/benchmark-checklist/SKILL.md")
     desc = _extract_frontmatter_field(content, "description")
     desc_lower = desc.lower()
 
-    assert desc.startswith("CRITICAL RULE:"), (
-        "benchmark-checklist description must begin with 'CRITICAL RULE:'"
-    )
-    assert "changeset" in desc_lower, "Description must scope trigger to changeset claims"
+    assert desc.startswith("CRITICAL RULE:")
+    assert "changeset" in desc_lower
     for kw in ("benchmark", "latency", "throughput", "speedup", "profiling", "regression"):
         assert kw in desc_lower, f"Description missing trigger keyword: {kw}"
 
@@ -79,83 +77,55 @@ def test_benchmark_checklist_frontmatter_and_rules():
     ):
         assert question in body_lower, f"Missing checklist question: {question}"
 
-    assert "inconclusive" in body_lower, "Must specify inconclusive verdict rule"
-    assert "methodology" in body_lower and "re-benchmark" in body_lower, (
-        "Must cover user-supplied methodology path without redundant re-benchmarking"
-    )
+    assert "inconclusive" in body_lower
+    assert "methodology" in body_lower and "re-benchmark" in body_lower
 
 
-def test_agents_md_benchmark_wiring():
-    """Slice 1: AGENTS.md enforces benchmark-checklist tripwire and registers skill."""
+def test_agents_md_benchmark_state_and_ponytail_wiring():
+    """AGENTS.md enforces benchmark-checklist tripwire, state transitions, downstream trace, and encode lessons."""
     agents = _read("AGENTS.md")
-    behaviors = _section_between(agents, "### Core Operating Behaviors", "## 4. Discoverable Global Skills")
-    assert "benchmark-checklist" in behaviors, (
-        "Empirical Grounding tripwire must reference benchmark-checklist"
-    )
-    assert "changeset" in behaviors.lower(), (
-        "AGENTS.md tripwire must scope benchmark-checklist to changeset claims"
-    )
 
-    skills_section = _section_between(agents, "## 4. Discoverable Global Skills", "## 5.")
+    ponytail_rules = _section_between(agents, "### Key Rules", "## 2. Caveman")
+    rules_lower = ponytail_rules.lower()
+    assert "Downstream Consumer Trace" in ponytail_rules
+    assert "indirect" in rules_lower and "grep" in rules_lower
+    assert "execution" in rules_lower
+    assert "Encode lessons in structure" in ponytail_rules
+    assert "linter" in rules_lower and "test" in rules_lower
+
+    tiers = _section_between(agents, "### Complexity Tiers", "### Core Operating Invariants")
+    assert "State transitions:" in tiers
+    for term in ("background", "retry", "cancellation", "illegal", "timeout", "error"):
+        assert term in tiers.lower()
+
+    invariants = _section_between(agents, "### Core Operating Invariants", "## 4. On-Demand Skills")
+    assert "benchmark-checklist" in invariants
+    assert "changeset" in invariants.lower()
+
+    skills_section = _section_between(agents, "## 4. On-Demand Skills", "## 5.")
     assert "[benchmark-checklist/SKILL.md](skills/benchmark-checklist/SKILL.md)" in skills_section
 
 
-def test_benchmark_review_gates():
-    """Slice 1: review skills cross-reference @skill:benchmark-checklist."""
+def test_adversarial_review_pstack_gates():
+    """adversarial-review includes Downstream Consumer Trace, @skill:benchmark-checklist, and --unslop."""
     adv = _read("skills/adversarial-review/SKILL.md")
-    adv_perf = _section_between(adv, "5. **Perform Adversarial Review**", "6. **Output Report")
-    assert "@skill:benchmark-checklist" in adv_perf
-    adv_lower = adv_perf.lower()
-    assert "limiter" in adv_lower and "tuned" in adv_lower and "ballpark" in adv_lower
+    checklist = _section_between(adv, "## Step 4: Adversarial Audit Checklist", "## Step 5:")
+    lower = checklist.lower()
 
-    crq = _read("skills/code-review-and-quality/SKILL.md")
-    crq_perf = _section_between(crq, "### 5. Performance", "### Domain Checklist:")
-    assert "@skill:benchmark-checklist" in crq_perf
+    assert "Downstream Consumer Trace" in checklist
+    assert "beyond" in lower and "grep" in lower
+    assert "unproven" in lower and "execution" in lower
 
+    assert "@skill:benchmark-checklist" in checklist
+    assert "limiter" in lower and "tuned" in lower and "ballpark" in lower
 
-def test_statechart_gate_is_auditable():
-    """Slice 2: spec-driven-development and adversarial-review enforce State transitions: gate."""
-    sdd = _read("skills/spec-driven-development/SKILL.md")
-    draft_section = _section_between(sdd, "### 2. Draft the Spec", "### 2b.")
-    draft_lower = draft_section.lower()
-
-    assert "State transitions:" in draft_section
-    for trigger_term in ("background", "retry", "cancellation", "teardown"):
-        assert trigger_term in draft_lower, f"Missing statechart trigger term: {trigger_term}"
-    assert "ambiguity" in draft_lower and "inclusion" in draft_lower, (
-        "Must state ambiguity-resolves-to-inclusion tie-break"
-    )
-    assert "n/a" in draft_lower and "reason" in draft_lower, (
-        "Must require non-empty reason when declaring N/A"
-    )
-
-    adv = _read("skills/adversarial-review/SKILL.md")
-    spec_checklist = _section_between(adv, "2. Apply mode-specific checklist:", "3. Output verdict")
-    spec_lower = spec_checklist.lower()
-    assert "State transitions:" in spec_checklist
-    assert "n/a" in spec_lower
-    for edge in ("illegal", "timeout", "error"):
-        assert edge in spec_lower, f"spec-review checklist missing {edge} transition audit"
+    assert "[prose-editor](../prose-editor/SKILL.md)" in checklist
+    assert "--unslop" in checklist and "inline" in lower
+    assert "@skill:prose-editor" not in checklist
 
 
-def test_downstream_consumer_trace_gates():
-    """Slice 2: adversarial-review and ponytail require Downstream Consumer Trace beyond grep."""
-    adv = _read("skills/adversarial-review/SKILL.md")
-    adv_section = _section_between(adv, "5. **Perform Adversarial Review**", "6. **Output Report")
-    adv_lower = adv_section.lower()
-    assert "Downstream Consumer Trace" in adv_section
-    assert "beyond" in adv_lower and "grep" in adv_lower
-    assert "unproven" in adv_lower and "execution" in adv_lower
-
-    ponytail = _read("skills/ponytail/SKILL.md")
-    ponytail_lower = ponytail.lower()
-    assert "Downstream Consumer Trace" in ponytail
-    assert "indirect" in ponytail_lower and "grep" in ponytail_lower
-    assert "execution" in ponytail_lower or "running code" in ponytail_lower
-
-
-def test_unslop_tier_precedence_and_wiring():
-    """Slice 3: prose-editor has --unslop tier + caveman precedence; external prose gates wire it inline."""
+def test_unslop_tier_precedence_in_prose_editor():
+    """prose-editor has --unslop tier and surface precedence with caveman."""
     pe = _read("skills/prose-editor/SKILL.md")
     triggers = _section_between(pe, "## Command Triggers", "## Core Principles")
     principles = _section_between(pe, "## Core Principles", "## Editing Tiers")
@@ -165,37 +135,9 @@ def test_unslop_tier_precedence_and_wiring():
     assert "--unslop" in tiers
 
     principles_lower = principles.lower()
-    assert "unslop" in principles_lower and "caveman" in principles_lower, (
-        "Core Principles must state precedence between --unslop and caveman"
-    )
+    assert "unslop" in principles_lower and "caveman" in principles_lower
     assert "chat" in principles_lower and ("external" in principles_lower or "document" in principles_lower)
 
     tiers_lower = tiers.lower()
-    for canonical_token in (
-        "ai vocabulary",
-        "em dash",
-        "abstract metaphor nouns",
-        "over-compression",
-    ):
+    for canonical_token in ("ai vocabulary", "em dash", "abstract metaphor nouns", "over-compression"):
         assert canonical_token in tiers_lower, f"Missing canonical unslop token: {canonical_token}"
-
-    mf = _read("skills/make-feature/SKILL.md")
-    step_7c = _section_between(mf, "Step 7c", "5. **Phase 4")
-    assert "[prose-editor](../prose-editor/SKILL.md)" in step_7c
-    assert "--unslop" in step_7c and "inline" in step_7c.lower()
-    assert "@skill:prose-editor" not in step_7c
-
-    adv = _read("skills/adversarial-review/SKILL.md")
-    adv_section = _section_between(adv, "5. **Perform Adversarial Review**", "6. **Output Report")
-    assert "[prose-editor](../prose-editor/SKILL.md)" in adv_section
-    assert "--unslop" in adv_section and "inline" in adv_section.lower()
-    assert "@skill:prose-editor" not in adv_section
-
-
-def test_agents_md_encode_lessons_rule():
-    """Slice 3: AGENTS.md Key Rules under Ponytail includes Encode lessons in structure."""
-    agents = _read("AGENTS.md")
-    ponytail_rules = _section_between(agents, "### Key Rules", "## 2. Caveman")
-    rules_lower = ponytail_rules.lower()
-    assert "Encode lessons in structure" in ponytail_rules
-    assert "linter" in rules_lower and "test" in rules_lower

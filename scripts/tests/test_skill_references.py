@@ -3,114 +3,149 @@ import os
 import re
 import subprocess
 
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+SKILLS_DIR = os.path.join(ROOT_DIR, "skills")
+
+
+def _tracked_skill_markdown_files():
+    """Return tracked markdown files under skills/ so gitignored auto-bundles do not pollute tests."""
+    res = subprocess.run(
+        ["git", "ls-files", "skills/"],
+        cwd=ROOT_DIR,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if res.returncode == 0 and res.stdout.strip():
+        return [
+            os.path.join(ROOT_DIR, line.strip())
+            for line in res.stdout.splitlines()
+            if line.strip().endswith(".md") and os.path.exists(os.path.join(ROOT_DIR, line.strip()))
+        ]
+    return glob.glob(os.path.join(SKILLS_DIR, "**/*.md"), recursive=True)
+
+
+def _tracked_skill_names():
+    """Return top-level tracked skill directory names under skills/."""
+    res = subprocess.run(
+        ["git", "ls-files", "skills/"],
+        cwd=ROOT_DIR,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if res.returncode == 0 and res.stdout.strip():
+        names = set()
+        for line in res.stdout.splitlines():
+            parts = line.strip().split("/")
+            if len(parts) >= 3 and parts[0] == "skills" and not parts[1].startswith("."):
+                skill_dir = os.path.join(SKILLS_DIR, parts[1])
+                if os.path.isdir(skill_dir):
+                    names.add(parts[1])
+        return sorted(names)
+    return sorted(
+        name
+        for name in os.listdir(SKILLS_DIR)
+        if os.path.isdir(os.path.join(SKILLS_DIR, name)) and not name.startswith(".")
+    )
+
+
 def parse_frontmatter_name(skill_md_path):
     """Parse name from YAML frontmatter without external YAML parser dependency."""
     if not os.path.exists(skill_md_path):
         return None
     with open(skill_md_path, "r", encoding="utf-8") as f:
         content = f.read()
-    
-    # Requirement 1: must start with --- at byte zero
+
     if not content.startswith("---"):
         return None
-        
-    # Requirement 2: locate closing delimiter on its own line
+
     lines = content.splitlines()
     if not lines or lines[0] != "---":
         return None
-        
+
     closing_idx = -1
     for i in range(1, len(lines)):
         if lines[i] == "---":
             closing_idx = i
             break
-            
+
     if closing_idx == -1:
         return None
-        
-    # Requirement 3: parse only the frontmatter block
+
     frontmatter_lines = lines[1:closing_idx]
-    
-    # Locate name line
     name_value = None
     for line in frontmatter_lines:
         match = re.match(r"^name:\s*(.+)$", line)
         if match:
             name_value = match.group(1).strip()
             break
-            
+
     if not name_value:
         return None
-        
-    # Requirement 5: handle surrounding single or double quotes
-    if (name_value.startswith('"') and name_value.endswith('"')) or (name_value.startswith("'") and name_value.endswith("'")):
+
+    if (name_value.startswith('"') and name_value.endswith('"')) or (
+        name_value.startswith("'") and name_value.endswith("'")
+    ):
         name_value = name_value[1:-1].strip()
-        
-    # Requirement 4: require the entire name to match the expected skill-name grammar
+
     if not re.match(r"^[a-zA-Z0-9_-]+$", name_value):
         return None
-        
+
     return name_value
+
 
 def validate_skill_resolution(skills_dir, skill_name):
     """Validate skill folder structure and frontmatter name."""
     skill_path = os.path.join(skills_dir, skill_name)
     if not os.path.exists(skill_path) or not os.path.isdir(skill_path):
         return f"Directory skills/{skill_name} does not exist."
-    
+
     skill_md_path = os.path.join(skill_path, "SKILL.md")
     if not os.path.exists(skill_md_path):
         return f"File skills/{skill_name}/SKILL.md does not exist."
-        
+
     fm_name = parse_frontmatter_name(skill_md_path)
     if not fm_name:
         return f"skills/{skill_name}/SKILL.md is missing name in frontmatter."
-        
+
     if fm_name != skill_name:
         return f"skills/{skill_name}/SKILL.md has mismatched frontmatter name '{fm_name}' (expected '{skill_name}')."
-        
+
     return None
 
+
 def test_all_skill_references_resolve():
-    """Verify that every @skill:<name> reference in skills/ resolves to a valid, loadable skill."""
-    skills_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../skills"))
-    
-    # Regex to find @skill:<name> (handling markdown bold formatting around it if any)
+    """Verify that every @skill:<name> reference in tracked skills resolves to a valid skill."""
     skill_ref_pattern = re.compile(r"@skill:([a-zA-Z0-9_-]+)")
-    
+
     errors = []
-    # Scan all markdown files in skills/ recursively
-    markdown_files = glob.glob(os.path.join(skills_dir, "**/*.md"), recursive=True)
-    for filepath in markdown_files:
+    for filepath in _tracked_skill_markdown_files():
         with open(filepath, "r", encoding="utf-8") as f:
             content = f.read()
-            
-        matches = skill_ref_pattern.findall(content)
-        for ref in matches:
-            err = validate_skill_resolution(skills_dir, ref)
+
+        for ref in skill_ref_pattern.findall(content):
+            err = validate_skill_resolution(SKILLS_DIR, ref)
             if err:
-                rel_path = os.path.relpath(filepath, skills_dir)
+                rel_path = os.path.relpath(filepath, SKILLS_DIR)
                 errors.append(f"In {rel_path}: reference '@skill:{ref}' failed validation: {err}")
-                
+
     assert not errors, "\n".join(errors)
 
+
 def test_all_skills_have_correct_frontmatter_name():
-    """Verify all existing skill directories match their frontmatter names."""
-    skills_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../skills"))
-    for skill_name in os.listdir(skills_dir):
-        skill_path = os.path.join(skills_dir, skill_name)
-        if os.path.isdir(skill_path) and not skill_name.startswith("."):
-            err = validate_skill_resolution(skills_dir, skill_name)
-            assert err is None, f"Skill '{skill_name}' failed validation: {err}"
+    """Verify all tracked skill directories match their frontmatter names."""
+    for skill_name in _tracked_skill_names():
+        err = validate_skill_resolution(SKILLS_DIR, skill_name)
+        assert err is None, f"Skill '{skill_name}' failed validation: {err}"
 
 
 def test_no_skill_disables_model_invocation():
-    """Permanent structural guard: no skill may set disable-model-invocation: true."""
-    skills_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../skills"))
+    """Permanent structural guard: no tracked skill may set disable-model-invocation: true."""
     violations = []
-    for skill_name in sorted(os.listdir(skills_dir)):
-        skill_md = os.path.join(skills_dir, skill_name, "SKILL.md")
-        if not os.path.isfile(skill_md) or skill_name.startswith("."):
+    for skill_name in _tracked_skill_names():
+        skill_md = os.path.join(SKILLS_DIR, skill_name, "SKILL.md")
+        if not os.path.isfile(skill_md):
             continue
         with open(skill_md, "r", encoding="utf-8") as f:
             lines = f.read().splitlines()
@@ -124,30 +159,46 @@ def test_no_skill_disables_model_invocation():
                 break
     assert not violations, f"Skills disabling model invocation: {violations}"
 
+
 def test_no_non_portable_file_links():
-    """Verify that no markdown file contains file:// URLs (all file:// links are prohibited to ensure portability)."""
-    skills_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../skills"))
-    
-    # Matches markdown link target starting with file://
+    """Verify that no tracked markdown file contains non-portable file:// URLs."""
     file_link_pattern = re.compile(r"\]\((file://[^\)]+)\)")
-    
+
     errors = []
-    markdown_files = glob.glob(os.path.join(skills_dir, "**/*.md"), recursive=True)
-    for filepath in markdown_files:
+    for filepath in _tracked_skill_markdown_files():
         with open(filepath, "r", encoding="utf-8") as f:
             content = f.read()
-            
-        links = file_link_pattern.findall(content)
-        for link in links:
-            rel_path = os.path.relpath(filepath, skills_dir)
-            errors.append(f"In {rel_path}: file:// link found: '{link}' (file:// links are prohibited)")
-                    
+
+        for link in file_link_pattern.findall(content):
+            rel_path = os.path.relpath(filepath, SKILLS_DIR)
+            errors.append(f"In {rel_path}: file:// link found: '{link}'")
+
     assert not errors, "\n".join(errors)
 
-# Focused test cases using pytest tmp_path
+
+def test_all_skill_relative_markdown_links_resolve():
+    """Verify relative links outside code blocks/inline examples in tracked SKILL.md files resolve."""
+    fence_re = re.compile(r"^\s*(`{3,}|~{3,}).*?^\s*\1", re.MULTILINE | re.DOTALL)
+    link_re = re.compile(r"\]\((?!https?://|#|mailto:)([^)#]+)(?:#[^)]*)?\)")
+    errors = []
+    for skill_name in _tracked_skill_names():
+        skill_md = os.path.join(SKILLS_DIR, skill_name, "SKILL.md")
+        with open(skill_md, "r", encoding="utf-8") as f:
+            content = fence_re.sub("", f.read())
+        for rel_target in link_re.findall(content):
+            if "<" in rel_target or ">" in rel_target or rel_target == "path/to/file":
+                continue
+            resolved = os.path.normpath(os.path.join(os.path.dirname(skill_md), rel_target))
+            if not os.path.exists(resolved):
+                errors.append(f"In skills/{skill_name}/SKILL.md: broken link '{rel_target}' -> '{resolved}'")
+    assert not errors, "\n".join(errors)
+
+
+# Focused unit test cases for validate_skill_resolution
 def test_validation_missing_directory(tmp_path):
     err = validate_skill_resolution(str(tmp_path), "missing-skill")
     assert "does not exist" in err
+
 
 def test_validation_missing_skill_md(tmp_path):
     skill_dir = tmp_path / "no-skill-md"
@@ -155,228 +206,92 @@ def test_validation_missing_skill_md(tmp_path):
     err = validate_skill_resolution(str(tmp_path), "no-skill-md")
     assert "SKILL.md does not exist" in err
 
+
 def test_validation_mismatched_frontmatter_name(tmp_path):
     skill_dir = tmp_path / "mismatch-name"
     skill_dir.mkdir()
-    skill_md = skill_dir / "SKILL.md"
-    skill_md.write_text("---\nname: different-name\n---\nbody")
+    (skill_dir / "SKILL.md").write_text("---\nname: different-name\n---\nbody")
     err = validate_skill_resolution(str(tmp_path), "mismatch-name")
     assert "mismatched frontmatter name" in err
+
 
 def test_validation_leading_non_frontmatter(tmp_path):
     skill_dir = tmp_path / "leading-content"
     skill_dir.mkdir()
-    skill_md = skill_dir / "SKILL.md"
-    skill_md.write_text("invalid leading content\n---\nname: leading-content\n---\nbody")
+    (skill_dir / "SKILL.md").write_text("invalid leading content\n---\nname: leading-content\n---\nbody")
     err = validate_skill_resolution(str(tmp_path), "leading-content")
     assert "missing name in frontmatter" in err
+
 
 def test_validation_missing_closing_delimiter(tmp_path):
     skill_dir = tmp_path / "no-closing"
     skill_dir.mkdir()
-    skill_md = skill_dir / "SKILL.md"
-    skill_md.write_text("---\nname: no-closing\nbody")
+    (skill_dir / "SKILL.md").write_text("---\nname: no-closing\nbody")
     err = validate_skill_resolution(str(tmp_path), "no-closing")
     assert "missing name in frontmatter" in err
+
 
 def test_validation_name_extra_text(tmp_path):
     skill_dir = tmp_path / "extra-text"
     skill_dir.mkdir()
-    skill_md = skill_dir / "SKILL.md"
-    skill_md.write_text("---\nname: extra-text extra\n---\nbody")
+    (skill_dir / "SKILL.md").write_text("---\nname: extra-text extra\n---\nbody")
     err = validate_skill_resolution(str(tmp_path), "extra-text")
     assert "missing name in frontmatter" in err
+
 
 def test_validation_quoted_valid_name(tmp_path):
     skill_dir = tmp_path / "quoted-name"
     skill_dir.mkdir()
-    skill_md = skill_dir / "SKILL.md"
-    skill_md.write_text("---\nname: \"quoted-name\"\n---\nbody")
+    (skill_dir / "SKILL.md").write_text('---\nname: "quoted-name"\n---\nbody')
     err = validate_skill_resolution(str(tmp_path), "quoted-name")
     assert err is None
 
 
-def test_retained_reasoning_and_compaction_rules_exist():
-    """Verify that AGENTS.md and make-feature SKILL.md contain retained reasoning & compaction rules with strict path safety."""
-    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-    agents_md = os.path.join(root_dir, "AGENTS.md")
-    make_feature_md = os.path.join(root_dir, "skills/make-feature/SKILL.md")
-
-    with open(agents_md, "r", encoding="utf-8") as f:
-        agents_content = f.read()
-
-    with open(make_feature_md, "r", encoding="utf-8") as f:
-        make_feature_content = f.read()
-
-    literal_scratchpad_path = "<appDataDir>/brain/<conversation-id>/scratch/scratchpad.md"
-    assert literal_scratchpad_path in agents_content, f"Exact path '{literal_scratchpad_path}' missing from AGENTS.md"
-    assert literal_scratchpad_path in make_feature_content, f"Exact path '{literal_scratchpad_path}' missing from make-feature SKILL.md"
-
-    # Scan ONLY git-tracked markdown files to exclude untracked local noise or scratch directories
-    res = subprocess.run(
-        ["git", "ls-files", "*.md"],
-        cwd=root_dir,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    tracked_md_files = [
-        os.path.join(root_dir, line.strip())
-        for line in res.stdout.splitlines()
-        if line.strip()
-    ]
-
-    # Only assert when scratchpad.md is preceded by a path segment or slash
-    path_ref_pattern = re.compile(r"[\w~<>./-]+/scratchpad\.md")
-    for md_path in tracked_md_files:
-        with open(md_path, "r", encoding="utf-8") as f:
-            content = f.read()
-        matches = path_ref_pattern.findall(content)
-        for match in matches:
-            assert match == literal_scratchpad_path, (
-                f"Non-canonical scratchpad path reference '{match}' found in {md_path}"
-            )
-
-    # Verify the 5 compaction fields are consistent across AGENTS.md and SKILL.md
-    required_fields = [
-        "Feature Rationale",
-        "Key Architectural Decisions",
-        "Active Constraints",
-        "Prior Step Findings",
-        "Target Artifact Paths",
-    ]
-    for field in required_fields:
-        assert field in agents_content, f"Compaction field '{field}' missing from AGENTS.md"
-        assert field in make_feature_content, f"Compaction field '{field}' missing from make-feature SKILL.md"
-
-
-def test_sequential_subagent_slicing_consistency():
-    """Verify that Sequential Subagent Slicing guidelines, canonical thresholds, and safety rules are consistent across skill files."""
-    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-    inc_md = os.path.join(root_dir, "skills/incremental-implementation/SKILL.md")
-    plan_md = os.path.join(root_dir, "skills/planning-and-task-breakdown/SKILL.md")
-    make_feature_md = os.path.join(root_dir, "skills/make-feature/SKILL.md")
-
-    with open(inc_md, "r", encoding="utf-8") as f:
-        inc_content = f.read()
-    with open(plan_md, "r", encoding="utf-8") as f:
-        plan_content = f.read()
-    with open(make_feature_md, "r", encoding="utf-8") as f:
-        make_feature_content = f.read()
-
-    assert "Sequential Subagent Slicing" in inc_content, "Missing Sequential Subagent Slicing in incremental-implementation"
-    assert "Execution Strategy" in plan_content, "Missing Execution Strategy in planning-and-task-breakdown"
-    assert "Sequential Subagent Delegation" in make_feature_content, "Missing Sequential Subagent Delegation in make-feature"
-
-    # Precise threshold harmonization assertions
-    canonical_threshold = "5 or more complex multi-file slices"
-    assert canonical_threshold in inc_content, f"Canonical threshold '{canonical_threshold}' missing from incremental-implementation"
-    assert canonical_threshold in plan_content, f"Canonical threshold '{canonical_threshold}' missing from planning-and-task-breakdown"
-    assert ">5 heavy slices" not in inc_content, "Obsolete threshold '>5 heavy slices' found in incremental-implementation"
-    assert ">5 heavy slices" not in plan_content, "Obsolete threshold '>5 heavy slices' found in planning-and-task-breakdown"
-
-    # Execution safety, environment wrapper, and handoff rule assertions
-    assert "Single Active Writer" in inc_content, "Missing Single Active Writer rule in incremental-implementation"
-    assert "Pre-Dispatch Verification Gate" in inc_content, "Missing Pre-Dispatch Verification Gate in incremental-implementation"
-    assert "Failure Circuit Breaker" in inc_content, "Missing Failure Circuit Breaker in incremental-implementation"
-    assert "git add -- <intended-paths>" in inc_content, "Missing safe path-specific staging instruction in incremental-implementation"
-    assert "parent conversation ID" in inc_content, "Missing explicit parent conversation ID scratchpad reference in incremental-implementation"
-    assert "python3 ~/.gemini/scripts/run_in_env.py <worktree_path> pytest" in inc_content, "Missing environment wrapper pytest command in incremental-implementation"
-    assert "python3 ~/.gemini/scripts/run_in_env.py <worktree_path> ruff check ." in inc_content, "Missing environment wrapper ruff command in incremental-implementation"
-
-    # Strategy selection checkbox assertion
-    assert "ensuring exactly one strategy checkbox is selected" in plan_content, "Missing single strategy checkbox assertion in planning-and-task-breakdown"
-
-
-def test_multi_stage_adversarial_gates_contract():
-    """Verify Stage 0 /grill-me hyphenation, 4 adversarial review modes, artifact-only bypass rules, and audit summary preservation."""
-    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-    agents_md = os.path.join(root_dir, "AGENTS.md")
-    make_feature_md = os.path.join(root_dir, "skills/make-feature/SKILL.md")
-    adv_review_md = os.path.join(root_dir, "skills/adversarial-review/SKILL.md")
-    lifecycle_guide_md = os.path.join(root_dir, "skills/make-feature/resources/lifecycle-guide.md")
-    spec_md = os.path.join(root_dir, "skills/spec-driven-development/SKILL.md")
-    plan_md = os.path.join(root_dir, "skills/planning-and-task-breakdown/SKILL.md")
+def test_streamlined_agents_and_adversarial_review_contract():
+    """Verify streamlined AGENTS.md workflow rules and single-purpose adversarial-review contract."""
+    agents_md = os.path.join(ROOT_DIR, "AGENTS.md")
+    adv_md = os.path.join(SKILLS_DIR, "adversarial-review", "SKILL.md")
+    gitignore_path = os.path.join(ROOT_DIR, ".gitignore")
 
     with open(agents_md, "r", encoding="utf-8") as f:
         agents_c = f.read()
-    with open(make_feature_md, "r", encoding="utf-8") as f:
-        mf_c = f.read()
-    with open(adv_review_md, "r", encoding="utf-8") as f:
+    with open(adv_md, "r", encoding="utf-8") as f:
         adv_c = f.read()
-    with open(lifecycle_guide_md, "r", encoding="utf-8") as f:
-        lg_c = f.read()
-    with open(spec_md, "r", encoding="utf-8") as f:
-        spec_c = f.read()
-    with open(plan_md, "r", encoding="utf-8") as f:
-        plan_c = f.read()
+    with open(gitignore_path, "r", encoding="utf-8") as f:
+        gi_c = f.read()
 
-    # 1. Canonical /grill-me hyphenation (no unhyphenated /grillme in instructions)
-    assert "/grill-me" in agents_c, "Missing canonical /grill-me in AGENTS.md"
-    assert "/grill-me" in mf_c, "Missing canonical /grill-me in make-feature SKILL.md"
-    assert "/grill-me" in spec_c, "Missing canonical /grill-me in spec-driven-development SKILL.md"
-    assert "/grill-me" in lg_c, "Missing canonical /grill-me in lifecycle-guide.md"
-    assert "/grillme" not in agents_c, "Un-hyphenated /grillme found in AGENTS.md"
-    assert "/grillme" not in mf_c, "Un-hyphenated /grillme found in make-feature SKILL.md"
-    assert "/grillme" not in spec_c, "Un-hyphenated /grillme found in spec-driven-development SKILL.md"
-    assert "/grillme" not in plan_c, "Un-hyphenated /grillme found in planning-and-task-breakdown SKILL.md"
+    # Protected branch safety + in-place manual worktree support
+    assert "edit in place" in agents_c.lower()
+    assert "nested worktrees" in agents_c.lower()
+    assert "/grill-me" in agents_c
+    assert "/grillme" not in agents_c
 
-    # 2. All 4 review modes documented in adversarial-review/SKILL.md
-    modes = ["Spec Reviewer Mode", "Plan Reviewer Mode", "RED Test Reviewer Mode", "Code Reviewer Mode"]
-    for mode in modes:
-        assert mode in adv_c, f"Review mode '{mode}' missing from adversarial-review SKILL.md"
+    # Proportional tiers
+    for tier in ["Trivial", "Standard", "Heavy"]:
+        assert tier in agents_c
 
-    # 3. Mode dispatch and routing assertions
-    assert "Step 0: Select Review Mode and Route (Mandatory Dispatch)" in adv_c, "Missing Step 0 Mode Dispatch in adversarial-review SKILL.md"
-    assert "Artifact Review Path (Spec & Plan)" in adv_c, "Missing Artifact Review Path section in adversarial-review SKILL.md"
-    assert "Artifact Mode Bypass Rules" in adv_c, "Missing Artifact Mode Bypass Rules in adversarial-review SKILL.md"
-    assert "Worktree Code Review Path" in adv_c, "Missing Worktree Code Review Path section in adversarial-review SKILL.md"
-    assert "Worktree RED Test Review Path" in adv_c, "Missing Worktree RED Test Review Path section in adversarial-review SKILL.md"
-    assert "Do NOT require the full test suite to pass at this gate" in adv_c, "Missing RED test full suite pass exemption in adversarial-review SKILL.md"
-    assert "External Standalone Mode" in adv_c, "Missing External Standalone Mode in adversarial-review SKILL.md"
-    assert "Internal Pipeline Mode" in adv_c, "Missing Internal Pipeline Mode in adversarial-review SKILL.md"
-    assert "--last-sha" in adv_c, "Missing --last-sha in adversarial-review SKILL.md"
-    assert "--force" in adv_c, "Missing --force in adversarial-review SKILL.md"
-    assert "External PR Action Plan" in adv_c, "Missing External PR Action Plan in adversarial-review SKILL.md"
-    assert "Review Mode Context: internal-pipeline" in mf_c or ("Review Mode Context" in mf_c and "internal-pipeline" in mf_c), "Missing 'Review Mode Context: internal-pipeline' in make-feature SKILL.md Phase 3 compaction block"
-    assert '"sha_changed"' in adv_c or "sha_changed" in adv_c, "Missing sha_changed in adversarial-review SKILL.md"
-    assert '"mode"' in adv_c or "mode" in adv_c, "Missing mode schema in adversarial-review SKILL.md"
-    assert "--mode" in adv_c and "Script Flags" in adv_c, "Missing --mode in Script Flags section"
+    # Adversarial review streamlined flags & sections
+    for flag in ["--mode=external|pipeline", "--last-sha", "--force", "--pr", "--prune"]:
+        assert flag in adv_c
+    assert "Adversarial Audit Summary" in adv_c
+    assert "External PR Action Plan" in adv_c
+    assert "run_in_env.py" in adv_c
 
+    # Legacy Arena / ephemeral review branch bloat removed
+    for legacy_term in ["Reviewer Identification Proof", "TAMPERED/CLOBBERED", "review_prompt.md", "reviewer_scorecard.md"]:
+        assert legacy_term not in agents_c
+        assert legacy_term not in adv_c
 
-
-
-    # RED Test Review Path contract assertions
-    assert "Target Worktree Path" in adv_c, "Missing Target Worktree Path required input in test-review"
-    assert "Designated RED Test Paths" in adv_c, "Missing Designated RED Test Paths required input in test-review"
-    assert "Approved Spec Path" in adv_c, "Missing Approved Spec Path required input in test-review"
-    assert "Spec Parity" in adv_c, "Missing Spec Parity check in test-review"
-    assert "Assertion Rigor" in adv_c, "Missing Assertion Rigor check in test-review"
-    assert "Edge, Boundary & Error Coverage" in adv_c, "Missing Edge, Boundary & Error Coverage check in test-review"
-    assert "Expected Behavioral Failure" in adv_c, "Missing Expected Behavioral Failure check in test-review"
-
-    # Verify Step 0 appears before Worktree Code Review Path
-    step0_idx = adv_c.find("Step 0: Select Review Mode and Route")
-    worktree_path_idx = adv_c.find("Worktree Code Review Path")
-    assert step0_idx < worktree_path_idx, "Step 0 Mode Dispatch must appear before Worktree Code Review Path"
-
-    # 4. Mandatory Adversarial Audit Summary in AGENTS.md & adversarial-review SKILL.md
-    assert "Adversarial Audit Summary" in agents_c, "Missing Adversarial Audit Summary rule in AGENTS.md"
-    assert "Adversarial Audit Summary" in adv_c, "Missing Adversarial Audit Summary section in adversarial-review SKILL.md"
-
-    # 5. Full Audit Trail Preservation in make-feature SKILL.md & Plan Review in planning-and-task-breakdown SKILL.md
-    assert "Full Audit Trail Preservation" in mf_c, "Missing Full Audit Trail Preservation requirement in make-feature SKILL.md"
-    assert "Subagent Adversarial Plan Review" in plan_c, "Missing Subagent Adversarial Plan Review section in planning-and-task-breakdown SKILL.md"
+    # Scratch and auto-bundled Data Cloud skills gitignored
+    assert "scratch/" in gi_c
+    assert "skills/.datacloud_skills_manifest" in gi_c
 
 
 def test_catchmeup_skill_contract():
-    """Verify that catchmeup SKILL.md contains required presets, read-only exception, cleanup instructions, trailer parsing, and @skill references."""
-    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-    catchmeup_md = os.path.join(root_dir, "skills/catchmeup/SKILL.md")
-    readme_md = os.path.join(root_dir, "README.md")
-    agents_md = os.path.join(root_dir, "AGENTS.md")
-
-    assert os.path.exists(catchmeup_md), "skills/catchmeup/SKILL.md does not exist"
+    """Verify catchmeup SKILL.md presets, read-only scratch safety, trailer parsing, and @skill references."""
+    catchmeup_md = os.path.join(SKILLS_DIR, "catchmeup", "SKILL.md")
+    readme_md = os.path.join(ROOT_DIR, "README.md")
+    agents_md = os.path.join(ROOT_DIR, "AGENTS.md")
 
     with open(catchmeup_md, "r", encoding="utf-8") as f:
         catchmeup_content = f.read()
@@ -385,163 +300,75 @@ def test_catchmeup_skill_contract():
     with open(agents_md, "r", encoding="utf-8") as f:
         agents_content = f.read()
 
-    # Preset assertions
     for preset in ["1d", "1w", "2w", "1mo"]:
-        assert preset in catchmeup_content, f"Preset '{preset}' missing from catchmeup SKILL.md"
+        assert preset in catchmeup_content
 
-    # Read-only contract & ephemeral scratch file exception assertion
-    assert "Creating temporary, ephemeral scratch files under the conversation's scratch directory" in catchmeup_content, \
-        "Missing ephemeral scratch file read-only exception in catchmeup SKILL.md"
-    assert 'rm -- "<appDataDir>/brain/<conversation-id>/scratch/temp_catchmeup_' in catchmeup_content, \
-        "Missing explicit rm -- cleanup instruction in catchmeup SKILL.md"
-    assert "view_file" in catchmeup_content and "<=800-line" in catchmeup_content, \
-        "Missing view_file <=800-line reading instruction in catchmeup SKILL.md"
+    assert "Creating temporary, ephemeral scratch files under the conversation's scratch directory" in catchmeup_content
+    assert 'rm -- "<appDataDir>/brain/<conversation-id>/scratch/temp_catchmeup_' in catchmeup_content
+    assert "view_file" in catchmeup_content and "<=800-line" in catchmeup_content
+    assert "%(trailers:key=Signoff-*" not in catchmeup_content
+    assert "%(trailers:key=Signoff-Reviewed-Commit-SHA" in catchmeup_content
+    assert "VERIFIED_BY_HUMAN_NO_TRANSCRIPT_DIGEST" in catchmeup_content
+    assert "--invert-grep" in catchmeup_content
 
-    # Attestation parsing assertion (must use explicit keys, never broken glob %(trailers:key=Signoff-*)
-    assert "%(trailers:key=Signoff-*" not in catchmeup_content, \
-        "Broken trailer glob %(trailers:key=Signoff-*) found in catchmeup SKILL.md"
-    assert "%(trailers:key=Signoff-Reviewed-Commit-SHA" in catchmeup_content, \
-        "Missing explicit key %(trailers:key=Signoff-Reviewed-Commit-SHA... in catchmeup SKILL.md"
-    assert "VERIFIED_BY_HUMAN_NO_TRANSCRIPT_DIGEST" in catchmeup_content, \
-        "Missing VERIFIED_BY_HUMAN_NO_TRANSCRIPT_DIGEST handling in catchmeup SKILL.md"
-    assert "--invert-grep" in catchmeup_content, \
-        "Missing --invert-grep attestation exclusion filter in catchmeup SKILL.md"
-
-    # Dynamic duration grammar regex extraction test against advertised preset table values
     grammar_match = re.search(r"- \*\*Accepted Grammar\*\*: `(.*?)`", catchmeup_content)
-    assert grammar_match, "Accepted Grammar pattern missing from catchmeup SKILL.md"
+    assert grammar_match
     grammar_pattern = re.compile(grammar_match.group(1))
     for table_arg in ["1d", "1 day", "1w", "1 week", "2w", "2 weeks", "1mo", "1 month"]:
-        assert grammar_pattern.match(table_arg), f"Extracted grammar regex failed to match table argument '{table_arg}'"
+        assert grammar_pattern.match(table_arg)
 
-    # Reference assertion
-    assert "@skill:explain-diff" in catchmeup_content, \
-        "Missing @skill:explain-diff reference in catchmeup SKILL.md"
-
-    # Registration assertion
-    assert "`catchmeup`" in readme_content, "Missing catchmeup registration in README.md"
-    assert "catchmeup/SKILL.md" in agents_content, "Missing catchmeup indexing in AGENTS.md"
-
-
-def test_heavy_mode_documented_consistently():
-    """Verify that /make-feature heavy is documented consistently across README.md, make-feature, planning-and-task-breakdown, and incremental-implementation."""
-    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-    readme_md = os.path.join(root_dir, "README.md")
-    make_feature_md = os.path.join(root_dir, "skills/make-feature/SKILL.md")
-    plan_md = os.path.join(root_dir, "skills/planning-and-task-breakdown/SKILL.md")
-    inc_md = os.path.join(root_dir, "skills/incremental-implementation/SKILL.md")
-
-    with open(readme_md, "r", encoding="utf-8") as f:
-        readme_content = f.read()
-    with open(make_feature_md, "r", encoding="utf-8") as f:
-        make_feature_content = f.read()
-    with open(plan_md, "r", encoding="utf-8") as f:
-        plan_content = f.read()
-    with open(inc_md, "r", encoding="utf-8") as f:
-        inc_content = f.read()
-
-    canonical_heavy_phrase = "proactively selects `Sequential Subagents` execution strategy"
-
-    assert "/make-feature heavy" in readme_content, "Missing /make-feature heavy in README.md"
-    assert "/make-feature heavy" in make_feature_content, "Missing /make-feature heavy in make-feature SKILL.md"
-    assert "/make-feature heavy" in plan_content, "Missing /make-feature heavy in planning-and-task-breakdown SKILL.md"
-    assert "/make-feature heavy" in inc_content, "Missing /make-feature heavy in incremental-implementation SKILL.md"
-
-    assert canonical_heavy_phrase in readme_content, "Canonical heavy phrase missing from README.md"
-    assert canonical_heavy_phrase in make_feature_content, "Canonical heavy phrase missing from make-feature SKILL.md"
-    assert canonical_heavy_phrase in plan_content, "Canonical heavy phrase missing from planning-and-task-breakdown SKILL.md"
-    assert canonical_heavy_phrase in inc_content, "Canonical heavy phrase missing from incremental-implementation SKILL.md"
+    assert "@skill:explain-diff" in catchmeup_content
+    assert "../git-signoff/SKILL.md" in catchmeup_content
+    assert "`catchmeup`" in readme_content
+    assert "catchmeup/SKILL.md" in agents_content
 
 
 def test_signoff_socratic_remediation_rule():
-    """Verify that skills/git-signoff/SKILL.md and skills/math-proof-audit/SKILL.md define hardened Socratic remediation rules for uncertainty and vague answers."""
-    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-    signoff_md = os.path.join(root_dir, "skills/git-signoff/SKILL.md")
-    math_proof_md = os.path.join(root_dir, "skills/math-proof-audit/SKILL.md")
-
-    assert os.path.exists(signoff_md), "skills/git-signoff/SKILL.md does not exist"
-    assert os.path.exists(math_proof_md), "skills/math-proof-audit/SKILL.md does not exist"
+    """Verify vendored skills/git-signoff/SKILL.md defines Socratic remediation rules."""
+    signoff_md = os.path.join(SKILLS_DIR, "git-signoff", "SKILL.md")
+    assert os.path.exists(signoff_md)
 
     with open(signoff_md, "r", encoding="utf-8") as f:
         signoff_content = f.read()
 
-    assert "Evaluation & Remediation" in signoff_content, "Missing Evaluation & Remediation in skills/git-signoff/SKILL.md"
-
-    # Extract Evaluation & Remediation section from git-signoff SKILL.md
     section_match = re.search(r"Evaluation & Remediation:\s*(.*?)(?=\n### |\n## |\Z)", signoff_content, re.DOTALL)
-    assert section_match, "Could not extract Evaluation & Remediation section from skills/git-signoff/SKILL.md"
+    assert section_match
     remediation_text = section_match.group(1)
 
-    assert any(term in remediation_text for term in ["not sure", "uncertainty"]), "Missing uncertainty trigger in remediation rule"
-    assert "vague" in remediation_text or "hand-waving" in remediation_text, "Missing vague/hand-waving trigger in remediation rule"
-    assert "pause signoff" in remediation_text, "Missing 'pause signoff' in remediation rule"
-    assert "@skill:explain-diff" in remediation_text, "Missing '@skill:explain-diff' reference in remediation rule"
-    assert "re-probe" in remediation_text, "Missing re-probing requirement in remediation rule"
-
-    with open(math_proof_md, "r", encoding="utf-8") as f:
-        math_content = f.read()
-
-    assert "Phase 3: Socratic Signoff" in math_content, "Missing Phase 3 in skills/math-proof-audit/SKILL.md"
-    assert "@skill:git-signoff" in math_content, "Missing @skill:git-signoff reference in math-proof-audit SKILL.md"
-    assert "@skill:explain-diff" in math_content, "Missing @skill:explain-diff reference in math-proof-audit SKILL.md"
-
-    # Assert Worktree Target Mandate
-    assert "Worktree Target Mandate" in signoff_content, "Missing Worktree Target Mandate in skills/git-signoff/SKILL.md"
-    assert "worktree_path" in signoff_content, "Missing 'worktree_path' in skills/git-signoff/SKILL.md"
+    assert any(term in remediation_text for term in ["not sure", "uncertainty"])
+    assert "vague" in remediation_text or "hand-waving" in remediation_text
+    assert "pause signoff" in remediation_text
+    assert "@skill:explain-diff" in remediation_text
+    assert "re-probe" in remediation_text
+    assert "Worktree Target Mandate" in signoff_content
+    assert "worktree_path" in signoff_content
 
 
 def test_signoff_gsa_protocol_spec_and_trailers():
-    """Verify the GSA Protocol core spec exists and skills/git-signoff/SKILL.md implements its portable trailer schema, harness adapters, and Git Notes persistence."""
-    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-    spec_md = os.path.join(root_dir, "skills/git-signoff/specs/gsa-core.md")
-    signoff_md = os.path.join(root_dir, "skills/git-signoff/SKILL.md")
-
-    assert os.path.exists(spec_md), "skills/git-signoff/specs/gsa-core.md does not exist"
+    """Verify GSA Protocol spec and skills/git-signoff/SKILL.md trailer/adapter contracts."""
+    spec_md = os.path.join(SKILLS_DIR, "git-signoff", "specs", "gsa-core.md")
+    signoff_md = os.path.join(SKILLS_DIR, "git-signoff", "SKILL.md")
 
     with open(spec_md, "r", encoding="utf-8") as f:
         spec_content = f.read()
-
-    for anchor in [
-        "Protocol Specification",
-        "Cryptographic Developer Identity Binding",
-        "cat_sort_uniq",
-        "ack_no_transcript",
-    ]:
-        assert anchor in spec_content, f"Missing '{anchor}' in skills/git-signoff/specs/gsa-core.md"
-
     with open(signoff_md, "r", encoding="utf-8") as f:
         signoff_content = f.read()
 
-    # GSA v1.0 trailer schema fields
-    for trailer in [
-        "Signoff-Spec-Version: 1.0",
-        "Signoff-Harness-ID",
-        "Signoff-Transcript-Bytes",
-    ]:
-        assert trailer in signoff_content, f"Missing '{trailer}' trailer in skills/git-signoff/SKILL.md"
+    for anchor in ["Protocol Specification", "Cryptographic Developer Identity Binding", "cat_sort_uniq", "ack_no_transcript"]:
+        assert anchor in spec_content
 
-    # Portable harness adapter resolution (the core portability goal)
-    for adapter_env in [
-        "GIT_SIGNOFF_TRANSCRIPT_FILE",
-        "ANTIGRAVITY_CONVERSATION_ID",
-        "CLAUDE_CODE_SESSION_ID",
-    ]:
-        assert adapter_env in signoff_content, f"Missing '{adapter_env}' adapter resolution in skills/git-signoff/SKILL.md"
+    for trailer in ["Signoff-Spec-Version: 1.0", "Signoff-Harness-ID", "Signoff-Transcript-Bytes"]:
+        assert trailer in signoff_content
 
-    # Worktree fallback: cwd slug misses inside linked worktrees, so the adapter
-    # must resolve the primary repository root via git-common-dir
-    assert "git-common-dir" in signoff_content, "Missing worktree git-common-dir fallback in skills/git-signoff/SKILL.md"
+    for adapter_env in ["GIT_SIGNOFF_TRANSCRIPT_FILE", "ANTIGRAVITY_CONVERSATION_ID", "CLAUDE_CODE_SESSION_ID"]:
+        assert adapter_env in signoff_content
 
-    # Git Notes dual persistence with tracking-ref concurrency merge
-    assert "refs/notes/signoff" in signoff_content, "Missing 'refs/notes/signoff' persistence in skills/git-signoff/SKILL.md"
-    assert "cat_sort_uniq" in signoff_content, "Missing 'cat_sort_uniq' notes merge strategy in skills/git-signoff/SKILL.md"
-    assert "refs/notes/signoff-remote" in spec_content, "Missing tracking-ref fetch for notes merge in skills/git-signoff/specs/gsa-core.md"
-
-    # Signed attestation commits (GSA spec section 2.4)
-    assert "user.signingkey" in signoff_content, "Missing signed-commit support (user.signingkey) in skills/git-signoff/SKILL.md"
-
-    # Spec cross-reference resolves relative to the skill directory
-    assert "specs/gsa-core.md" in signoff_content, "Missing specs/gsa-core.md reference in skills/git-signoff/SKILL.md"
+    assert "git-common-dir" in signoff_content
+    assert "refs/notes/signoff" in signoff_content
+    assert "cat_sort_uniq" in signoff_content
+    assert "refs/notes/signoff-remote" in spec_content
+    assert "user.signingkey" in signoff_content
+    assert "specs/gsa-core.md" in signoff_content
 
 
 PROFILE_BLOCK_RE = re.compile(
@@ -557,16 +384,12 @@ def _extract_profile_block(content, source):
 
 
 def test_signoff_phase3c_interview_contract():
-    """Verify Phase 3c: Signoff-Agent provenance grammar, named intensity levels, and the single swappable INTERVIEW PROFILE block."""
-    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-    signoff_md = os.path.join(root_dir, "skills/git-signoff/SKILL.md")
-    spec_md = os.path.join(root_dir, "skills/git-signoff/specs/gsa-core.md")
-    harnesses_md = os.path.join(root_dir, "skills/git-signoff/HARNESSES.md")
-    default_profile_md = os.path.join(root_dir, "skills/git-signoff/profiles/software-general.md")
-    science_profile_md = os.path.join(root_dir, "skills/git-signoff/profiles/domain-science.md")
-
-    for path in [signoff_md, spec_md, harnesses_md, default_profile_md, science_profile_md]:
-        assert os.path.exists(path), f"{os.path.relpath(path, root_dir)} does not exist"
+    """Verify Signoff-Agent provenance grammar, named intensity levels, and swappable INTERVIEW PROFILE block."""
+    signoff_md = os.path.join(SKILLS_DIR, "git-signoff", "SKILL.md")
+    spec_md = os.path.join(SKILLS_DIR, "git-signoff", "specs", "gsa-core.md")
+    harnesses_md = os.path.join(SKILLS_DIR, "git-signoff", "HARNESSES.md")
+    default_profile_md = os.path.join(SKILLS_DIR, "git-signoff", "profiles", "software-general.md")
+    science_profile_md = os.path.join(SKILLS_DIR, "git-signoff", "profiles", "domain-science.md")
 
     with open(signoff_md, "r", encoding="utf-8") as f:
         signoff_content = f.read()
@@ -579,257 +402,44 @@ def test_signoff_phase3c_interview_contract():
     with open(science_profile_md, "r", encoding="utf-8") as f:
         science_profile_content = f.read()
 
-    # (1) Signoff-Agent provenance grammar defined in the spec and used by the skill
     for token in ["harness=", "model=", "reasoning=", "interview="]:
-        assert token in signoff_content, f"Signoff-Agent grammar token '{token}' missing from skills/git-signoff/SKILL.md"
-        assert token in spec_content, f"Signoff-Agent grammar token '{token}' missing from skills/git-signoff/specs/gsa-core.md"
-    assert "N/A" in spec_content, "Missing N/A convention for unexposed provenance fields in gsa-core.md"
-    # Deterministic sources for the priority harness
+        assert token in signoff_content
+        assert token in spec_content
+    assert "N/A" in spec_content
     for env_var in ["CLAUDE_CODE_VERSION", "CLAUDE_EFFORT", "ANTHROPIC_MODEL"]:
-        assert env_var in signoff_content, f"Deterministic provenance source '{env_var}' missing from skills/git-signoff/SKILL.md"
+        assert env_var in signoff_content
 
-    # (2) Named intensity levels formalizing --quick/--deep
     for level in ["cursory", "standard", "skeptical"]:
-        assert level in signoff_content, f"Intensity level '{level}' missing from skills/git-signoff/SKILL.md"
-    assert "--quick" in signoff_content and "--deep" in signoff_content, "Missing --quick/--deep modifier mapping in skills/git-signoff/SKILL.md"
-    assert "Interview Intensity Levels" in signoff_content, "Missing Interview Intensity Levels section in skills/git-signoff/SKILL.md"
-    assert "prediction challenge" in signoff_content, "Missing skeptical-level prediction challenges in skills/git-signoff/SKILL.md"
+        assert level in signoff_content
+    assert "--quick" in signoff_content and "--deep" in signoff_content
+    assert "Interview Intensity Levels" in signoff_content
+    assert "prediction challenge" in signoff_content
 
-    # (3) Exactly one delimited INTERVIEW PROFILE block, byte-identical to the shipped default
     embedded_block = _extract_profile_block(signoff_content, "skills/git-signoff/SKILL.md")
     default_block = _extract_profile_block(default_profile_content, "skills/git-signoff/profiles/software-general.md")
-    assert embedded_block == default_block, (
-        "Embedded INTERVIEW PROFILE block in SKILL.md diverged from profiles/software-general.md"
-    )
+    assert embedded_block == default_block
 
-    # Every profile block declares a Profile-ID matching the trailer token grammar
     for block, source in [
         (embedded_block, "skills/git-signoff/SKILL.md"),
         (science_profile_content, "skills/git-signoff/profiles/domain-science.md"),
     ]:
-        pid = re.search(r"^Profile-ID:\s*([a-z0-9-]+)\s*$", block, re.MULTILINE)
-        assert pid, f"Missing or malformed Profile-ID in {source}"
-    assert "Profile-ID: software-general" in embedded_block, "Default embedded profile must be software-general"
-    assert "Profile-ID: domain-science" in science_profile_content, "domain-science profile must declare its Profile-ID"
-
-    # External-user documentation: the block is the sole customization point
-    assert "sole customization point" in signoff_content, "Missing 'sole customization point' marker in skills/git-signoff/SKILL.md"
-    assert "sole customization point" in harnesses_content, "Missing 'sole customization point' documentation in skills/git-signoff/HARNESSES.md"
-    assert "profiles/software-general.md" in harnesses_content, "Missing software-general profile reference in HARNESSES.md"
-    assert "profiles/domain-science.md" in harnesses_content, "Missing domain-science profile reference in HARNESSES.md"
+        assert re.search(r"^Profile-ID:\s*([a-z0-9-]+)\s*$", block, re.MULTILINE), f"Missing Profile-ID in {source}"
+    assert "Profile-ID: software-general" in embedded_block
+    assert "Profile-ID: domain-science" in science_profile_content
+    assert "sole customization point" in signoff_content
+    assert "sole customization point" in harnesses_content
+    assert "profiles/software-general.md" in harnesses_content
+    assert "profiles/domain-science.md" in harnesses_content
 
 
-def test_external_review_prompts_and_living_branches_contract():
-    """Verify external review prompts, living review branches, Mode A/B, Reviewer Signal Scorecard, and server-truth cleanup contracts."""
-    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-    agents_md = os.path.join(root_dir, "AGENTS.md")
-    gemini_md = os.path.join(root_dir, "GEMINI.md")
-    make_feature_md = os.path.join(root_dir, "skills/make-feature/SKILL.md")
-    adv_review_md = os.path.join(root_dir, "skills/adversarial-review/SKILL.md")
-    gitignore = os.path.join(root_dir, ".gitignore")
-
-    assert os.path.islink(gemini_md), "GEMINI.md must be a symbolic link"
-    assert os.readlink(gemini_md) == "AGENTS.md", "GEMINI.md must point to AGENTS.md"
-
-    with open(agents_md, "r", encoding="utf-8") as f:
-        agents_c = f.read()
-    with open(make_feature_md, "r", encoding="utf-8") as f:
-        mf_c = f.read()
-    with open(adv_review_md, "r", encoding="utf-8") as f:
-        adv_c = f.read()
-    with open(gitignore, "r", encoding="utf-8") as f:
-        gi_c = f.read()
-
-    # 1. .gitignore contains scratch/
-    assert "scratch/" in gi_c, ".gitignore must contain scratch/"
-
-    # 2. Branch naming & grammar & freshness handshake in make-feature/SKILL.md
-    assert "review/${FEATURE_SLUG}/${REVIEWER_ID}" in mf_c, "Missing review branch naming pattern in make-feature SKILL.md"
-    assert "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" in mf_c, "Missing REVIEWER_ID regex grammar in make-feature SKILL.md"
-    assert "AUDITED_SHA:" in mf_c, "Missing AUDITED_SHA handshake in make-feature SKILL.md"
-
-    # 3. Delivery modes: Mode A & Mode B
-    assert "Mode A: Isolated Review Branches" in mf_c, "Missing Mode A in make-feature SKILL.md"
-    assert "Mode B: Shared Sandbox Branch Mode" in mf_c, "Missing Mode B in make-feature SKILL.md"
-    assert "reviews/${REVIEWER_ID}.md" in mf_c, "Missing reviews/${REVIEWER_ID}.md in make-feature SKILL.md"
-    assert "git pull --rebase origin <shared-branch>" in mf_c, "Missing rebase-push retry in make-feature SKILL.md"
-    assert "forbidden from running `push --force` on the shared branch" in mf_c, "Missing ban on force-push in make-feature SKILL.md"
-
-    # 4. Precedence Hierarchy & Reviewer Signal Scorecard
-    precedence = "Human Directives / Approved Spec > Code Invariants > External Reviewer Feedback"
-    assert precedence in mf_c, "Missing Precedence Hierarchy in make-feature SKILL.md"
-    assert "Reviewer Signal Scorecard" in mf_c, "Missing Reviewer Signal Scorecard in make-feature SKILL.md"
-    assert "HIGH SIGNAL" in mf_c, "Missing HIGH SIGNAL in make-feature SKILL.md"
-    assert "LOW SIGNAL / NOISE" in mf_c, "Missing LOW SIGNAL / NOISE in make-feature SKILL.md"
-    assert "UNRESPONSIVE / STUCK" in mf_c, "Missing UNRESPONSIVE / STUCK in make-feature SKILL.md"
-    assert "Retain List" in mf_c, "Missing Retain List directive in make-feature SKILL.md"
-    assert "Drop List" in mf_c, "Missing Drop List directive in make-feature SKILL.md"
-
-    # 5. Server-truth cleanup & Non-merging invariant
-    cleanup_cmd = 'git ls-remote --heads origin "refs/heads/review/${FEATURE_SLUG}/*"'
-    assert cleanup_cmd in mf_c, f"Missing server-truth cleanup '{cleanup_cmd}' in make-feature SKILL.md"
-    assert "PR source MUST be `gemini/${FEATURE_SLUG}`" in mf_c, "Missing PR source requirement in make-feature SKILL.md"
-    assert "never executes unverified" in mf_c, "Missing untrusted input defense in make-feature SKILL.md"
-    assert "scratch/external_reviews/" in mf_c, "Missing fallback ingestion path in make-feature SKILL.md"
-    assert 'git branch -D "$lb"' in mf_c, "Missing local review branch cleanup loop in make-feature SKILL.md"
-    assert "could not verify remote cleanup" in mf_c, "Missing post-delete verification warning in make-feature SKILL.md"
-    assert 'git show "FETCH_HEAD:reviews/${REVIEWER_ID}.md"' in mf_c, "Missing builder inspection command in make-feature SKILL.md"
-    assert 'git show "origin/review/${FEATURE_SLUG}/${REVIEWER_ID}:review.md"' in mf_c, (
-        "Missing Mode A builder inspection command in make-feature SKILL.md"
-    )
-    assert '{ git merge-base --is-ancestor "$before" FETCH_HEAD 2>/dev/null || before="origin/${BRANCH_NAME}"; }' in mf_c, "Missing ancestor guard in make-feature SKILL.md"
-    assert 'git log --name-only "${before}..FETCH_HEAD"' in mf_c, "Missing scoped authorship log in make-feature SKILL.md"
-
-    # 6. Scoped emission anchors across all milestone steps (non-vacuous check)
-    assert "Emit External Review Prompt (Spec Gate)" in mf_c, "Missing Spec Gate emission anchor"
-    assert "Emit External Review Prompt (Plan Gate)" in mf_c, "Missing Plan Gate emission anchor"
-    assert "Emit External Review Prompt (RED Test Gate)" in mf_c, "Missing RED Test Gate emission anchor"
-    assert "Emit External Review Prompt (Heavy Mode Slice Gate)" in mf_c, "Missing Heavy Mode Slice Gate emission anchor"
-    assert "Emit External Review Prompt (GREEN Commit Gate" in mf_c, "Missing GREEN Commit Gate emission anchor"
-    assert "Emit External Review Prompt (GREEN Push Gate" in mf_c, "Missing GREEN Push Gate emission anchor"
-    assert "git diff ${BASE_BRANCH} HEAD" in mf_c, "Missing local-safe offline git diff command in make-feature SKILL.md"
-
-    # 7. Cleanup ordering assertion (purge appears after APPROVE in Step 7b)
-    step7_idx = mf_c.find("Step 7 (Subagent Adversarial Review Loop)")
-    step7b_idx = mf_c.find("Step 7b (Idempotent Ephemeral Cleanup)")
-    step7c_idx = mf_c.find("Step 7c (Ephemeral Post-Review Audit Report Artifact")
-    assert step7_idx != -1 and step7b_idx != -1 and step7c_idx != -1, "Missing Step 7, 7b, or 7c anchors"
-    seg = mf_c[step7b_idx:step7c_idx]
-    assert cleanup_cmd in seg, "Cleanup command must appear within Step 7b"
-    assert 'push origin --delete "$b"' in seg, "Delete loop must appear within Step 7b"
-    assert step7_idx < step7b_idx < step7c_idx, (
-        "Cleanup command must appear in Step 7b after Step 7 review loop in make-feature SKILL.md"
-    )
-
-    # 8. Synchronization in adversarial-review/SKILL.md
-    assert "Mode B: Shared Sandbox Branch Mode" in adv_c, "Missing Mode B in adversarial-review SKILL.md"
-    assert "Reviewer Signal Scorecard" in adv_c, "Missing Reviewer Signal Scorecard in adversarial-review SKILL.md"
-    assert "External PR Action Plan" in adv_c, "Standalone External PR Action Plan must remain intact in adversarial-review SKILL.md"
-    assert "Canonical External Review Prompt Template" in adv_c, "Missing Canonical External Review Prompt Template in adversarial-review SKILL.md"
-    assert "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" in adv_c, "Missing grammar regex in adversarial-review SKILL.md"
-    assert 'git show "FETCH_HEAD:reviews/${REVIEWER_ID}.md"' in adv_c, "Missing inspection command in adversarial-review SKILL.md"
-    assert 'git show "origin/review/${FEATURE_SLUG}/${REVIEWER_ID}:review.md"' in adv_c, (
-        "Missing Mode A inspection command in adversarial-review SKILL.md"
-    )
-    assert '{ git merge-base --is-ancestor "$before" FETCH_HEAD 2>/dev/null || before="origin/${BRANCH_NAME}"; }' in adv_c, "Missing ancestor guard in adversarial-review SKILL.md"
-    assert 'git log --name-only "${before}..FETCH_HEAD"' in adv_c, "Missing scoped authorship log in adversarial-review SKILL.md"
-    assert 'git diff "${BASE_SHA}" FETCH_HEAD' in adv_c, "Missing robust inspection command in adversarial-review SKILL.md"
-
-    # 9. Synchronization in AGENTS.md
-    assert "Reviewer Signal Scorecard" in agents_c, "Missing Reviewer Signal Scorecard in AGENTS.md"
-    assert "Mode B: Shared Sandbox Branch Mode" in agents_c, "Missing Mode B in AGENTS.md"
-
-    # 10. Masked Identity Proof & Session Persistence contract across all documents
-    assert "Reviewer Identification Proof" in mf_c, "Missing Reviewer Identification Proof in make-feature SKILL.md"
-    assert "Session Continuity Directive" in mf_c, "Missing Session Continuity Directive in make-feature SKILL.md"
-    assert "Reviewer Identification Proof" in adv_c, "Missing Reviewer Identification Proof in adversarial-review SKILL.md"
-    assert "Reviewer Identification Proof" in agents_c, "Missing Reviewer Identification Proof in AGENTS.md"
-
-    # 11. Anti-Collision, Peer Isolation & Authorship Invariants
-    assert "FILE ISOLATION" in mf_c, "Missing FILE ISOLATION in make-feature SKILL.md"
-    assert "TARGETED STAGING" in mf_c, "Missing TARGETED STAGING in make-feature SKILL.md"
-    assert "ABORT ON FOREIGN CONFLICT" in mf_c, "Missing ABORT ON FOREIGN CONFLICT in make-feature SKILL.md"
-    assert "Builder Ingestion Authorship Audit" in mf_c, "Missing Builder Ingestion Authorship Audit in make-feature SKILL.md"
-    assert "TAMPERED/CLOBBERED" in mf_c, "Missing TAMPERED/CLOBBERED in make-feature SKILL.md"
-    assert "FILE ISOLATION" in adv_c, "Missing FILE ISOLATION in adversarial-review SKILL.md"
-    assert "TARGETED STAGING" in adv_c, "Missing TARGETED STAGING in adversarial-review SKILL.md"
-    assert "TAMPERED/CLOBBERED" in agents_c, "Missing TAMPERED/CLOBBERED in AGENTS.md"
-
-    # 12. Spec and Plan parity for Identity Proof and Peer Isolation
-    spec_md = os.path.join(root_dir, "external-review-prompts-50ee34/spec.md")
-    plan_md = os.path.join(root_dir, "external-review-prompts-50ee34/plan.md")
-    if os.path.exists(spec_md) and os.path.exists(plan_md):
-        with open(spec_md, "r", encoding="utf-8") as f:
-            spec_c = f.read()
-        with open(plan_md, "r", encoding="utf-8") as f:
-            plan_c = f.read()
-        assert "Reviewer Identification Proof" in spec_c, "Missing Identity Proof in spec.md"
-        assert "FILE ISOLATION" in spec_c, "Missing FILE ISOLATION in spec.md"
-        assert "Reviewer Identification Proof" in plan_c, "Missing Identity Proof in plan.md"
-
-    # 13. In-Tree Ephemeral Review Prompt Protocol (review_prompt.md)
-    assert "review_prompt.md" in mf_c, "Missing review_prompt.md in make-feature SKILL.md"
-    assert 'git fetch origin ${BRANCH_NAME} && git show "FETCH_HEAD:${FEATURE_SLUG}/review_prompt.md"' in mf_c, (
-        "Missing dispatch command in make-feature SKILL.md"
-    )
-    assert "review_prompt.md" in adv_c, "Missing review_prompt.md in adversarial-review SKILL.md"
-    assert 'git fetch origin ${BRANCH_NAME} && git show "FETCH_HEAD:${FEATURE_SLUG}/review_prompt.md"' in adv_c, (
-        "Missing dispatch command in adversarial-review SKILL.md"
-    )
-    assert "review_prompt.md" in agents_c, "Missing review_prompt.md in AGENTS.md"
-    if os.path.exists(spec_md) and os.path.exists(plan_md):
-        assert "review_prompt.md" in spec_c, "Missing review_prompt.md in spec.md"
-        assert 'git fetch origin ${BRANCH_NAME} && git show "FETCH_HEAD:${FEATURE_SLUG}/review_prompt.md"' in spec_c, (
-            "Missing dispatch command in spec.md"
-        )
-        assert "review_prompt.md" in plan_c, "Missing review_prompt.md in plan.md"
-
-    # 14. In-Tree Ephemeral Scorecard Protocol & Tamper Tripwire (reviewer_scorecard.md)
-    assert "reviewer_scorecard.md" in mf_c, "Missing reviewer_scorecard.md in make-feature SKILL.md"
-    assert "Tamper Tripwire" in mf_c, "Missing Tamper Tripwire in make-feature SKILL.md"
-    assert "BRANCH ISOLATION" in mf_c, "Missing BRANCH ISOLATION in make-feature SKILL.md"
-    assert 'git fetch origin ${BRANCH_NAME} && git show "FETCH_HEAD:${FEATURE_SLUG}/reviewer_scorecard.md"' in mf_c, (
-        "Missing scorecard dispatch pointer in make-feature SKILL.md"
-    )
-    assert "chore: update reviewer scorecard" in mf_c, "Missing scorecard commit cadence in make-feature SKILL.md"
-    assert '[ -f "reviews/${REVIEWER_ID}.md" ]' in mf_c, "Missing collision check in make-feature SKILL.md"
-    assert "Verify-Before-Terminate" in mf_c, "Missing Verify-Before-Terminate in make-feature SKILL.md"
-    assert "reviewer_scorecard.md" in adv_c, "Missing reviewer_scorecard.md in adversarial-review SKILL.md"
-    assert "BRANCH ISOLATION" in adv_c, "Missing BRANCH ISOLATION in adversarial-review SKILL.md"
-    assert "UNIVERSAL TAMPER TRIPWIRE" in adv_c, "Missing UNIVERSAL TAMPER TRIPWIRE in adversarial-review SKILL.md"
-    assert 'git fetch origin ${BRANCH_NAME} && git show "FETCH_HEAD:${FEATURE_SLUG}/reviewer_scorecard.md"' in adv_c, (
-        "Missing scorecard dispatch pointer in adversarial-review SKILL.md"
-    )
-    assert "reviewer_scorecard.md" in agents_c, "Missing reviewer_scorecard.md in AGENTS.md"
-    assert "Tamper Tripwire" in agents_c, "Missing Tamper Tripwire in AGENTS.md"
-    if os.path.exists(spec_md) and os.path.exists(plan_md):
-        assert "reviewer_scorecard.md" in spec_c, "Missing reviewer_scorecard.md in spec.md"
-        assert "Tamper Tripwire" in spec_c, "Missing Tamper Tripwire in spec.md"
-        assert "Verify-Before-Terminate" in spec_c, "Missing Verify-Before-Terminate in spec.md"
-        assert "reviewer_scorecard.md" in plan_c, "Missing reviewer_scorecard.md in plan.md"
-
-    # 15. External Review Convergence Gate (Retain List Only)
-    assert "External Review Convergence Gate" in mf_c, "Missing Convergence Gate in make-feature SKILL.md"
-    assert "Retain List Only" in mf_c, "Missing Retain List Only in make-feature SKILL.md"
-    assert "Content-Conflict Precedence Hierarchy" in mf_c, "Missing Content-Conflict Precedence Hierarchy in make-feature SKILL.md"
-    assert "Chat Announcement Requirement" in mf_c, "Missing Chat Announcement Requirement in make-feature SKILL.md"
-    assert "Bounded Unresponsiveness Demotion" in mf_c, "Missing Bounded Unresponsiveness Demotion in make-feature SKILL.md"
-    assert "External Review Convergence Gate" in adv_c, "Missing Convergence Gate in adversarial-review SKILL.md"
-    assert "Content-Conflict Precedence Hierarchy" in adv_c, "Missing Content-Conflict Precedence Hierarchy in adversarial-review SKILL.md"
-    assert "External Review Convergence Gate" in agents_c, "Missing Convergence Gate in AGENTS.md"
-    assert "Content-Conflict Precedence Hierarchy" in agents_c, "Missing Content-Conflict Precedence Hierarchy in AGENTS.md"
-    if os.path.exists(spec_md) and os.path.exists(plan_md):
-        assert "External Review Convergence Gate" in spec_c, "Missing Convergence Gate in spec.md"
-        assert "Content-Conflict Precedence Hierarchy" in spec_c, "Missing Content-Conflict Precedence Hierarchy in spec.md"
-        assert not any(re.match(r"^\d{2,4}:\s", line) for line in spec_c.splitlines()), "Corrupted line-number prefixes in spec.md"
-
-
-def test_dependent_skills_and_links():
-    """Verify dependent skills link to git-signoff and no active skills have broken references."""
-    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-    catchmeup_md = os.path.join(root_dir, "skills/catchmeup/SKILL.md")
-    math_proof_md = os.path.join(root_dir, "skills/math-proof-audit/SKILL.md")
-
-    with open(catchmeup_md, "r", encoding="utf-8") as f:
-        catchmeup_content = f.read()
-    assert "../git-signoff/SKILL.md" in catchmeup_content, "Missing link to ../git-signoff/SKILL.md in catchmeup"
-
-    with open(math_proof_md, "r", encoding="utf-8") as f:
-        math_content = f.read()
-    assert "@skill:git-signoff" in math_content, "Missing @skill:git-signoff in math-proof-audit"
-    assert "/git-signoff" in math_content, "Missing /git-signoff in math-proof-audit"
-
-    # Recursively scan all active markdown files in skills/ excluding ephemeral migration directories
-    skills_dir = os.path.join(root_dir, "skills")
+def test_no_deprecated_signoff_references():
+    """Verify no tracked skill markdown file uses deprecated @skill:signoff or skills/signoff/."""
     skill_ref_pattern = re.compile(r"@skill:signoff\b")
     link_ref_pattern = re.compile(r"skills/signoff/")
 
     errors = []
-    for filepath in glob.glob(os.path.join(skills_dir, "**/*.md"), recursive=True):
-        rel_path = os.path.relpath(filepath, root_dir)
-        # Exclude ephemeral migration artifacts
-        if "integrate-git-signoff-48d1c2" in rel_path:
-            continue
+    for filepath in _tracked_skill_markdown_files():
+        rel_path = os.path.relpath(filepath, ROOT_DIR)
         with open(filepath, "r", encoding="utf-8") as f:
             content = f.read()
         if skill_ref_pattern.search(content):
@@ -838,9 +448,3 @@ def test_dependent_skills_and_links():
             errors.append(f"In {rel_path}: deprecated 'skills/signoff/' link found")
 
     assert not errors, "\n".join(errors)
-
-
-
-
-
-

@@ -1,37 +1,27 @@
-# Antigravity Global Agent Config (`dotgemini`)
-
-[![attested by humans](https://github.com/jerrylin96/dotgemini/actions/workflows/signoff.yml/badge.svg?branch=main&event=push)](https://github.com/jerrylin96/dotgemini/actions/workflows/signoff.yml)
+# Antigravity Global Agent Config (`dotagent`)
 
 Personal global configuration and custom skills for Google Antigravity CLI.
 
 > [!NOTE]
-> **Repository Naming vs. Installation Paths:** The repository is named `dotagent` to reflect dotfile configuration for AI agents. Google Antigravity CLI expects its global settings to reside at `~/.gemini/` on disk. Setup cloning instructions target `~/.gemini` for Antigravity-compatibility.
+> **Repository Naming vs. Installation Paths:** The repository is named `dotagent` (formerly `dotgemini`; GitHub redirects old URLs automatically). Google Antigravity CLI loads global settings from `~/.gemini/` on disk.
 
 ## Platform Support
 
-This configuration is developed and tested on macOS and Linux (validated in CI). It is not supported on Windows — the branch resolver script used by the adversarial-review and explain-diff skills will exit with an error on platforms without fcntl, and several paths assume POSIX semantics.
+Developed and tested on macOS and Linux (validated in CI). Windows is unsupported (`fcntl` file locking and POSIX path semantics are required).
 
 ## Setup on a New Machine
 
 1. **Install Antigravity CLI:**
-   Download and install the [Antigravity CLI](https://antigravity.google/product/antigravity-cli). This is required for executing Antigravity skills (`adversarial-review`, `catchmeup`, `explain-diff`, `make-feature`, `session-sync`), environment runner wrappers, and subagent delegation.
-   
-   Verify your installation:
+   Download and install [Antigravity CLI](https://antigravity.google/product/antigravity-cli), then verify:
    ```bash
    agy --version
    ```
 
-   > [!NOTE]
-   > **Installation Order:** If you clone the repository before installing the CLI, the CLI will safely initialize its state inside the existing `~/.gemini` folder without conflicts when you install it.
-
 2. **Backup existing config (if any):**
-   Ensure `$HOME/.gemini.bak` does not already exist before running the backup command. If both directories exist, the backup step will fail with an error to prevent overwriting or nesting:
-
    ```bash
    if [ -e "$HOME/.gemini" ] || [ -L "$HOME/.gemini" ]; then
      if [ -e "$HOME/.gemini.bak" ] || [ -L "$HOME/.gemini.bak" ]; then
        echo "Error: Both $HOME/.gemini and $HOME/.gemini.bak exist." >&2
-       echo "Please manually rename or remove $HOME/.gemini.bak before proceeding." >&2
        exit 1
      else
        mv "$HOME/.gemini" "$HOME/.gemini.bak"
@@ -39,119 +29,52 @@ This configuration is developed and tested on macOS and Linux (validated in CI).
    fi
    ```
 
-3. **Clone this repository:**
-   Clone the repository to `~/.gemini` so that the Antigravity CLI can locate it:
-
+3. **Clone to `~/.gemini`:**
    ```bash
    git clone https://github.com/jerrylin96/dotagent.git ~/.gemini
-   # Or via SSH: git clone git@github.com:jerrylin96/dotagent.git ~/.gemini
    ```
-
-   *Note: The repository was previously named `dotgemini`; GitHub automatically redirects old URLs and clones to `dotagent`.*
 
 4. **Restore local settings and credentials (if applicable):**
    ```bash
-   # Restore settings, credentials, and machine state safely if backup exists
    if [ -d "$HOME/.gemini.bak" ]; then
      mkdir -p "$HOME/.gemini/antigravity-cli"
      [ -f "$HOME/.gemini.bak/antigravity-cli/settings.json" ] && cp "$HOME/.gemini.bak/antigravity-cli/settings.json" "$HOME/.gemini/antigravity-cli/settings.json"
-     
-     # Restore credentials and machine IDs
      [ -f "$HOME/.gemini.bak/google_accounts.json" ] && cp "$HOME/.gemini.bak/google_accounts.json" "$HOME/.gemini/google_accounts.json"
      [ -f "$HOME/.gemini.bak/oauth_creds.json" ] && cp "$HOME/.gemini.bak/oauth_creds.json" "$HOME/.gemini/oauth_creds.json"
      [ -f "$HOME/.gemini.bak/antigravity-cli/installation_id" ] && cp "$HOME/.gemini.bak/antigravity-cli/installation_id" "$HOME/.gemini/antigravity-cli/installation_id"
-   else
-     echo "No backup directory found to restore settings."
    fi
    ```
 
-*Note: Credentials, local settings (`antigravity-cli/settings.json`), terminal logs (`*.log`), subagent run data (`brain/`), and conversation logs (`conversations/`) are automatically excluded via `.gitignore` to prevent leaking secrets or tracking local session state.*
+*Credentials, local CLI state (`antigravity-cli/`), logs (`*.log`), subagent artifacts (`brain/`), and auto-bundled Data Cloud skills are excluded via `.gitignore`.*
 
 ---
 
 ## What's Included
 
-### 1. Global Rules (`AGENTS.md`, aliased as `GEMINI.md`)
-* Defines the **Ponytail (Lazy Senior Dev Mode)** YAGNI ladder.
-* Enforces the **Caveman (Terse Style)** communication formatting to save ~65% output tokens.
-* Enforces structured software development lifecycle gates.
-* Also exposed as `GEMINI.md` (a symlink to `AGENTS.md` for backward compatibility). Antigravity CLI seamlessly reads the rules by default.
+### 1. Lean Global Rules (`AGENTS.md`, symlinked as `GEMINI.md`)
+* **Ponytail (Lazy Senior Dev Mode):** 7-rung YAGNI ladder, root-cause fixes + downstream consumer tracing, minimal diffs, and encoding recurring lessons in tests/linters.
+* **Caveman (Terse Style):** Cuts conversational fluff (~65% fewer output tokens) while keeping technical artifacts exact.
+* **Proportional Engineering Workflow:** Respects manual worktrees and feature branches in place (blocking direct edits only on protected branches), scales planning/TDD/review ceremony to task size, and enforces empirical grounding.
 
-### 2. Isolated Execution Environments
-* Integrates with `setup_review_env.py` to automatically bootstrap CPU-compatible testing and linting virtual environments under `~/.gemini/tmp/<workspace-hash>` using `uv`.
-  > [!WARNING]
-  > This provides dependency/test isolation, NOT a security sandbox. Running setup scripts or installing dependencies (via uv/pip) on untrusted repositories can execute arbitrary build hooks or code under your user credentials.
-* Isolates dynamic branch workspaces to prevent test collisions.
+### 2. Isolated Execution Environments (`scripts/`)
+* `setup_review_env.py` + `run_in_env.py` bootstrap CPU-compatible testing/linting virtual environments under `~/.gemini/tmp/<workspace-hash>` via `uv` (dependency isolation only, not a security sandbox).
 
-### 3. Custom Registered Skills (`skills/`)
-* `adversarial-review` — Git worktree-based adversarial code review helper.
-  * **User Workflow**:
-    1. **Prepare Baseline**: Prior to starting the review, checkout the intended **reference branch** (the baseline, e.g., `main` or a specific release branch) in your active workspace:
-       ```bash
-       git checkout <your-reference-branch>
-       ```
-    2. **Activate Review**: Trigger the review by typing `/adversarial-review` in the chat.
-    3. **Select Feature Branch or PR**: Antigravity will automatically fetch the latest updates, detect your current checked-out branch as the reference branch, and present a list of all other local and remote branches. Select the **feature branch** (the target containing the new changes to review) when prompted. You can also name a pull request directly (e.g. "review PR #42" or paste the PR/MR URL) — the resolver fetches the PR head ref from the remote, so fork PRs work without a local branch (GitHub/GitLab/Gitea; not Bitbucket).
-    4. **Under the Hood**: Antigravity checks out the selected feature branch to a clean, isolated worktree under `~/.gemini/tmp/worktrees/`, leaving your active workspace untouched on the reference branch. It then generates the diff between the two branches, runs tests/linters in the feature branch worktree, and performs the adversarial review.
-
-* `explain-diff` — Interactive, read-only walkthrough explaining what changed between a feature branch, pull request, or specific commit/range and a reference branch (supporting topic-by-topic cross-file synthesis, chronological commit narrative, and cumulative file diffs).
-  * **User Workflow**: Trigger with `/explain-diff`. Branch selection works exactly like `adversarial-review` (it reuses the same branch resolver and worktree cache). You then get an overall summary of the changeset (with commit timeline) and a Tri-Lens navigation menu offering topic-by-topic walkthroughs (`[t]`, recommended), commit-by-commit (`[c]`, available for multi-commit changesets and omitted for single-commit changesets), or file-by-file (`[f]`); pick a topic, commit, or file for a hunk-by-hunk explanation with bidirectional navigation, ask follow-up questions, and return to the menu until done. Nothing is executed or modified — no tests, no linters.
-
-* `catchmeup` — Executive time-window activity summary for PIs, leads, and reviewers (presets: `1d`, `1w`, `2w`, `1mo`).
-  * **User Workflow**: Trigger with `/catchmeup` (or specify duration like `/catchmeup 2w`). Provides an executive overview of recent commits, milestone themes, `Signoff-*` attestation audits, and interactive drill-downs into specific commits or files.
-
-* `make-feature` — Git worktree-based isolated feature branch development engine and mandatory software lifecycle pipeline.
-  * **User Workflow**: Trigger with `/make-feature` (or `/make-feature heavy` where the agent proactively selects `Sequential Subagents` execution strategy across task slices; or automatically whenever preparing to write or edit codebase files).
-    1. **Phase 1a & 1b (Spec & Plan Remote Gates)**: Creates an isolated worktree on branch `gemini/<feature-name>-<hash>` under `~/.gemini/tmp/worktrees/`. Drafts in-tree spec (`<feature-name>-<hash>/spec.md`) and plan (`plan.md`), commits and pushes them to `origin` for third-party review, runs subagent adversarial audits, and pauses for explicit human approval.
-    2. **Phase 2 (Build, Worktree & RED Test Remote Push Gate)**: Writes RED test suite, runs subagent review, commits and pushes failing RED tests to `origin` (`test: add RED test suite (failing)`), implements GREEN code, and verifies 100% test pass via `run_in_env.py`. In Heavy Mode, enforces a per-slice 2-stage commit cadence (`test(slice-N)` → `feat(slice-N)`).
-    3. **Phase 3 (Push, Subagent Review & Ephemeral Cleanup)**: Pushes feature branch to `origin`, delegates an isolated subagent review loop until approved, executes idempotent ephemeral folder cleanup (`git rm -rf --ignore-unmatch "<feature-name>-<hash>"`), and generates an ephemeral review report artifact in the conversation brain.
-    4. **Phase 4 (Human Signoff & PR Merge)**: Antigravity pauses, presents the post-review report, and the human engineer owns PR creation and merging into the target branch before pruning the worktree.
-
-* [`git-signoff`](skills/git-signoff/SKILL.md) — Socratic human-comprehension and risk-ownership audit before merging.
-  * **User Workflow**: Trigger with `/git-signoff` before merging a feature branch. Antigravity reverse-interviews you across 4 core axes (mechanics, trade-offs, failure boundaries, ownership). Upon verified comprehension and explicit user approval, it creates an empty attestation commit (`git commit --allow-empty`) containing a flat block of `Signoff-*` git trailers (including a traceable SHA-256 transcript reference digest).
-
-* `prose-editor` — Structured, high-clarity editing and review for prose, technical documentation, papers, and markdown essays.
-  * **User Workflow**: Trigger with `/edit-prose` or `/prose` (e.g., `/edit-prose docs/architecture.md` or `/edit-prose --diff`). Provides atomic Suggestion Cards with numbered IDs, category tags (`[Clarity]`, `[Brevity]`, `[Flow]`, `[Tone]`, `[Grammar]`, `[Structure]`), verbatim original quotes, proposed rewrites, and explicit rationales. Operates in pure advisory mode without mutating source files.
-
-* `/ponytail` — Lazy senior developer instructions.
-* `/caveman` — Token-efficient caveman communication mode.
-* `incremental-implementation` — Vertical slicing development guidelines.
-* `test-driven-development` — Red-green-refactor testing patterns.
-* `debugging-and-error-recovery` — Systematic triage and root-cause fix strategies.
+### 3. Custom Skills (`skills/`)
+* `adversarial-review` — Isolated worktree diff, test, linter, LaTeX, and scientific code review (`/adversarial-review`). Resolves local/remote branches or fork PRs (`#42` or PR URL) into `~/.gemini/tmp/worktrees/` without touching your active checkout.
+* `explain-diff` — Interactive, read-only walkthrough explaining changes across topic-by-topic synthesis (`[t]`), chronological commit-by-commit narrative (`[c]`, shown for multi-commit changesets and omitted for single-commit changesets), and file-by-file diffs (`[f]`) (`/explain-diff`).
+* `codebase-audit` — Multi-agent parallel cluster review and cross-boundary contract audit for large diffs (>300 LoC) and whole repositories (`/codebase-audit`).
+* `codebase-map` — Multi-agent polyglot architecture discovery, entrypoint detection, and onboarding map generator (`/codebase-map`).
+* `catchmeup` — Executive time-window repository summary (`1d`, `1w`, `2w`, `1mo`) with commit themes and interactive drill-downs (`/catchmeup`).
+* `benchmark-checklist` — 7-question verification gate before running benchmarks or claiming speedups, latency/throughput gains, or perf regressions.
+* `math-proof-audit` — Formal LaTeX derivation alignment and numerical edge-case red-teaming for mathematical/statistical code (`/showproof`).
+* `prose-editor` — Advisory prose, paper, and documentation review using schema-validated Suggestion Cards and `--unslop` mode (`/edit-prose`, `/prose`).
+* `google-workspace` & `timeline-postmortem` — Google Calendar/Tasks/Docs timeline scheduling, status rollups, and 5-Whys deadline retrospectives.
+* `session-sync` — Sync and restore Antigravity CLI sessions across machines via hidden Git refs.
+* [`git-signoff`](skills/git-signoff/SKILL.md) — Opt-in Socratic comprehension interview (`--explain`, `--practice`, or GSA trailer attestation via `/git-signoff`) for shared/high-stakes repositories.
 
 ## Running Tests
 
-To run all unit tests for the configured skills and environment setup:
 ```bash
 python3 scripts/run_tests.py
 ```
-This script automatically ensures that the correct isolated virtual environment is initialized/up-to-date and runs all discoverable tests using `pytest` with `importlib` import mode.
-
-If `uv` is available but the environment setup fails, `run_tests.py` will exit with a non-zero status by default to prevent masking issues. To bypass setup errors and fall back to testing on the host environment anyway, run with the `ALLOW_HOST_TEST_FALLBACK=1` environment variable set. If `uv` is entirely missing, host testing fallback occurs automatically.
-
----
-
-## Sharing and Collaborator Onboarding
-
-> [!WARNING]
-> While this repository commits **no** credentials, local settings, or session history (they are automatically gitignored), replacing a collaborator's local `~/.gemini` directory with this repository will replace their own global rules, custom skills, and preferences with yours.
->
-> Furthermore, collaborators will lose their local configurations and credentials unless they back up and restore:
-> - `google_accounts.json`
-> - `oauth_creds.json`
-> - `antigravity-cli/settings.json`
-> - `antigravity-cli/installation_id` (optional machine state ID)
-> 
-> Collaborators should only clone this as a reference or keep it isolated. For sharing rules/skills across team projects, **prefer Project-Level Integration** below to build a shared, repository-specific review workflow, or copy only the specific skill subset needed.
-
-### Project-Level Integration (Recommended for Sharing)
-If you want to bake this isolated environment setup directly into a specific project repository so that *any* agent working on it automatically uses it:
-1. **Copy the Env Manager**: Place the [setup_review_env.py](scripts/setup_review_env.py) script in the project repository (e.g., `scripts/setup_review_env.py`).
-2. **Add a Project-Level Guide**: Add an `AGENTS.md` to the project's root containing:
-   ````markdown
-   ## Isolated Testing & Execution Environment
-   All testing and validation commands must run inside the CPU-isolated virtual environment:
-   1. Initialize: `python3 scripts/setup_review_env.py <workspace_path>`
-   2. Run Tests: `python3 ~/.gemini/scripts/run_in_env.py <workspace_path> pytest`
-   *(Note: The setup_review_env.py script automatically manages and prints details of the isolated environment.)*
-   ````
+Initializes the isolated test environment via `uv` and runs all skill and helper test suites with `pytest` and `importlib` import mode.

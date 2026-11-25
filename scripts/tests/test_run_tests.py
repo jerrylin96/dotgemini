@@ -92,7 +92,7 @@ class TestRunTests(unittest.TestCase):
             
         self.assertIn("scripts/tests", called_dirs)
         self.assertIn("skills/adversarial-review/tests", called_dirs)
-        self.assertIn("skills/data-autocleaning/tests", called_dirs)
+        self.assertIn("skills/prose-editor/tests", called_dirs)
 
 if __name__ == "__main__":
     unittest.main()
