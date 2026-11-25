@@ -107,12 +107,6 @@ Each subagent MUST:
    - **Invariants & Conventions:** Specific constraints (concurrency, idempotency, caching, units).
 4. **Terminate Turn Immediately:** Stop calling tools after outputting the Domain Card.
 
-### 4. Subagent Lifecycle Cleanup
-Once all subagents return, parent agent terminates them via:
-```python
-manage_subagents(Action="kill", ConversationIds=[...])
-```
-
 ---
 
 ## Stage 3: Orchestrator Architecture Synthesis

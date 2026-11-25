@@ -101,12 +101,6 @@ Each subagent MUST:
    - `### Cross-Boundary Contract Flags`: Note any modified exported symbols, signature changes, or assumptions about external modules.
 5. **Terminate Turn Immediately:** Stop calling tools after outputting the audit card.
 
-### 4. Subagent Lifecycle Cleanup
-Once subagents complete and report back, the parent agent MUST clean up subagent instances:
-```python
-manage_subagents(Action="kill", ConversationIds=[...])
-```
-
 ---
 
 ## Stage 3: Unified Synthesis, Cross-Boundary Check & Blast Radius
